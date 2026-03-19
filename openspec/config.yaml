@@ -1,0 +1,28 @@
+schema: ai-edu
+
+# Project context - shown to AI when creating artifacts
+context: |
+  Tech stack: Python 3.11+
+  Framework: FastAPI / Flask / Django (specify based on project)
+  ORM: SQLAlchemy / Django ORM
+  Database: PostgreSQL / MySQL
+  Testing: pytest
+  Package Manager: pip / poetry / uv
+
+  Code Style:
+  - Use type hints
+  - Follow PEP 8
+  - Use docstrings for functions and classes
+
+  Testing:
+  - Run tests with: pytest
+  - Coverage: pytest --cov
+
+# Per-artifact rules (optional)
+rules:
+  tasks:
+    - Break tasks into chunks of max 2 hours
+    - Each task should be testable
+  api:
+    - Include OpenAPI/Swagger examples
+    - Use FastAPI response models
