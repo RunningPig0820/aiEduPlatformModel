@@ -52,6 +52,10 @@ coverage.xml
 
 # Environments
 .env
+.env.local
+.env.*.local
+.env.production
+.env.development
 .venv
 env/
 venv/
@@ -59,43 +63,16 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows
-Thumbs.db
-ehthumbs.db
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Logs
-*.log
-logs/
-
-# Local configuration
-*.local
-local_settings.py
-
-# Secrets
+# Secrets & API Keys
 secrets.yaml
 secrets.json
+secrets/
 *.pem
 *.key
+*_api_key*
+*_apikey*
+credentials.json
+service-account.json
 
 # Claude Code
 .claude/

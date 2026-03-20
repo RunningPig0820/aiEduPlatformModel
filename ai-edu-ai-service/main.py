@@ -25,9 +25,12 @@ async def health_check():
 
 
 # 注册路由
-# from api import ocr, llm, rag
+from api.chat import router as chat_router
+app.include_router(chat_router)
+
+# 后续注册其他路由
+# from api import ocr, rag
 # app.include_router(ocr.router, prefix="/api/ocr", tags=["OCR"])
-# app.include_router(llm.router, prefix="/api/llm", tags=["LLM"])
 # app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
 
 
