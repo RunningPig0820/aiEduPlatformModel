@@ -104,11 +104,12 @@ def test_bailian():
         return
 
     try:
-        from langchain_community.chat_models import ChatTongyi
+        from langchain_openai import ChatOpenAI
 
-        llm = ChatTongyi(
+        llm = ChatOpenAI(
             model="qwen-turbo",
-            dashscope_api_key=settings.BAILIAN_API_KEY
+            openai_api_key=settings.BAILIAN_API_KEY,
+            openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1"
         )
 
         print("发送测试消息: 你好，请用一句话介绍你自己")

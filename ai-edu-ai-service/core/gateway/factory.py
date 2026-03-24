@@ -3,6 +3,8 @@ LLM Factory - 创建 LangChain ChatModel 实例
 """
 from typing import Optional, Dict, Any
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_community.chat_models import ChatZhipuAI
+from langchain_openai import ChatOpenAI
 
 from config.settings import settings
 
@@ -89,8 +91,6 @@ class LLMFactory:
         **kwargs
     ) -> BaseChatModel:
         """创建智谱 ChatModel"""
-        from langchain_community.chat_models import ChatZhipuAI
-
         api_key = settings.ZHIPU_API_KEY
         if not api_key:
             raise ValueError("ZHIPU_API_KEY not configured in environment")
@@ -109,8 +109,6 @@ class LLMFactory:
         **kwargs
     ) -> BaseChatModel:
         """创建 DeepSeek ChatModel (使用 OpenAI 兼容协议)"""
-        from langchain_openai import ChatOpenAI
-
         api_key = settings.DEEPSEEK_API_KEY
         if not api_key:
             raise ValueError("DEEPSEEK_API_KEY not configured in environment")
@@ -130,8 +128,6 @@ class LLMFactory:
         **kwargs
     ) -> BaseChatModel:
         """创建百炼 ChatModel (通义千问) - 使用 OpenAI 兼容协议"""
-        from langchain_openai import ChatOpenAI
-
         # 使用 BAILIAN_API_KEY
         api_key = settings.BAILIAN_API_KEY
         if not api_key:

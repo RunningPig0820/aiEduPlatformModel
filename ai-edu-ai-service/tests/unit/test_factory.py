@@ -7,7 +7,7 @@ import sys
 import os
 
 # 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
 class TestLLMFactory:
@@ -71,18 +71,19 @@ class TestLLMFactory:
         assert call_kwargs["openai_api_base"] == "https://api.deepseek.com/v1"
         assert result == mock_instance
 
-    @patch("core.gateway.factory.ChatTongyi")
-    def test_create_bailian(self, mock_chat_tongyi):
+    @patch("core.gateway.factory.ChatOpenAI")
+    def test_create_bailian(self, mock_chat_openai):
         """测试创建百炼 ChatModel"""
         from core.gateway.factory import LLMFactory
 
         mock_instance = MagicMock()
-        mock_chat_tongyi.return_value = mock_instance
+        mock_chat_openai.return_value = mock_instance
 
         result = LLMFactory._create_bailian("qwen-turbo", 0.7)
 
-        mock_chat_tongyi.assert_called_once()
-        call_kwargs = mock_chat_tongyi.call_args[1]
+        mock_chat_openai.assert_called_once()
+        call_kwargs = mock_chat_openai.call_args[1]
         assert call_kwargs["model"] == "qwen-turbo"
         assert call_kwargs["temperature"] == 0.7
+        assert call_kwargs["openai_api_base"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
         assert result == mock_instance

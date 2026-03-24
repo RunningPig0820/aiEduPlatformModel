@@ -6,13 +6,14 @@ from unittest.mock import patch, MagicMock
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
 class TestBailianIntegration:
     """阿里百炼集成测试"""
 
-    @patch("core.gateway.factory.ChatTongyi")
+    @patch("core.gateway.factory.ChatOpenAI")
     def test_invoke_chat(self, mock_chat):
         """测试基本对话调用"""
         from core.gateway.factory import LLMFactory
@@ -28,7 +29,7 @@ class TestBailianIntegration:
 
         assert response.content == "这是一个百炼测试响应"
 
-    @patch("core.gateway.factory.ChatTongyi")
+    @patch("core.gateway.factory.ChatOpenAI")
     def test_stream_chat(self, mock_chat):
         """测试流式对话"""
         from core.gateway.factory import LLMFactory
@@ -49,7 +50,7 @@ class TestBailianIntegration:
 
         assert result == "这是百炼"
 
-    @patch("core.gateway.factory.ChatTongyi")
+    @patch("core.gateway.factory.ChatOpenAI")
     def test_bind_tools(self, mock_chat):
         """测试工具绑定"""
         from core.gateway.factory import LLMFactory
@@ -69,7 +70,7 @@ class TestBailianIntegration:
 
         mock_instance.bind_tools.assert_called_once()
 
-    @patch("core.gateway.factory.ChatTongyi")
+    @patch("core.gateway.factory.ChatOpenAI")
     def test_model_variants(self, mock_chat):
         """测试不同模型变体"""
         from core.gateway.factory import LLMFactory
@@ -84,9 +85,9 @@ class TestBailianIntegration:
 
         assert mock_chat.call_count == len(models)
 
-    @patch("core.gateway.factory.ChatTongyi")
+    @patch("core.gateway.factory.ChatOpenAI")
     def test_dashscope_api_key_used(self, mock_chat):
-        """测试使用 dashscope API Key"""
+        """测试使用百炼 API Key (OpenAI 兼容模式)"""
         from core.gateway.factory import LLMFactory
 
         mock_instance = MagicMock()
@@ -95,4 +96,5 @@ class TestBailianIntegration:
         LLMFactory.create("bailian", "qwen-turbo")
 
         call_kwargs = mock_chat.call_args[1]
-        assert "dashscope_api_key" in call_kwargs
+        assert "openai_api_key" in call_kwargs
+        assert call_kwargs["openai_api_base"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
