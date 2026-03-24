@@ -11,6 +11,13 @@ import logging
 from models.chat import ChatRequest, ChatResponse, UsageInfo, StreamChunk
 from core.gateway.router import ModelRouter
 from config.settings import settings
+from config.model_config import (
+    MODEL_CONFIG,
+    is_model_allowed,
+    get_allowed_models,
+    get_default_model_for_provider,
+    get_global_default_model
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,45 @@ def verify_internal_token(x_internal_token: Optional[str] = Header(None)) -> str
     return x_internal_token
 
 
+def validate_model(provider: Optional[str], model: Optional[str]) -> tuple:
+    """
+    验证模型是否在白名单内
+
+    Args:
+        provider: 用户指定的 provider
+        model: 用户指定的 model
+
+    Returns:
+        (provider, model): 验证后的 provider 和 model
+
+    Raises:
+        HTTPException: 模型不在白名单内
+    """
+    # 未指定则使用全局默认模型（从配置读取）
+    if not provider:
+        return get_global_default_model()
+
+    if not model:
+        # 只指定了 provider，使用该 provider 的默认模型
+        model = get_default_model_for_provider(provider)
+        if not model:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown provider: {provider}"
+            )
+
+    # 白名单验证 - 从配置读取
+    if not is_model_allowed(provider, model):
+        allowed = get_allowed_models()
+        allowed_list = [m["full_name"] for m in allowed]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{provider}/{model}' not allowed. Allowed models: {allowed_list}"
+        )
+
+    return provider, model
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -36,17 +82,24 @@ async def chat(
     """
     对话接口 - 仅供 Java 后端内部调用
 
+    安全设计：
+    - 用户可指定 provider + model，但必须在白名单内
+    - 不指定则使用默认模型（glm-4-flash，免费）
+
     需要在 Header 中携带 x-internal-token
     """
     # 验证内部 Token
     verify_internal_token(x_internal_token)
 
+    # 验证模型是否允许
+    provider, model = validate_model(request.provider, request.model)
+
     try:
         # 创建 LLM
         llm, model_used = ModelRouter.create_llm(
             scene=request.scene,
-            provider=request.model_provider,
-            model=request.model_name
+            provider=provider,
+            model=model
         )
 
         # 构建消息
@@ -110,18 +163,24 @@ async def chat_stream(
     """
     流式对话接口 - 仅供 Java 后端内部调用
 
+    安全设计：
+    - 用户可指定 provider + model，但必须在白名单内
+
     返回 SSE 格式的流式响应
     """
     # 验证内部 Token
     verify_internal_token(x_internal_token)
+
+    # 验证模型是否允许
+    provider, model = validate_model(request.provider, request.model)
 
     async def generate_stream() -> AsyncIterator[str]:
         try:
             # 创建 LLM
             llm, model_used = ModelRouter.create_llm(
                 scene=request.scene,
-                provider=request.model_provider,
-                model=request.model_name
+                provider=provider,
+                model=model
             )
 
             # 构建消息
@@ -183,25 +242,51 @@ async def chat_stream(
     )
 
 
-@router.get("/models")
-async def list_models(x_internal_token: str = Header(None)):
+@router.get("/allowed-models")
+async def list_allowed_models(x_internal_token: str = Header(None)):
     """
-    获取可用模型列表 - 仅供 Java 后端内部调用
+    获取允许调用的模型列表 - 仅供 Java 后端内部调用
+
+    用户只能从这个列表中选择模型
     """
     # 验证内部 Token
     verify_internal_token(x_internal_token)
 
-    from config.model_config import get_all_providers
-    from core.gateway.router import ModelRouter
+    # 从配置读取允许的模型列表
+    models = get_allowed_models()
 
-    providers = get_all_providers()
-    scene_defaults = ModelRouter.get_scene_defaults()
+    # 获取默认模型
+    default_provider, default_model = get_global_default_model()
 
     return {
         "code": "00000",
         "message": "success",
         "data": {
-            "providers": providers,
-            "scene_defaults": scene_defaults
+            "allowed_models": models,
+            "default_model": f"{default_provider}/{default_model}",
+            "note": "调用时只能使用 allowed_models 中的模型"
         }
     }
+
+
+@router.get("/models")
+async def list_models(x_internal_token: str = Header(None)):
+    """
+    获取所有模型列表 - 仅供 Java 后端内部调用
+    """
+    # 验证内部 Token
+    verify_internal_token(x_internal_token)
+
+    from config.model_config import get_all_providers
+
+    providers = get_all_providers()
+
+    return {
+        "code": "00000",
+        "message": "success",
+        "data": {
+            "providers": providers
+        }
+    }
+
+

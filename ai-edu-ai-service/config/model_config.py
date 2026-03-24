@@ -12,6 +12,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "glm-4-flash": {
                 "display_name": "GLM-4-Flash",
                 "free": True,
+                "allowed": True,  # 允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "免费模型，适合大多数场景"
@@ -19,6 +20,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "glm-4.5-air": {
                 "display_name": "GLM-4.5-Air",
                 "free": False,
+                "allowed": False, # 不允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "均衡模型"
@@ -26,6 +28,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "glm-4.6v": {
                 "display_name": "GLM-4.6V",
                 "free": False,
+                "allowed": False, # 不允许外部调用
                 "supports_tools": True,
                 "supports_vision": True,
                 "description": "视觉模型，支持图片理解"
@@ -33,6 +36,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "glm-4.7": {
                 "display_name": "GLM-4.7",
                 "free": False,
+                "allowed": False,  # 不允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "最强模型"
@@ -46,6 +50,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "deepseek-chat": {
                 "display_name": "DeepSeek Chat",
                 "free": False,
+                "allowed": True,  # 允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "通用对话模型"
@@ -53,6 +58,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "deepseek-coder": {
                 "display_name": "DeepSeek Coder",
                 "free": False,
+                "allowed": True,  # 允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "代码专用模型"
@@ -66,6 +72,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "qwen-turbo": {
                 "display_name": "Qwen-Turbo",
                 "free": False,
+                "allowed": True,  # 允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "快速响应模型"
@@ -73,9 +80,18 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
             "qwen-plus": {
                 "display_name": "Qwen-Plus",
                 "free": False,
+                "allowed": True,  # 允许外部调用
                 "supports_tools": True,
                 "supports_vision": False,
                 "description": "增强模型"
+            },
+            "qwen-math-turbo": {
+                "display_name": "Qwen-Math-Turbo",
+                "free": False,
+                "allowed": True,  # 允许外部调用
+                "supports_tools": True,
+                "supports_vision": False,
+                "description": "数学专用模型，适合数学计算和推理"
             }
         },
         "default_model": "qwen-turbo"
@@ -84,6 +100,7 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
 
 
 # ============ 场景到模型的映射 ============
+# 用户只能选择场景，后端决定模型（安全设计）
 
 SCENE_MODEL_MAPPING: Dict[str, Tuple[str, str]] = {
     # 免费！页面解释用免费模型足够
@@ -100,6 +117,9 @@ SCENE_MODEL_MAPPING: Dict[str, Tuple[str, str]] = {
 
     # 内容生成
     "content_generation": ("deepseek", "deepseek-chat"),
+
+    # 数学辅导 - 使用百炼数学模型
+    "math_tutor": ("bailian", "qwen-math-turbo"),
 }
 
 # 默认场景配置
@@ -149,3 +169,83 @@ def get_all_providers() -> list:
             ]
         })
     return result
+
+
+def get_allowed_models() -> list:
+    """
+    获取允许外部调用的模型列表
+
+    Returns:
+        list: 允许调用的模型列表
+    """
+    allowed_models = []
+    for provider, config in MODEL_CONFIG.items():
+        for model, model_config in config["models"].items():
+            if model_config.get("allowed", True):
+                allowed_models.append({
+                    "provider": provider,
+                    "model": model,
+                    "full_name": f"{provider}/{model}",
+                    "display_name": model_config["display_name"],
+                    "free": model_config.get("free", False),
+                    "supports_tools": model_config.get("supports_tools", False),
+                    "supports_vision": model_config.get("supports_vision", False),
+                    "description": model_config.get("description", "")
+                })
+    return allowed_models
+
+
+def is_model_allowed(provider: str, model: str) -> bool:
+    """
+    检查模型是否允许外部调用
+
+    Args:
+        provider: 提供商名称
+        model: 模型名称
+
+    Returns:
+        bool: 是否允许调用
+    """
+    if provider not in MODEL_CONFIG:
+        return False
+    if model not in MODEL_CONFIG[provider]["models"]:
+        return False
+    return MODEL_CONFIG[provider]["models"][model].get("allowed", True)
+
+
+def get_default_model_for_provider(provider: str) -> str:
+    """
+    获取 provider 的默认模型
+
+    Args:
+        provider: 提供商名称
+
+    Returns:
+        str: 默认模型名称，如果 provider 不存在返回 None
+    """
+    if provider not in MODEL_CONFIG:
+        return None
+    return MODEL_CONFIG[provider].get("default_model")
+
+
+def get_global_default_model() -> Tuple[str, str]:
+    """
+    获取全局默认模型（优先选择免费模型）
+
+    Returns:
+        Tuple[str, str]: (provider, model)
+    """
+    # 优先选择免费的允许调用的模型
+    for provider, config in MODEL_CONFIG.items():
+        for model, model_config in config["models"].items():
+            if model_config.get("free", False) and model_config.get("allowed", True):
+                return provider, model
+
+    # 没有免费模型，返回第一个允许的模型
+    for provider, config in MODEL_CONFIG.items():
+        for model, model_config in config["models"].items():
+            if model_config.get("allowed", True):
+                return provider, model
+
+    # 兜底：返回 zhipu 的默认模型
+    return "zhipu", "glm-4-flash"

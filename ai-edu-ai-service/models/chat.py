@@ -7,12 +7,13 @@ from enum import Enum
 
 
 class SceneEnum(str, Enum):
-    """场景枚举"""
+    """场景枚举 - 用户只能选择这些预定义场景"""
     PAGE_ASSISTANT = "page_assistant"
     HOMEWORK_GRADING = "homework_grading"
     FAQ = "faq"
     IMAGE_ANALYSIS = "image_analysis"
     CONTENT_GENERATION = "content_generation"
+    MATH_TUTOR = "math_tutor"  # 数学辅导场景 -> 使用 qwen-math-turbo
 
 
 class ChatMessage(BaseModel):
@@ -29,14 +30,20 @@ class ToolCall(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """聊天请求 - 来自 Java 后端"""
+    """聊天请求 - 来自 Java 后端
+
+    安全设计：
+    - 用户可指定 provider + model，但必须在白名单内
+    - 不指定则使用默认模型
+    """
     message: str = Field(..., description="用户消息", max_length=10000)
-    scene: str = Field(..., description="场景代码")
+    scene: Optional[str] = Field(None, description="场景代码（可选）")
     user_id: int = Field(..., description="用户 ID")
     session_id: Optional[str] = Field(None, description="会话 ID")
     page_code: Optional[str] = Field(None, description="页面编码")
-    model_provider: Optional[str] = Field(None, description="指定 Provider")
-    model_name: Optional[str] = Field(None, description="指定模型名称")
+    # 用户可指定的模型（必须在白名单内）
+    provider: Optional[str] = Field(None, description="指定 Provider")
+    model: Optional[str] = Field(None, description="指定模型名称")
     context: Optional[Dict[str, Any]] = Field(None, description="额外上下文")
 
 

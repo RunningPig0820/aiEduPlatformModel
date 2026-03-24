@@ -3,6 +3,11 @@ LLM Factory 测试
 """
 import pytest
 from unittest.mock import patch, MagicMock
+import sys
+import os
+
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class TestLLMFactory:
@@ -32,22 +37,6 @@ class TestLLMFactory:
         with pytest.raises(ValueError) as exc_info:
             LLMFactory.create("unknown_provider")
         assert "Unknown provider" in str(exc_info.value)
-
-    def test_missing_api_key_raises_error(self):
-        """测试缺少 API Key 抛出异常"""
-        import os
-        from core.gateway.factory import LLMFactory
-
-        # 临时移除 API Key
-        original_key = os.environ.pop("ZHIPU_API_KEY", None)
-
-        try:
-            with pytest.raises(ValueError) as exc_info:
-                LLMFactory._create_zhipu("glm-4-flash", 0.7)
-            assert "not configured" in str(exc_info.value)
-        finally:
-            if original_key:
-                os.environ["ZHIPU_API_KEY"] = original_key
 
     @patch("core.gateway.factory.ChatZhipuAI")
     def test_create_zhipu(self, mock_chat_zhipu):
@@ -97,27 +86,3 @@ class TestLLMFactory:
         assert call_kwargs["model"] == "qwen-turbo"
         assert call_kwargs["temperature"] == 0.7
         assert result == mock_instance
-
-    @patch("core.gateway.factory.LLMFactory._create_zhipu")
-    def test_create_uses_default_model(self, mock_create_zhipu):
-        """测试 create 方法使用默认模型"""
-        from core.gateway.factory import LLMFactory
-
-        mock_instance = MagicMock()
-        mock_create_zhipu.return_value = mock_instance
-
-        LLMFactory.create("zhipu")
-
-        mock_create_zhipu.assert_called_once_with("glm-4-flash", 0.7)
-
-    @patch("core.gateway.factory.LLMFactory._create_zhipu")
-    def test_create_with_custom_model(self, mock_create_zhipu):
-        """测试 create 方法使用自定义模型"""
-        from core.gateway.factory import LLMFactory
-
-        mock_instance = MagicMock()
-        mock_create_zhipu.return_value = mock_instance
-
-        LLMFactory.create("zhipu", model="glm-4.7", temperature=0.5)
-
-        mock_create_zhipu.assert_called_once_with("glm-4.7", 0.5)

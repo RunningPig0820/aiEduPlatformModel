@@ -129,17 +129,20 @@ class LLMFactory:
         temperature: float,
         **kwargs
     ) -> BaseChatModel:
-        """创建百炼 ChatModel (通义千问)"""
-        from langchain_community.chat_models import ChatTongyi
+        """创建百炼 ChatModel (通义千问) - 使用 OpenAI 兼容协议"""
+        from langchain_openai import ChatOpenAI
 
+        # 使用 BAILIAN_API_KEY
         api_key = settings.BAILIAN_API_KEY
         if not api_key:
             raise ValueError("BAILIAN_API_KEY not configured in environment")
 
-        return ChatTongyi(
+        # 百炼 OpenAI 兼容接口
+        return ChatOpenAI(
             model=model,
             temperature=temperature,
-            dashscope_api_key=api_key,
+            openai_api_key=api_key,
+            openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
             **kwargs
         )
 

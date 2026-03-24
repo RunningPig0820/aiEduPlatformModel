@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # 阿里云百炼 (通义千问)
     BAILIAN_API_KEY: str = ""
 
+    # 阿里云 DashScope API Key (百炼使用)
+    DASHSCOPE_API_KEY: str = ""
+
     # ============ 服务配置 ============
     # Java 后端调用 AI 服务的内部 Token
     INTERNAL_TOKEN: str = ""
