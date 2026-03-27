@@ -1,6 +1,14 @@
 """
-Pytest 配置 - 用于单元测试和集成测试（Mock）
-真实 API 测试使用 tests/real/conftest.py
+Pytest 全局配置
+
+测试目录结构：
+tests/
+├── llm/           # LLM Gateway 模块测试
+│   ├── unit/      # 单元测试 (Mock)
+│   ├── integration/ # 集成测试 (Mock)
+│   └── real/      # 真实 API 测试
+└── kg/            # Knowledge Graph 模块测试
+    └── real/      # 真实 Neo4j 测试
 """
 import pytest
 import sys
@@ -9,6 +17,22 @@ import os
 # 添加项目根目录到 Python 路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
+
+
+def pytest_configure(config):
+    """配置 pytest markers."""
+    config.addinivalue_line(
+        "markers", "requires_zhipu: 需要 ZHIPU_API_KEY"
+    )
+    config.addinivalue_line(
+        "markers", "requires_deepseek: 需要 DEEPSEEK_API_KEY"
+    )
+    config.addinivalue_line(
+        "markers", "requires_bailian: 需要 DASHSCOPE_API_KEY"
+    )
+    config.addinivalue_line(
+        "markers", "requires_neo4j: 需要 Neo4j 连接配置"
+    )
 
 
 @pytest.fixture(autouse=True, scope="session")

@@ -1,5 +1,5 @@
 """
-真实 API 集成测试
+LLM 真实 API 测试配置
 需要配置真实 API Key
 验证与各 Provider 的实际连通性
 """
@@ -9,19 +9,6 @@ from dotenv import load_dotenv
 
 # 加载 .env 文件
 load_dotenv()
-
-
-def pytest_configure(config):
-    """标记需要 API Key 的测试"""
-    config.addinivalue_line(
-        "markers", "requires_zhipu: 需要 ZHIPU_API_KEY"
-    )
-    config.addinivalue_line(
-        "markers", "requires_deepseek: 需要 DEEPSEEK_API_KEY"
-    )
-    config.addinivalue_line(
-        "markers", "requires_bailian: 需要 DASHSCOPE_API_KEY"
-    )
 
 
 def pytest_collection_modifyitems(config, items):

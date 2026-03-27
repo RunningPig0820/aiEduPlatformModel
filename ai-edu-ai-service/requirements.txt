@@ -28,6 +28,11 @@ pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 httpx>=0.26.0
 
+# Knowledge Graph
+neo4j>=5.0.0
+rdflib>=7.0.0
+jieba>=0.42.1
+
 # Testing
 pytest>=7.4.0
 pytest-asyncio>=0.23.0

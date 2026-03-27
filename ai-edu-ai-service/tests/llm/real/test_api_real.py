@@ -89,14 +89,14 @@ class TestChatAPIReal:
             json={
                 "message": "你好",
                 "user_id": 1,
-                "provider": "bailian",
-                "model": "qwen-plus"  # 配置中 allowed: false
+                "provider": "zhipu",
+                "model": "glm-4.5-air"  # 配置中 allowed: false
             },
             headers={"x-internal-token": get_internal_token()}
         )
 
         assert response.status_code == 400
-        print(f"\n✅ 百炼不允许的模型被正确拒绝")
+        print(f"\n✅ 智谱不允许的模型被正确拒绝")
 
     def test_chat_unknown_provider(self, client):
         """测试聊天 - 未知的 provider"""

@@ -41,6 +41,22 @@ class Settings(BaseSettings):
     # ============ 日志配置 ============
     LOG_LEVEL: str = "INFO"
 
+    # ============ Neo4j 知识图谱配置 ============
+    # Neo4j 连接 URI (bolt 协议)
+    NEO4J_URI: str = "bolt://localhost:7687"
+
+    # Neo4j HTTP 端口 (浏览器访问)
+    NEO4J_HTTP_URI: str = "http://localhost:7474"
+
+    # Neo4j 用户名
+    NEO4J_USER: str = "neo4j"
+
+    # Neo4j 密码
+    NEO4J_PASSWORD: str = ""
+
+    # ============ Redis 配置 (可选) ============
+    REDIS_URL: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
