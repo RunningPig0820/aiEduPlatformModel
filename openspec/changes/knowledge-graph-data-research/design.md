@@ -85,17 +85,17 @@
 }]->(:KnowledgePoint)
 
 // ========== 核心前置关系（真正的学习依赖）==========
-// 业务查询用 PREREQUISITE，EduKG 标准用 先修于
+// 业务查询用 PREREQUISITE，EduKG 标准用 PREREQUISITE_ON
 (:KnowledgePoint)-[:PREREQUISITE {
   confidence: 0.85,
   source: "llm",           // llm/definition_extraction/teacher
   evidence_types: ["definition_dependency", "llm_inference"],
   verified: false,
-  standard_relation: "先修于"
+  standard_relation: "PREREQUISITE_ON"
 }]->(:KnowledgePoint)
 
 // EduKG 标准关系（便于互操作）
-(:KnowledgePoint)-[:先修_on {
+(:KnowledgePoint)-[:PREREQUISITE_ON {
   confidence: 0.85,
   source: "llm"
 }]->(:KnowledgePoint)
@@ -118,7 +118,7 @@
 - **TEACHES_BEFORE**：教材教学顺序，不等于学习依赖。如"勾股定理"在教材中先于"圆"，但学圆不需要先学勾股定理。
 - **PREREQUISITE**：真正的学习依赖（不学A就学不懂B），由定义依赖抽取 + LLM 多模型投票生成。
 - **PREREQUISITE_CANDIDATE**：低置信度候选关系，待后续验证。
-- **先修_on**：EduKG 标准关系，方便未来互操作。
+- **PREREQUISITE_ON**：EduKG 标准关系，方便未来互操作。
 
 ---
 
@@ -280,7 +280,7 @@ def extract_definition_dependencies(knowledge_points):
 ```python
 LLM_CONFIG = {
     "providers": ["zhipu", "deepseek"],
-    "model": {"zhipu": "glm-4-flash", "deepseek": "deepseek-chat"},
+    "model": {"zhipu": "glm-4-flash", "deepseek": "deepseek-V3"},
     "scene": "prerequisite_inference",
     "temperature": 0.3,
     "batch_size": 10,      # 调小批次，提高精度
