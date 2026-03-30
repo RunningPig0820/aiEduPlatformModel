@@ -27,7 +27,7 @@ infer_teaches_before.py → extract_definition_deps.py → infer_prerequisites_l
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/infer_teaches_before.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/infer_teaches_before.py` |
 | 执行方式 | `python infer_teaches_before.py [--options]` |
 
 ### 命令行参数
@@ -60,7 +60,7 @@ SUCCESS: Output written to output/math_teaches_before.csv
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/extract_definition_deps.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/extract_definition_deps.py` |
 | 执行方式 | `python extract_definition_deps.py [--options]` |
 
 ### 命令行参数
@@ -95,7 +95,7 @@ SUCCESS: Output written to output/math_definition_deps.csv
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/infer_prerequisites_llm.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/infer_prerequisites_llm.py` |
 | 执行方式 | `python infer_prerequisites_llm.py [--options]` |
 | **设计成本** | 约 8,980 次 LLM 调用（glm-4-flash 免费 + deepseek <1元） |
 
@@ -146,7 +146,7 @@ SUCCESS: Output written to output/math_llm_prereq.csv
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/fuse_prerequisites.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/fuse_prerequisites.py` |
 | 执行方式 | `python fuse_prerequisites.py [--options]` |
 
 ### 命令行参数
@@ -185,7 +185,7 @@ SUCCESS: Output written to output/math_final_prereq.csv
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/import_prereq_to_neo4j.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/import_prereq_to_neo4j.py` |
 | 执行方式 | `python import_prereq_to_neo4j.py [--options]` |
 | 依赖 | kg-math-native-relations 已完成 |
 
@@ -221,7 +221,7 @@ SUCCESS: Import completed.
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/validate_dag.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/validate_dag.py` |
 | 执行方式 | `python validate_dag.py` |
 | 退出码 | 0: 无环, 1: 有环 |
 

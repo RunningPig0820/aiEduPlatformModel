@@ -7,9 +7,9 @@ Combines Neo4j queries with entity linking.
 import logging
 from typing import Optional, List, Dict, Any
 
-from core.neo4j import get_neo4j_client, Neo4jClient
-from core.kg.entity_linker import get_entity_linker, EntityLinker
-from models.kg import (
+from edukg.core.neo4j import get_neo4j_client, Neo4jClient
+from edukg.core.kg.entity_linker import get_entity_linker, EntityLinker
+from edukg.models.kg import (
     EntityResponse,
     EntitySearchResponse,
     EntityLinkResponse,

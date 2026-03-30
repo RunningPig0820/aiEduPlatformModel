@@ -9,7 +9,7 @@ All endpoints use x-internal-token for authentication.
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Header
 
-from core.neo4j.service import Neo4jService, get_neo4j_service
+from edukg.core.neo4j.service import Neo4jService, get_neo4j_service
 from config.settings import settings
 
 router = APIRouter(prefix="/api/neo4j", tags=["Neo4j"])

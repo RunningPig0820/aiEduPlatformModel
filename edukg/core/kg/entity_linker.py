@@ -12,8 +12,6 @@ from dataclasses import dataclass, field
 
 import jieba
 
-from config.settings import settings
-
 logger = logging.getLogger(__name__)
 
 

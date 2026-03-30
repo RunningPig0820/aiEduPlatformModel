@@ -9,8 +9,8 @@ All methods are designed to be called via API endpoints.
 import logging
 from typing import Optional, List, Dict, Any
 
-from core.neo4j.client import Neo4jClient, get_neo4j_client
-from core.neo4j.repository import Neo4jRepository
+from edukg.core.neo4j.client import Neo4jClient, get_neo4j_client
+from edukg.core.neo4j.repository import Neo4jRepository
 
 logger = logging.getLogger(__name__)
 

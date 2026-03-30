@@ -57,7 +57,7 @@ AI 引导式答疑业务需要知识图谱数据支持：
 
 ## Impact
 
-- **数据目录**: 新建 `ai-edu-ai-service/scripts/kg_construction/` 目录
+- **数据目录**: 新建 `edukg/scripts/kg_construction/` 目录
 - **Neo4j**: 新增 6 种关系类型（TEACHES_BEFORE, PREREQUISITE, PREREQUISITE_ON, PREREQUISITE_CANDIDATE, RELATED_TO, SUB_CATEGORY）
 - **LLM Gateway**: 新增 `prerequisite_inference` scene 映射，支持多模型投票
 - **数据量**: 约 56,391 知识点，10,198 原生关系（保留），约 50,000+ 学习依赖关系（多证据融合生成）

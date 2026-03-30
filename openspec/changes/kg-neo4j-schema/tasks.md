@@ -1,6 +1,6 @@
 ## 1. Environment Setup
 
-- [x] 1.1 Create scripts directory `ai-edu-ai-service/scripts/kg_construction/`
+- [x] 1.1 Create scripts directory `edukg/scripts/kg_construction/`
 - [x] 1.2 Add Neo4j Python driver dependency to requirements.txt (`neo4j>=5.0.0`)
 - [x] 1.3 Create Neo4j connection configuration in `config/settings.py`
 

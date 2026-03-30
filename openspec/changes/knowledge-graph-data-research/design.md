@@ -1244,7 +1244,7 @@ TTL 解析库	rdflib	Python 生态最成熟的 RDF 解析库
 Neo4j 驱动	neo4j-driver 4.4.x	与 Neo4j 版本严格匹配
 LLM 调用	复用 Gateway	使用现有 core/gateway/factory.py
 10.2 脚本目录结构
-ai-edu-ai-service/scripts/kg_construction/
+edukg/scripts/kg_construction/
 ├── requirements-scripts.txt   # 脚本独立依赖，不污染主服务
 ├── clean_math_data.py         # 数学数据清洗
 ├── extract_textbook_info.py   # 教材信息提取
@@ -2397,7 +2397,7 @@ pyyaml>=6.0
 portalocker>=2.7.0
 
 十七、脚本目录结构更新
-ai-edu-ai-service/scripts/kg_construction/
+edukg/scripts/kg_construction/
 ├── requirements-scripts.txt
 ├── config/
 │   ├── pipeline.yaml           # 流程配置

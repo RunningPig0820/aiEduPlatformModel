@@ -22,7 +22,7 @@ clean_math_data.py → extract_textbook_info.py → merge_math_data.py → impor
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/clean_math_data.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/clean_math_data.py` |
 | 执行方式 | `python clean_math_data.py [--options]` |
 | 依赖 | RDFLib, 环境变量配置 |
 
@@ -38,7 +38,7 @@ clean_math_data.py → extract_textbook_info.py → merge_math_data.py → impor
 
 **正常执行:**
 ```bash
-cd ai-edu-ai-service/scripts/kg_construction
+cd edukg/scripts/kg_construction
 python clean_math_data.py
 ```
 
@@ -82,7 +82,7 @@ SUCCESS: Output written to output/math_knowledge_points.json
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/extract_textbook_info.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/extract_textbook_info.py` |
 | 执行方式 | `python extract_textbook_info.py [--options]` |
 | 依赖 | RDFLib, 数学知识点 JSON |
 
@@ -122,7 +122,7 @@ SUCCESS: Output written to output/math_textbook_mapping.json
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/merge_math_data.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/merge_math_data.py` |
 | 执行方式 | `python merge_math_data.py [--options]` |
 
 ### 命令行参数
@@ -158,7 +158,7 @@ SUCCESS: Output written to output/math_final_data.json
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/import_math_kp_to_neo4j.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/import_math_kp_to_neo4j.py` |
 | 执行方式 | `python import_math_kp_to_neo4j.py [--options]` |
 | 依赖 | Neo4j Python driver, kg-neo4j-schema 已执行 |
 
@@ -213,7 +213,7 @@ SUCCESS: Import completed. Statistics:
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/validate_math_import.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/validate_math_import.py` |
 | 执行方式 | `python validate_math_import.py [--options]` |
 | 退出码 | 0: 成功, 1: 失败 |
 

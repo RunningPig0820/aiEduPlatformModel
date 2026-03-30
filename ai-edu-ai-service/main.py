@@ -7,6 +7,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Add project root to sys.path for edukg module
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 
 def validate_kg_config():
     """
@@ -63,8 +68,8 @@ def validate_kg_config():
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    from core.neo4j import init_neo4j, close_neo4j
-    from core.kg.entity_linker import init_entity_linker
+    from edukg.core.neo4j import init_neo4j, close_neo4j
+    from edukg.core.kg.entity_linker import init_entity_linker
 
     print("\n" + "=" * 50)
     print("AI Education Platform - AI Service")

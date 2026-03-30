@@ -64,7 +64,7 @@
 
 ## Impact
 
-- **新目录**: `ai-edu-ai-service/scripts/kg_construction/`, `ai-edu-ai-service/data/edukg/split/`
+- **新目录**: `edukg/scripts/kg_construction/`, `edukg/data/edukg/split/`
 - **新脚本**: `split_main_ttl.py`, `create_neo4j_schema.py`, `validate_schema.py`
 - **新数据文件**: 8 个 main-{subject}.ttl 文件（main-math.ttl, main-physics.ttl 等）
 - **Neo4j**: 创建 6 个节点标签，2 个唯一性约束（不创建性能索引）

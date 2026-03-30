@@ -76,3 +76,7 @@ service-account.json
 
 # Claude Code
 .claude/
+
+
+*/edukg/data/*
+**/edukg/data/**

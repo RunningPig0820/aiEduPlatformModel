@@ -18,7 +18,7 @@
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/create_neo4j_schema.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/create_neo4j_schema.py` |
 | 执行方式 | `python create_neo4j_schema.py [--options]` |
 | 依赖 | Neo4j Python driver, 环境变量配置 |
 
@@ -35,7 +35,7 @@
 
 **正常执行:**
 ```bash
-cd ai-edu-ai-service/scripts/kg_construction
+cd edukg/scripts/kg_construction
 python create_neo4j_schema.py
 ```
 
@@ -83,7 +83,7 @@ SUCCESS: Schema initialization completed
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/validate_schema.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/validate_schema.py` |
 | 执行方式 | `python validate_schema.py [--options]` |
 | 退出码 | 0: 成功, 1: 失败 |
 

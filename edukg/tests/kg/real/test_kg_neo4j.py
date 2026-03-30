@@ -5,8 +5,14 @@ Real Neo4j connection tests for knowledge graph operations.
 Tests are READ-ONLY - they do not create or delete data.
 """
 import os
+import sys
 import pytest
 from dotenv import load_dotenv
+
+# Add project root to sys.path
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 # Load .env file
 load_dotenv()
@@ -15,7 +21,7 @@ load_dotenv()
 @pytest.fixture(scope="module")
 def neo4j_client():
     """Get Neo4j client for testing."""
-    from core.neo4j import init_neo4j, get_neo4j_client, close_neo4j
+    from edukg.core.neo4j import init_neo4j, get_neo4j_client, close_neo4j
 
     init_neo4j()
     client = get_neo4j_client()
@@ -26,7 +32,7 @@ def neo4j_client():
 @pytest.fixture(scope="module")
 def entity_linker():
     """Get entity linker for testing."""
-    from core.kg.entity_linker import init_entity_linker, get_entity_linker
+    from edukg.core.kg.entity_linker import init_entity_linker, get_entity_linker
 
     init_entity_linker()
     return get_entity_linker()
@@ -35,9 +41,9 @@ def entity_linker():
 @pytest.fixture(scope="module")
 def kg_service():
     """Get KG service for testing."""
-    from core.neo4j import init_neo4j
-    from core.kg.entity_linker import init_entity_linker
-    from core.kg.service import get_kg_service
+    from edukg.core.neo4j import init_neo4j
+    from edukg.core.kg.entity_linker import init_entity_linker
+    from edukg.core.kg.service import get_kg_service
 
     init_neo4j()
     init_entity_linker()

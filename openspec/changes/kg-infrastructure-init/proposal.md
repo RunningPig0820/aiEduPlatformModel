@@ -52,7 +52,7 @@
 
 ## Impact
 
-- **新目录**: `ai-edu-ai-service/scripts/kg_construction/core/`
+- **新目录**: `edukg/scripts/kg_construction/core/`
 - **新模块**: `state_db.py`, `process_lock.py`, `cost_tracker.py`, `db_connection.py`
 - **新配置**: `config/database.yaml`
 - **MySQL**: 新建数据库 `ai_edu_kg`，5 张表

@@ -6,7 +6,7 @@ RESTful API endpoints for knowledge graph operations.
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
-from models.kg import (
+from edukg.models.kg import (
     EntitySearchResponse,
     EntityResponse,
     EntityLinkRequest,
@@ -21,7 +21,7 @@ from models.kg import (
     LearningPathResponse,
     SubjectEnum,
 )
-from core.kg.service import get_kg_service, KnowledgeGraphService
+from edukg.core.kg.service import get_kg_service, KnowledgeGraphService
 
 router = APIRouter(prefix="/api/kg", tags=["Knowledge Graph"])
 

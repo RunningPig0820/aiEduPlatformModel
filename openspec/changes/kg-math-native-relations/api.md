@@ -23,7 +23,7 @@ extract_native_relations.py → import_native_relations_to_neo4j.py → validate
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/extract_native_relations.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/extract_native_relations.py` |
 | 执行方式 | `python extract_native_relations.py [--options]` |
 | 依赖 | RDFLib |
 
@@ -61,7 +61,7 @@ SUCCESS: Output written to output/math_native_relations.csv
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/import_native_relations_to_neo4j.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/import_native_relations_to_neo4j.py` |
 | 执行方式 | `python import_native_relations_to_neo4j.py [--options]` |
 | 依赖 | kg-math-knowledge-points 已完成 |
 
@@ -102,7 +102,7 @@ SUCCESS: Import completed. Statistics:
 
 | 项目 | 值 |
 |------|-----|
-| 脚本路径 | `ai-edu-ai-service/scripts/kg_construction/validate_native_relations.py` |
+| 脚本路径 | `edukg/scripts/kg_construction/validate_native_relations.py` |
 | 执行方式 | `python validate_native_relations.py` |
 | 退出码 | 0: 成功, 1: 失败 |
 
