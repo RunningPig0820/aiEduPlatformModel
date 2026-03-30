@@ -69,7 +69,7 @@
 - [ ] 2.8 编写 `scripts/fuse_prerequisites.py`
   - 融合定义依赖 + LLM 多模型投票
   - 生成最终 PREREQUISITE 关系
-  - 同时生成 EduKG 标准关系（先修_on）
+  - 同时生成 EduKG 标准关系（PREREQUISITE_ON）
   - 输出最终关系文件
 
 ### 导入 Neo4j
@@ -79,7 +79,7 @@
     - TEACHES_BEFORE（教学顺序）
     - PREREQUISITE（学习依赖）
     - PREREQUISITE_CANDIDATE（候选关系）
-    - 先修_on（EduKG 标准）
+    - PREREQUISITE_ON（EduKG 标准）
     - RELATED_TO（知识点关联）
     - SUB_CATEGORY（分类层级）
 - [ ] 2.10 编写 `scripts/import_math_to_neo4j.py`
@@ -89,7 +89,7 @@
   - 导入 TEACHES_BEFORE 关系
   - 导入 PREREQUISITE 关系
   - 导入 PREREQUISITE_CANDIDATE 关系
-  - 导入 先修_on 标准关系
+  - 导入 PREREQUISITE_ON 标准关系
   - 导入 RELATED_TO 关系（relateTo 数据）
   - 导入 SUB_CATEGORY 关系（subCategory 数据）
 - [ ] 2.11 验证数据完整性
@@ -212,7 +212,7 @@
 
 | 学科 | 知识点数 | TTL 原生关系 | 构建关系 | Phase |
 |------|---------|-------------|---------|-------|
-| 数学 | 4,490 | 9,870 relateTo → **RELATED_TO**<br>328 subCategory → **SUB_CATEGORY** | **TEACHES_BEFORE**（教学顺序）<br>**PREREQUISITE**（学习依赖）<br>**先修_on**（EduKG标准）<br>**PREREQUISITE_CANDIDATE**（候选） | P1 |
+| 数学 | 4,490 | 9,870 relateTo → **RELATED_TO**<br>328 subCategory → **SUB_CATEGORY** | **TEACHES_BEFORE**（教学顺序）<br>**PREREQUISITE**（学习依赖）<br>**PREREQUISITE_ON**（EduKG标准）<br>**PREREQUISITE_CANDIDATE**（候选） | P1 |
 | 物理 | 3,385 | 0 | 同上 | P2 |
 | 化学 | 5,718 | 0 | 同上 | P2 |
 | 生物 | 15,209 | 0 | 同上 | P2 |
@@ -229,7 +229,7 @@
 |---------|------|------|------|
 | **TEACHES_BEFORE** | 教材章节顺序 | 教学安排顺序（不等于学习依赖） | 教学参考、顺序查询 |
 | **PREREQUISITE** | 定义依赖抽取 + LLM多模型投票 | 学习依赖（不学A就学不懂B） | AI 答疑核心：学习路径、知识诊断 |
-| **先修_on** | 同 PREREQUISITE | EduKG 标准关系 | 互操作、标准化 |
+| **PREREQUISITE_ON** | 同 PREREQUISITE | EduKG 标准关系 | 互操作、标准化 |
 | **PREREQUISITE_CANDIDATE** | LLM 低置信度候选 | 待验证关系 | 后续迭代、人工审核 |
 | **RELATED_TO** | TTL relateTo 数据 | 知识点关联 | 知识扩展、可视化 |
 | **SUB_CATEGORY** | TTL subCategory 数据 | 分类层级 | 分类导航 |

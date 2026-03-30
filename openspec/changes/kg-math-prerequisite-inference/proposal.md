@@ -37,14 +37,14 @@
 4. **关系融合脚本**
    - 融合定义依赖 + LLM 多模型投票
    - 生成最终 PREREQUISITE 关系
-   - 同时生成 EduKG 标准关系（先修_on）
+   - 同时生成 EduKG 标准关系（PREREQUISITE_ON）
    - 输出最终关系文件
 
 5. **关系导入脚本**
    - 导入 TEACHES_BEFORE 关系
    - 导入 PREREQUISITE 关系
    - 导入 PREREQUISITE_CANDIDATE 关系
-   - 导入 先修_on 关系
+   - 导入 PREREQUISITE_ON 关系
    - 验证 DAG 合规性（无环）
 
 ## Capabilities
@@ -65,7 +65,7 @@
 
 - **新脚本**: `infer_teaches_before.py`, `extract_definition_deps.py`, `infer_prerequisites_llm.py`, `fuse_prerequisites.py`, `import_prereq_to_neo4j.py`
 - **中间文件**: `math_teaches_before.csv`, `math_definition_deps.csv`, `math_llm_prereq.csv`, `math_final_prereq.csv`
-- **Neo4j**: 新增约 50,000+ 条关系（TEACHES_BEFORE, PREREQUISITE, PREREQUISITE_CANDIDATE, 先修_on）
+- **Neo4j**: 新增约 50,000+ 条关系（TEACHES_BEFORE, PREREQUISITE, PREREQUISITE_CANDIDATE, PREREQUISITE_ON）
 - **LLM Gateway**: 新增 scene `prerequisite_inference`（GLM-4-flash + DeepSeek）
 - **设计成本**: 约 4,490 × 2 模型 = 8,980 次 LLM 调用（使用免费/低成本模型）
 - **依赖**: 依赖 `kg-math-native-relations` change 完成并测试通过

@@ -19,10 +19,10 @@ The system SHALL import inferred prerequisite relations into Neo4j.
 - **WHEN** import script is executed
 - **THEN** it SHALL import all PREREQUISITE_CANDIDATE relations
 
-#### Scenario: Import 先修_on relations
+#### Scenario: Import PREREQUISITE_ON relations
 
 - **WHEN** import script is executed
-- **THEN** it SHALL import all 先修_on relations (EduKG standard)
+- **THEN** it SHALL import all PREREQUISITE_ON relations (EduKG standard)
 
 ### Requirement: DAG validation
 

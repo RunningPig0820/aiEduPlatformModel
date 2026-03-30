@@ -21,12 +21,12 @@ The system SHALL fuse multiple evidence sources to generate final prerequisite r
 
 ### Requirement: EduKG standard relation
 
-The system SHALL generate EduKG standard relation (先修_on) alongside PREREQUISITE.
+The system SHALL generate EduKG standard relation (PREREQUISITE_ON) alongside PREREQUISITE.
 
-#### Scenario: Create 先修_on relations
+#### Scenario: Create PREREQUISITE_ON relations
 
 - **WHEN** a PREREQUISITE relation is created
-- **THEN** the fusion script SHALL also create 先修_on relation for EduKG compatibility
+- **THEN** the fusion script SHALL also create PREREQUISITE_ON relation for EduKG compatibility
 
 ### Requirement: Deduplication
 

@@ -33,12 +33,12 @@ AI 引导式答疑业务需要知识图谱数据支持：
    - subCategory → SUB_CATEGORY（分类层级）
 
 4. **EduKG 标准对齐**
-   - 新增 `先修_on` 标准关系，便于互操作
+   - 新增 `PREREQUISITE_ON` 标准关系，便于互操作
 
 5. **导入 Neo4j**
    - 建立标准数据模型
    - 创建层级结构 (学科→学段→年级→章节→知识点)
-   - 创建多种关系类型（TEACHES_BEFORE, PREREQUISITE, 先修_on, PREREQUISITE_CANDIDATE, RELATED_TO, SUB_CATEGORY）
+   - 创建多种关系类型（TEACHES_BEFORE, PREREQUISITE, PREREQUISITE_ON, PREREQUISITE_CANDIDATE, RELATED_TO, SUB_CATEGORY）
 
 ## Capabilities
 
@@ -49,7 +49,7 @@ AI 引导式答疑业务需要知识图谱数据支持：
 - `prerequisite-relation`: 学习依赖关系（多证据融合生成），支持学习路径推荐和知识诊断
 - `prerequisite-candidate`: 低置信度候选关系，支持后续迭代优化
 - `related-knowledge`: 知识点横向关联（TTL 原生数据），支持知识扩展和可视化
-- `edukg-standard`: EduKG 标准关系（先修_on），支持互操作
+- `edukg-standard`: EduKG 标准关系（PREREQUISITE_ON），支持互操作
 
 ### Modified Capabilities
 
@@ -58,6 +58,6 @@ AI 引导式答疑业务需要知识图谱数据支持：
 ## Impact
 
 - **数据目录**: 新建 `ai-edu-ai-service/scripts/kg_construction/` 目录
-- **Neo4j**: 新增 6 种关系类型（TEACHES_BEFORE, PREREQUISITE, 先修_on, PREREQUISITE_CANDIDATE, RELATED_TO, SUB_CATEGORY）
+- **Neo4j**: 新增 6 种关系类型（TEACHES_BEFORE, PREREQUISITE, PREREQUISITE_ON, PREREQUISITE_CANDIDATE, RELATED_TO, SUB_CATEGORY）
 - **LLM Gateway**: 新增 `prerequisite_inference` scene 映射，支持多模型投票
 - **数据量**: 约 56,391 知识点，10,198 原生关系（保留），约 50,000+ 学习依赖关系（多证据融合生成）

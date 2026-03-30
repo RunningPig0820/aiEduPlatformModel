@@ -170,7 +170,7 @@ INFO: Loading definition dependencies: 850
 INFO: Loading LLM inference results: 3,300 (PREREQUISITE: 2,800, CANDIDATE: 500)
 INFO: Fusing multiple evidence sources...
 INFO: Deduplicated relations: 50
-INFO: Created 先修_on relations: 3,650 (EduKG standard)
+INFO: Created PREREQUISITE_ON relations: 3,650 (EduKG standard)
 INFO: Final relations:
   - PREREQUISITE: 3,650
   - PREREQUISITE_CANDIDATE: 500
@@ -209,7 +209,7 @@ python import_prereq_to_neo4j.py
 INFO: Importing TEACHES_BEFORE relations: 1,200
 INFO: Importing PREREQUISITE relations: 3,650
 INFO: Importing PREREQUISITE_CANDIDATE relations: 500
-INFO: Importing 先修_on relations: 3,650
+INFO: Importing PREREQUISITE_ON relations: 3,650
 SUCCESS: Import completed.
 ```
 

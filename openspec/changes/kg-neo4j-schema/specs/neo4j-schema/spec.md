@@ -31,7 +31,7 @@ The system SHALL define relationship types in Neo4j schema without creating any 
 #### Scenario: Knowledge dependency relationship types defined
 
 - **WHEN** the schema initialization script is executed
-- **THEN** the following dependency relationship types SHALL be available: PREREQUISITE, TEACHES_BEFORE, 先修_on, PREREQUISITE_CANDIDATE
+- **THEN** the following dependency relationship types SHALL be available: PREREQUISITE, TEACHES_BEFORE, PREREQUISITE_ON, PREREQUISITE_CANDIDATE
 
 #### Scenario: Knowledge association relationship types defined
 

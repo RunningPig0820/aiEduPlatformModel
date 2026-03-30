@@ -64,7 +64,7 @@
 | FUSE-001 | 合并定义依赖 | 定义依赖文件存在 | 融合 | 包含定义依赖关系 |
 | FUSE-002 | 合并 LLM 结果 | LLM 结果文件存在 | 融合 | 包含 LLM 推断关系 |
 | FUSE-003 | 去重 | 相同 source-target 对 | 融合 | 只保留一条关系 |
-| FUSE-004 | 生成 先修_on | PREREQUISITE 关系存在 | 融合 | 同时生成 先修_on 关系 |
+| FUSE-004 | 生成 PREREQUISITE_ON | PREREQUISITE 关系存在 | 融合 | 同时生成 PREREQUISITE_ON 关系 |
 | FUSE-005 | CSV 输出格式 | 融合完成 | 检查输出 | CSV 结构正确 |
 
 ### 3.5 DAG 验证脚本测试

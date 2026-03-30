@@ -219,7 +219,7 @@ def validate_dag(driver):
 MATCH ()-[r:TEACHES_BEFORE]->() DELETE r
 MATCH ()-[r:PREREQUISITE]->() DELETE r
 MATCH ()-[r:PREREQUISITE_CANDIDATE]->() DELETE r
-MATCH ()-[r:先修_on]->() DELETE r
+MATCH ()-[r:PREREQUISITE_ON]->() DELETE r
 ```
 
 ## Open Questions

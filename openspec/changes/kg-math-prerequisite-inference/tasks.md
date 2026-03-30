@@ -47,7 +47,7 @@
 - [ ] 5.3 Implement LLM inference results loading
 - [ ] 5.4 Implement relation fusion logic (merge multiple evidence sources)
 - [ ] 5.5 Implement deduplication by source-target pair
-- [ ] 5.6 Implement EduKG standard relation generation (先修_on)
+- [ ] 5.6 Implement EduKG standard relation generation (PREREQUISITE_ON)
 - [ ] 5.7 Implement confidence aggregation
 - [ ] 5.8 Implement CSV output (`math_final_prereq.csv`)
 - [ ] 5.9 Add fusion statistics logging
@@ -59,7 +59,7 @@
 - [ ] 6.2 Implement TEACHES_BEFORE relations import
 - [ ] 6.3 Implement PREREQUISITE relations import
 - [ ] 6.4 Implement PREREQUISITE_CANDIDATE relations import
-- [ ] 6.5 Implement 先修_on relations import
+- [ ] 6.5 Implement PREREQUISITE_ON relations import
 - [ ] 6.6 Implement batch import using UNWIND Cypher
 - [ ] 6.7 Add progress logging
 
