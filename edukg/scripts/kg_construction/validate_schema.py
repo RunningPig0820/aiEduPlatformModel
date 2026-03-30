@@ -16,13 +16,20 @@ Usage:
 import argparse
 import logging
 import sys
+import os
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from neo4j import GraphDatabase
+# 添加 ai-edu-ai-service 目录到 sys.path 以加载 config
+AI_SERVICE_DIR = os.path.join(project_root, "ai-edu-ai-service")
+if AI_SERVICE_DIR not in sys.path:
+    sys.path.insert(0, AI_SERVICE_DIR)
+
+from edukg.core.neo4j.client import Neo4jClient
+from config.settings import settings
 
 # 配置日志
 logging.basicConfig(
@@ -54,32 +61,29 @@ EXPECTED_CONSTRAINTS = [
 class SchemaValidator:
     """Schema 验证器"""
 
-    def __init__(self, uri: str, user: str, password: str, database: str = 'neo4j'):
+    def __init__(self, database: str = 'neo4j'):
         """
         初始化 Neo4j 连接。
 
         Args:
-            uri: Neo4j 连接 URI
-            user: 用户名
-            password: 密码
             database: 数据库名
         """
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self.client = Neo4jClient()
         self.database = database
 
     def close(self):
         """关闭连接"""
-        self.driver.close()
+        self.client.close()
 
     def get_existing_labels(self) -> set:
         """获取数据库中已有的节点标签"""
-        with self.driver.session(database=self.database) as session:
+        with self.client.session(database=self.database) as session:
             result = session.run("CALL db.labels()")
             return {record['label'] for record in result}
 
     def get_existing_constraints(self) -> list:
         """获取数据库中已有的约束"""
-        with self.driver.session(database=self.database) as session:
+        with self.client.session(database=self.database) as session:
             result = session.run("SHOW CONSTRAINTS")
             return list(result)
 
@@ -168,24 +172,6 @@ def main():
         help='显示详细信息'
     )
     parser.add_argument(
-        '--uri',
-        type=str,
-        default=None,
-        help='Neo4j URI (默认从环境变量 NEO4J_URI 读取)'
-    )
-    parser.add_argument(
-        '--user',
-        type=str,
-        default=None,
-        help='Neo4j 用户名 (默认从环境变量 NEO4J_USER 读取)'
-    )
-    parser.add_argument(
-        '--password',
-        type=str,
-        default=None,
-        help='Neo4j 密码 (默认从环境变量 NEO4J_PASSWORD 读取)'
-    )
-    parser.add_argument(
         '--database',
         type=str,
         default='neo4j',
@@ -194,18 +180,8 @@ def main():
 
     args = parser.parse_args()
 
-    # 从环境变量或参数获取连接信息
-    import os
-    uri = args.uri or os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
-    user = args.user or os.environ.get('NEO4J_USER', 'neo4j')
-    password = args.password or os.environ.get('NEO4J_PASSWORD', '')
-
-    if not password:
-        logger.error("Neo4j password not provided. Set NEO4J_PASSWORD environment variable or use --password")
-        sys.exit(1)
-
     # 验证
-    validator = SchemaValidator(uri, user, password, args.database)
+    validator = SchemaValidator(args.database)
 
     try:
         passed, report = validator.validate(verbose=args.verbose)

@@ -17,13 +17,20 @@ Usage:
 import argparse
 import logging
 import sys
+import os
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from neo4j import GraphDatabase
+# 添加 ai-edu-ai-service 目录到 sys.path 以加载 config
+AI_SERVICE_DIR = os.path.join(project_root, "ai-edu-ai-service")
+if AI_SERVICE_DIR not in sys.path:
+    sys.path.insert(0, AI_SERVICE_DIR)
+
+from edukg.core.neo4j.client import Neo4jClient
+from config.settings import settings
 
 # 配置日志
 logging.basicConfig(
@@ -77,34 +84,23 @@ RELATIONSHIP_TYPES = [
 class Neo4jSchemaCreator:
     """Neo4j Schema 创建器"""
 
-    def __init__(self, uri: str, user: str, password: str, database: str = 'neo4j'):
+    def __init__(self, database: str = 'neo4j'):
         """
         初始化 Neo4j 连接。
 
         Args:
-            uri: Neo4j 连接 URI
-            user: 用户名
-            password: 密码
             database: 数据库名
         """
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self.client = Neo4jClient()
         self.database = database
 
     def close(self):
         """关闭连接"""
-        self.driver.close()
+        self.client.close()
 
     def test_connection(self) -> bool:
         """测试连接"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                result = session.run("RETURN 1")
-                result.single()
-            logger.info("✓ Neo4j connection successful")
-            return True
-        except Exception as e:
-            logger.error(f"✗ Neo4j connection failed: {e}")
-            return False
+        return self.client.health_check()
 
     def create_constraints(self, dry_run: bool = False) -> int:
         """
@@ -127,7 +123,7 @@ class Neo4jSchemaCreator:
                 logger.info(f"[DRY-RUN] {cypher}")
             else:
                 try:
-                    with self.driver.session(database=self.database) as session:
+                    with self.client.session(database=self.database) as session:
                         session.run(cypher)
                     logger.info(f"✓ Created constraint: {constraint_name}")
                 except Exception as e:
@@ -140,7 +136,7 @@ class Neo4jSchemaCreator:
 
     def show_schema_info(self):
         """显示当前 schema 信息"""
-        with self.driver.session(database=self.database) as session:
+        with self.client.session(database=self.database) as session:
             # 显示约束
             result = session.run("SHOW CONSTRAINTS")
             constraints = list(result)
@@ -167,24 +163,6 @@ def main():
         help='仅打印 Cypher 语句，不执行'
     )
     parser.add_argument(
-        '--uri',
-        type=str,
-        default=None,
-        help='Neo4j URI (默认从环境变量 NEO4J_URI 读取)'
-    )
-    parser.add_argument(
-        '--user',
-        type=str,
-        default=None,
-        help='Neo4j 用户名 (默认从环境变量 NEO4J_USER 读取)'
-    )
-    parser.add_argument(
-        '--password',
-        type=str,
-        default=None,
-        help='Neo4j 密码 (默认从环境变量 NEO4J_PASSWORD 读取)'
-    )
-    parser.add_argument(
         '--database',
         type=str,
         default='neo4j',
@@ -202,14 +180,8 @@ def main():
         print("\nNote: Performance indexes will be created after data import (see design.md D4)")
         sys.exit(0)
 
-    # 从环境变量或参数获取连接信息
-    import os
-    uri = args.uri or os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
-    user = args.user or os.environ.get('NEO4J_USER', 'neo4j')
-    password = args.password or os.environ.get('NEO4J_PASSWORD', '')
-
     # 创建 schema
-    creator = Neo4jSchemaCreator(uri, user, password, args.database)
+    creator = Neo4jSchemaCreator(database=args.database)
 
     try:
         # 测试连接
