@@ -134,13 +134,13 @@ source: "llm"
 数据源	版本	内容	用途
 ttl/*.ttl	v0.1	知识点实例	✅ 主要数据源
 relations/*.ttl	v0.1	知识点关系	✅ 关联/分类关系
-main.ttl	v3.0	教材出处	⚠️ 年级/教材信息
+main.ttl	v3.0	教材出处	⚠️ 年级/教材信息（已拆分为 split/main-{subject}.ttl）
 entities/*.json	v0.1	实体列表	✅ 实体链接
 好未来数据	-	小学数学	📖 层级参考
 3.2 整合策略
 Step 1: 以 ttl/*.ttl 为主数据源
 ↓
-Step 2: 通过标签匹配 main.ttl 获取教材信息
+Step 2: 通过标签匹配 split/main-{subject}.ttl 获取教材信息（如数学使用 main-math.ttl）
 ↓
 Step 3: 从教材信息推断年级
 ↓
@@ -727,7 +727,7 @@ def fuse_prerequisites(definition_deps, llm_candidates):
 Step 1.1: 选择学科 (从数学开始)
 Step 1.2: 解析 ttl/math.ttl → 提取知识点
 Step 1.3: 解析 relations/math_relations.ttl → 提取关系
-Step 1.4: 匹配 main.ttl → 获取教材信息
+Step 1.4: 匹配 split/main-math.ttl → 获取教材信息
 Step 1.5: 推断年级信息
 Step 1.6: 数据验证
 阶段二：导入 Neo4j

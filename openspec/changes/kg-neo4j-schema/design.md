@@ -152,6 +152,65 @@ CREATE CONSTRAINT IF NOT EXISTS subject_code_unique FOR (n:Subject) REQUIRE n.co
   - 没有约束会导致重复数据导入
   - 约束会自动创建 backing index，但这是内部索引，不影响批量导入性能
 
+### D6: main.ttl 按学科拆分
+
+**决策**: 将 main.ttl 按学科拆分为独立的 main-{subject}.ttl 文件
+
+**问题背景**:
+- main.ttl 文件过大（131,736 行，约 16MB）
+- 包含 8 个学科的数据混合在一起
+- 处理单个学科时加载整个文件浪费内存和上下文
+- LLM 处理时上下文窗口受限
+
+**当前数据分布**:
+
+| 学科 | 实体数 | URI 前缀 |
+|------|--------|----------|
+| biology | 1,367 | `instance/biology#` |
+| geo | 1,243 | `instance/geo#` |
+| chemistry | 1,138 | `instance/chemistry#` |
+| history | 1,035 | `instance/history#` |
+| physics | 1,029 | `instance/physics#` |
+| math | 784 | `instance/math#` |
+| politics | 702 | `instance/politics#` |
+| chinese | 677 | `instance/chinese#` |
+| **合计** | **6,975** | |
+
+**拆分策略**:
+
+```
+输入: main.ttl (131,736 行)
+输出:
+  ├── main-biology.ttl (~17,000 行)
+  ├── main-chemistry.ttl (~14,000 行)
+  ├── main-chinese.ttl (~8,500 行)
+  ├── main-geo.ttl (~15,500 行)
+  ├── main-history.ttl (~13,000 行)
+  ├── main-math.ttl (~9,800 行)
+  ├── main-physics.ttl (~13,000 行)
+  └── main-politics.ttl (~8,800 行)
+```
+
+**拆分规则**:
+1. 按 URI 前缀 `instance/{subject}#` 匹配实体归属
+2. 保留 TTL header（prefix 定义）
+3. 每个文件包含完整的 TTL 结构（可独立解析）
+4. 输出文件存放在 `edukg/split/` 目录
+
+**对后续设计的影响**:
+
+| Change | 原设计 | 新设计 |
+|--------|--------|--------|
+| kg-math-knowledge-points | 解析 `main.ttl` 匹配教材信息 | 解析 `main-math.ttl` |
+| kg-math-native-relations | - | - |
+| kg-math-prerequisite-inference | - | - |
+
+**理由**:
+- 减少单学科处理时的内存占用（从 16MB → 约 2MB）
+- 提高 LLM 处理效率（上下文更聚焦）
+- 支持并行处理多个学科
+- 文件更小，便于版本管理和调试
+
 ## Risks / Trade-offs
 
 ### Risk 1: Schema 变更困难
@@ -166,12 +225,17 @@ CREATE CONSTRAINT IF NOT EXISTS subject_code_unique FOR (n:Subject) REQUIRE n.co
 **风险**: 大量索引可能影响批量导入速度
 **缓解**: 先创建必要索引，导入后根据查询需求补充
 
+### Risk 4: main.ttl 拆分后的文件管理
+**风险**: 拆分后文件数量增加，需要维护一致性
+**缓解**: 拆分脚本幂等，可重复执行；原始 main.ttl 保留作为备份
+
 ## Migration Plan
 
 **部署步骤（本阶段）**:
 1. 确保 Neo4j 服务运行
-2. 执行 `create_neo4j_schema.py` 创建约束（仅唯一性约束，不创建性能索引）
-3. 执行 `validate_schema.py` 验证约束
+2. 执行 `split_main_ttl.py` 将 main.ttl 按学科拆分
+3. 执行 `create_neo4j_schema.py` 创建约束（仅唯一性约束，不创建性能索引）
+4. 执行 `validate_schema.py` 验证约束
 
 **后续阶段（kg-math-knowledge-points）**:
 1. 导入知识点数据（批量 MERGE）

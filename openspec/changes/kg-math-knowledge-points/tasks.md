@@ -21,7 +21,7 @@
 ## 3. Textbook Info Extraction Script
 
 - [ ] 3.1 Create `extract_textbook_info.py` with RDFLib setup
-- [ ] 3.2 Implement main.ttl parsing for textbook entities
+- [ ] 3.2 Implement split/main-math.ttl parsing for textbook entities
 - [ ] 3.3 Implement textbook-grade mapping table
 - [ ] 3.4 Implement label matching algorithm (knowledge point → chapter)
 - [ ] 3.5 Implement grade inference logic

@@ -3,7 +3,7 @@
 知识图谱数学数据清洗和导入是整个项目的**试点阶段**。数学学科是唯一有原生关系数据（relateTo, subCategory）的学科，因此选择数学作为试点验证设计方案。
 
 当前状态：
-- **数据源**: `ttl/math.ttl`（4,490 个知识点）, `main.ttl`（教材信息）
+- **数据源**: `ttl/math.ttl`（4,490 个知识点）, `split/main-math.ttl`（数学教材信息，由 kg-neo4j-schema 拆分）
 - **格式问题**: TTL 使用 Unicode 编码，需要解码为中文
 - **缺失信息**: 缺少年级信息，需要从教材推断
 - **Neo4j schema**: 已由 `kg-neo4j-schema` change 创建
