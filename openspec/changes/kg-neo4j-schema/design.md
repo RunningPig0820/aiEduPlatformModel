@@ -5,6 +5,12 @@
 - **数据源多样**: EduKG TTL 文件、教材信息、LLM 推断结果
 - **多学科共用**: 9 个学科使用同一 schema 结构
 
+**数据限制**（重要）：
+- **EduKG 数据主要是高中教材**，缺少小学和初中数据
+- 统计：高中 ~28,000 条，初中 ~10 条，小学 0 条
+- 这意味着 Stage 节点主要为 "高中"，Grade 主要为 g10/g11/g12
+- 未来需要补充小学和初中数据源（如好未来数据）
+
 设计约束：
 - 使用 Neo4j 5.x 版本
 - 支持中文节点名称和属性
@@ -267,6 +273,57 @@ CREATE CONSTRAINT IF NOT EXISTS textbook_isbn_unique FOR (n:Textbook) REQUIRE n.
 - 支持并行处理多个学科
 - 文件更小，便于版本管理和调试
 
+### D7: material.ttl 按学科拆分
+
+**决策**: 将 material.ttl 按学科拆分为独立的 material-{subject}.ttl 文件
+
+**问题背景**:
+- material.ttl 包含所有学科的教材信息（约 3.5MB）
+- URI 格式为 `entity/resource/textbook#I{N}`，无学科前缀
+- 学科信息需从教材名称（P4 属性）中提取
+
+**教材名称中的学科关键词映射**:
+
+| 学科 | 名称关键词 | 英文代码 |
+|------|----------|---------|
+| 数学 | "数学" | math |
+| 物理 | "物理" | physics |
+| 化学 | "化学" | chemistry |
+| 生物 | "生物" / "生物学" | biology |
+| 历史 | "历史" | history |
+| 地理 | "地理" | geo |
+| 语文 | "语文" | chinese |
+| 英语 | "英语" | english |
+| 政治 | "思想政治" / "政治" | politics |
+
+**拆分策略**:
+
+```
+输入: material.ttl (约 3.5MB)
+输出:
+  ├── material-math.ttl
+  ├── material-physics.ttl
+  ├── material-chemistry.ttl
+  ├── material-biology.ttl
+  ├── material-history.ttl
+  ├── material-geo.ttl
+  ├── material-chinese.ttl
+  ├── material-english.ttl
+  ├── material-politics.ttl
+  └── material-unknown.ttl (无法识别学科的章节等)
+```
+
+**拆分规则**:
+1. 遍历所有三元组，识别教材实体（URI 匹配 `textbook#I{N}` 格式）
+2. 从 `ns1:P4` 属性值中提取学科关键词
+3. 按学科分组教材及其关联实体（章节等）
+4. 保留 TTL header（prefix 定义）
+
+**理由**:
+- 与 main.ttl 拆分保持一致
+- 单学科处理时更高效
+- 便于后续教材-知识点关联处理
+
 ## Risks / Trade-offs
 
 ### Risk 1: Schema 变更困难
@@ -290,8 +347,9 @@ CREATE CONSTRAINT IF NOT EXISTS textbook_isbn_unique FOR (n:Textbook) REQUIRE n.
 **部署步骤（本阶段）**:
 1. 确保 Neo4j 服务运行
 2. 执行 `split_main_ttl.py` 将 main.ttl 按学科拆分
-3. 执行 `create_neo4j_schema.py` 创建约束（仅唯一性约束，不创建性能索引）
-4. 执行 `validate_schema.py` 验证约束
+3. 执行 `split_material_ttl.py` 将 material.ttl 按学科拆分
+4. 执行 `create_neo4j_schema.py` 创建约束（仅唯一性约束，不创建性能索引）
+5. 执行 `validate_schema.py` 验证约束
 
 **后续阶段（kg-math-knowledge-points）**:
 1. 导入知识点数据（批量 MERGE）

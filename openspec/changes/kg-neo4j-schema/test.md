@@ -54,7 +54,27 @@
 | VALIDATE-004 | 详细模式输出 | Schema 完整创建 | `--verbose` 参数 | 显示每个元素的详细信息 |
 | VALIDATE-005 | 连接失败处理 | Neo4j 服务未启动 | 执行验证脚本 | 抛出 ConnectionError 异常 |
 
-### 3.3 集成测试
+### 3.3 main.ttl 拆分脚本测试
+
+| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
+|---------|---------|---------|------|---------|
+| MAIN-SPLIT-001 | 正常拆分 main.ttl | main.ttl 文件存在 | 执行 `split_main_ttl.py` | 成功生成 8+ 个学科文件 |
+| MAIN-SPLIT-002 | 自动发现学科 | main.ttl 文件存在 | `--auto-discover` 参数 | 自动检测学科并拆分 |
+| MAIN-SPLIT-003 | 三元组数量验证 | 拆分完成 | 检查日志 | 原始文件三元组数 = 各文件总和 |
+| MAIN-SPLIT-004 | 指定学科列表 | main.ttl 文件存在 | `--subjects math,physics` | 仅拆分指定学科 |
+| MAIN-SPLIT-005 | URI 学科提取 | 各种 URI 格式 | 调用 extract_subject_from_uri | 正确提取学科或返回 "unknown" |
+
+### 3.4 material.ttl 拆分脚本测试
+
+| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
+|---------|---------|---------|------|---------|
+| MAT-SPLIT-001 | 正常拆分 material.ttl | material.ttl 文件存在 | 执行 `split_material_ttl.py` | 成功生成 9+ 个学科文件 |
+| MAT-SPLIT-002 | 教材名称学科提取 | 各种教材名称 | 调用 extract_subject_from_name | 正确提取学科关键词 |
+| MAT-SPLIT-003 | 三元组数量验证 | 拆分完成 | 检查日志 | 原始文件三元组数 = 各文件总和 |
+| MAT-SPLIT-004 | 未知学科处理 | 存在无法识别的教材 | 执行拆分 | 生成 material-unknown.ttl |
+| MAT-SPLIT-005 | 章节关联分组 | 教材有关联章节 | 执行拆分 | 章节随教材归入对应学科 |
+
+### 3.5 集成测试
 
 | 用例编号 | 场景描述 | 前置条件 | 输入 | 颍期结果 |
 |---------|---------|---------|------|---------|
@@ -82,8 +102,10 @@
 |-----|---------|
 | Schema 创建脚本 | 5 |
 | Schema 验证脚本 | 5 |
+| main.ttl 拆分脚本 | 5 |
+| material.ttl 拆分脚本 | 5 |
 | 集成测试 | 3 |
-| **总计** | **13** |
+| **总计** | **23** |
 
 ---
 
@@ -93,9 +115,11 @@
 
 ```
 tests/kg_construction/
-  test_create_schema.py   : Schema 创建脚本测试
-  test_validate_schema.py  : Schema 验证脚本测试
-  test_integration.py      : 集成测试
+  test_split_main_ttl.py     : main.ttl 拆分测试
+  test_split_material_ttl.py : material.ttl 拆分测试
+  test_create_schema.py      : Schema 创建脚本测试
+  test_validate_schema.py    : Schema 验证脚本测试
+  test_integration.py        : 集成测试
 ```
 
 ---
