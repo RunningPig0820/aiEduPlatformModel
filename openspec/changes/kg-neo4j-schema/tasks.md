@@ -33,7 +33,7 @@ edukg/split/
 
 - [ ] 3.1 Create `create_neo4j_schema.py` with Neo4j connection setup
 - [ ] 3.2 Implement node label creation (Subject, Stage, Grade, Textbook, Chapter, KnowledgePoint)
-- [ ] 3.3 Implement unique constraints ONLY (KnowledgePoint.uri, Subject.code)
+- [ ] 3.3 Implement unique constraints ONLY (KnowledgePoint.uri, Subject.code, Textbook.isbn)
 - [ ] 3.4 ~~Implement index creation~~ → **移到 kg-math-knowledge-points 数据导入后执行**
 - [ ] 3.5 Add command-line interface with `--dry-run` option
 - [ ] 3.6 Add logging for each schema operation
@@ -43,7 +43,7 @@ edukg/split/
 - [ ] 4.1 Create `validate_schema.py` with Neo4j connection setup
 - [ ] 4.2 Implement node labels verification (check all 6 labels exist)
 - [ ] 4.3 ~~Implement indexes verification~~ → **移到 kg-math-knowledge-points 验证**
-- [ ] 4.4 Implement constraints verification (check all constraints are active)
+- [ ] 4.4 Implement constraints verification (check all 3 constraints are active)
 - [ ] 4.5 Implement validation report output (success/failure with counts)
 - [ ] 4.6 Implement exit codes (0 for success, 1 for failure)
 - [ ] 4.7 Add command-line interface

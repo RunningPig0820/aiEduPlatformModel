@@ -60,15 +60,10 @@ INFO: Created label: Grade
 INFO: Created label: Textbook
 INFO: Created label: Chapter
 INFO: Created label: KnowledgePoint
-INFO: Creating indexes...
-INFO: Created index: kp_name_idx
-INFO: Created index: kp_uri_idx
-INFO: Created index: kp_subject_idx
-INFO: Created index: kp_grade_idx
-INFO: Created index: kp_subject_grade_idx
 INFO: Creating constraints...
 INFO: Created constraint: kp_uri_unique
 INFO: Created constraint: subject_code_unique
+INFO: Created constraint: textbook_isbn_unique
 SUCCESS: Schema initialization completed
 ```
 
@@ -120,8 +115,7 @@ python validate_schema.py --verbose
 VALIDATION REPORT
 ==================
 Labels: 6/6 ✓
-Indexes: 5/5 ✓
-Constraints: 2/2 ✓
+Constraints: 3/3 ✓
 
 All schema elements are correctly created.
 Exit code: 0
@@ -132,8 +126,7 @@ Exit code: 0
 VALIDATION REPORT
 ==================
 Labels: 5/6 ✗ (Missing: Textbook)
-Indexes: 3/5 ✗ (Missing: kp_grade_idx, kp_subject_grade_idx)
-Constraints: 2/2 ✓
+Constraints: 2/3 ✗ (Missing: textbook_isbn_unique)
 
 Missing schema elements detected. Please run create_neo4j_schema.py
 Exit code: 1
