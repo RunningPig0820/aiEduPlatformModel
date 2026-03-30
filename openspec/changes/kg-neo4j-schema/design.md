@@ -96,39 +96,61 @@ Subject (学科)
 
 ### D4: 索引策略
 
-**决策**: 创建以下索引
+**决策**: 索引创建延迟到数据导入后执行
 
+**重要变更**: 由于数据量大（数学约 4,500 知识点，全学科约 56,000 知识点），先创建索引再批量插入会导致严重性能问题。Neo4j 在插入时需要维护索引，每次写入都会触发索引更新，导致：
+- 批量导入时间大幅增加（实测 10x+）
+- 索引碎片化，影响后续查询性能
+
+**分阶段策略**:
+
+| 阶段 | Change | 操作 | 说明 |
+|------|--------|------|------|
+| Schema 初始化 | kg-neo4j-schema | 仅创建唯一性约束 | 约束必须有，防止重复导入 |
+| 数据导入后 | kg-math-knowledge-points | 创建性能索引 | 数据导入完成后批量创建 |
+
+**kg-neo4j-schema 创建（仅约束）**:
 ```cypher
-// 节点属性索引
-CREATE INDEX kp_name_idx FOR (n:KnowledgePoint) ON (n.name)
-CREATE INDEX kp_uri_idx FOR (n:KnowledgePoint) ON (n.uri)
-CREATE INDEX kp_subject_idx FOR (n:KnowledgePoint) ON (n.subject)
-CREATE INDEX kp_grade_idx FOR (n:KnowledgePoint) ON (n.grade)
+// 仅创建唯一性约束（必须有，防止重复数据）
+CREATE CONSTRAINT IF NOT EXISTS kp_uri_unique FOR (n:KnowledgePoint) REQUIRE n.uri IS UNIQUE
+CREATE CONSTRAINT IF NOT EXISTS subject_code_unique FOR (n:Subject) REQUIRE n.code IS UNIQUE
+```
+
+**kg-math-knowledge-points 创建（数据导入后）**:
+```cypher
+// 节点属性索引（数据导入完成后创建）
+CREATE INDEX IF NOT EXISTS kp_name_idx FOR (n:KnowledgePoint) ON (n.name)
+CREATE INDEX IF NOT EXISTS kp_uri_idx FOR (n:KnowledgePoint) ON (n.uri)
+CREATE INDEX IF NOT EXISTS kp_subject_idx FOR (n:KnowledgePoint) ON (n.subject)
+CREATE INDEX IF NOT EXISTS kp_grade_idx FOR (n:KnowledgePoint) ON (n.grade)
 
 // 复合索引（常用查询组合）
-CREATE INDEX kp_subject_grade_idx FOR (n:KnowledgePoint) ON (n.subject, n.grade)
+CREATE INDEX IF NOT EXISTS kp_subject_grade_idx FOR (n:KnowledgePoint) ON (n.subject, n.grade)
 ```
 
 **理由**:
-- `name` 支持实体链接快速查找
-- `uri` 支持跨源映射
-- `subject + grade` 支持按学科年级过滤
+- 约束必须先创建：防止重复数据导入，MERGE 操作依赖唯一性约束
+- 索引后创建：批量导入时无索引开销，导入后一次性构建索引更高效
+- Neo4j 官方推荐：大规模数据导入应先禁用索引，导入后重建
 
-### D5: 约束设计
+### D5: 约束设计（本阶段创建）
 
-**决策**: 创建唯一性约束
+**决策**: 创建唯一性约束（必须在数据导入前创建）
 
 ```cypher
-// URI 必须唯一
-CREATE CONSTRAINT kp_uri_unique FOR (n:KnowledgePoint) REQUIRE n.uri IS UNIQUE
+// URI 必须唯一（防止重复知识点导入）
+CREATE CONSTRAINT IF NOT EXISTS kp_uri_unique FOR (n:KnowledgePoint) REQUIRE n.uri IS UNIQUE
 
-// 学科代码唯一
-CREATE CONSTRAINT subject_code_unique FOR (n:Subject) REQUIRE n.code IS UNIQUE
+// 学科代码唯一（防止学科重复创建）
+CREATE CONSTRAINT IF NOT EXISTS subject_code_unique FOR (n:Subject) REQUIRE n.code IS UNIQUE
 ```
 
 **理由**:
-- 防止重复知识点导入
-- 防止学科重复创建
+- **约束 vs 索引**: 约束确保数据完整性，索引优化查询性能
+- **为什么约束必须先创建**:
+  - MERGE 操作依赖唯一性约束判断节点是否存在
+  - 没有约束会导致重复数据导入
+  - 约束会自动创建 backing index，但这是内部索引，不影响批量导入性能
 
 ## Risks / Trade-offs
 
@@ -146,19 +168,24 @@ CREATE CONSTRAINT subject_code_unique FOR (n:Subject) REQUIRE n.code IS UNIQUE
 
 ## Migration Plan
 
-**部署步骤**:
+**部署步骤（本阶段）**:
 1. 确保 Neo4j 服务运行
-2. 执行 `create_neo4j_schema.py` 创建 schema
-3. 执行 `validate_schema.py` 验证 schema
-4. 验证通过后，后续 change 开始导入数据
+2. 执行 `create_neo4j_schema.py` 创建约束（仅唯一性约束，不创建性能索引）
+3. 执行 `validate_schema.py` 验证约束
+
+**后续阶段（kg-math-knowledge-points）**:
+1. 导入知识点数据（批量 MERGE）
+2. 数据导入完成后，执行索引创建脚本
+3. 验证索引全部 online
 
 **回滚策略**:
 ```cypher
-// 删除所有索引和约束
-DROP INDEX kp_name_idx IF EXISTS
+// 删除约束（本阶段创建）
 DROP CONSTRAINT kp_uri_unique IF EXISTS
-// ... 其他清理
+DROP CONSTRAINT subject_code_unique IF EXISTS
 ```
+
+**注意**: 性能索引在 kg-math-knowledge-points 中创建，回滚需执行对应的删除脚本
 
 ## Open Questions
 

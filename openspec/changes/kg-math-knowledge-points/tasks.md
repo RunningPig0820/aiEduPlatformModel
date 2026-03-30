@@ -51,27 +51,51 @@
 - [ ] 5.7 Add progress logging (imported count)
 - [ ] 5.8 Implement import statistics output (node counts, relationship counts)
 
-## 6. Data Validation Script
+## 6. Performance Index Creation (数据导入后执行)
 
-- [ ] 6.1 Create `validate_math_import.py`
-- [ ] 6.2 Implement node count validation (expected: 4,490)
-- [ ] 6.3 Implement URI uniqueness validation
-- [ ] 6.4 Implement required fields validation (name, uri not null)
-- [ ] 6.5 Implement type coverage validation (≥70%)
-- [ ] 6.6 Implement validation report output
-- [ ] 6.7 Add exit codes (0: success, 1: failure)
+- [ ] 6.1 Create `create_kp_indexes.py` for post-import index creation
+- [ ] 6.2 Implement single-field indexes (name, uri, subject, grade)
+- [ ] 6.3 Implement composite index (subject + grade)
+- [ ] 6.4 Add `--dry-run` option for preview
+- [ ] 6.5 Add index verification (check all indexes are online)
+- [ ] 6.6 Add logging for index creation progress
+- [ ] 6.7 Update import script to call index creation after data import
 
-## 7. Testing
+**索引创建 Cypher**:
+```cypher
+// 单字段索引
+CREATE INDEX IF NOT EXISTS kp_name_idx FOR (n:KnowledgePoint) ON (n.name)
+CREATE INDEX IF NOT EXISTS kp_uri_idx FOR (n:KnowledgePoint) ON (n.uri)
+CREATE INDEX IF NOT EXISTS kp_subject_idx FOR (n:KnowledgePoint) ON (n.subject)
+CREATE INDEX IF NOT EXISTS kp_grade_idx FOR (n:KnowledgePoint) ON (n.grade)
 
-- [ ] 7.1 Write unit tests for `clean_math_data.py` (mock TTL parsing)
-- [ ] 7.2 Write unit tests for `extract_textbook_info.py` (mock matching)
-- [ ] 7.3 Write unit tests for `merge_math_data.py` (test merging logic)
-- [ ] 7.4 Write unit tests for `import_math_kp_to_neo4j.py` (mock Neo4j driver)
-- [ ] 7.5 Create integration test script (clean → extract → merge → import → validate)
-- [ ] 7.6 Verify all tests pass with `pytest`
+// 复合索引
+CREATE INDEX IF NOT EXISTS kp_subject_grade_idx FOR (n:KnowledgePoint) ON (n.subject, n.grade)
+```
 
-## 8. Documentation
+## 7. Data Validation Script
 
-- [ ] 8.1 Add inline docstrings to all functions
-- [ ] 8.2 Update README.md with math data cleaning workflow
-- [ ] 8.3 Add sample output files for reference
+- [ ] 7.1 Create `validate_math_import.py`
+- [ ] 7.2 Implement node count validation (expected: 4,490)
+- [ ] 7.3 Implement URI uniqueness validation
+- [ ] 7.4 Implement required fields validation (name, uri not null)
+- [ ] 7.5 Implement type coverage validation (≥70%)
+- [ ] 7.6 Implement index online validation (all 5 indexes online)
+- [ ] 7.7 Implement validation report output
+- [ ] 7.8 Add exit codes (0: success, 1: failure)
+
+## 8. Testing
+
+- [ ] 8.1 Write unit tests for `clean_math_data.py` (mock TTL parsing)
+- [ ] 8.2 Write unit tests for `extract_textbook_info.py` (mock matching)
+- [ ] 8.3 Write unit tests for `merge_math_data.py` (test merging logic)
+- [ ] 8.4 Write unit tests for `import_math_kp_to_neo4j.py` (mock Neo4j driver)
+- [ ] 8.5 Write unit tests for `create_kp_indexes.py` (mock index creation)
+- [ ] 8.6 Create integration test script (clean → extract → merge → import → create indexes → validate)
+- [ ] 8.7 Verify all tests pass with `pytest`
+
+## 9. Documentation
+
+- [ ] 9.1 Add inline docstrings to all functions
+- [ ] 9.2 Update README.md with math data cleaning workflow
+- [ ] 9.3 Add sample output files for reference

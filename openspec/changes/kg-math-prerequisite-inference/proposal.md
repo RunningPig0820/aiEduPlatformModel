@@ -1,4 +1,4 @@
-> **执行顺序: 4/4** | **设计成本: 有** (LLM 调用 ~8,980次) | **前置依赖: kg-math-native-relations**
+> **执行顺序: 5/5** | **设计成本: 有** (LLM 调用 ~8,980次) | **前置依赖: kg-infrastructure-init**
 
 ## Why
 

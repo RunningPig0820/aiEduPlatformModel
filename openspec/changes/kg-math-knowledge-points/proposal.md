@@ -1,4 +1,4 @@
-> **执行顺序: 2/4** | **设计成本: 无** | **前置依赖: kg-neo4j-schema**
+> **执行顺序: 2/5** | **设计成本: 无** | **前置依赖: kg-neo4j-schema**
 
 ## Why
 
@@ -36,6 +36,12 @@
    - 导入知识点节点（含类型信息）
    - 验证节点数量
 
+5. **性能索引创建（数据导入后）**
+   - 创建单字段索引：name, uri, subject, grade
+   - 创建复合索引：subject + grade
+   - 验证索引全部 online
+   - **为什么在导入后创建？** 先创建索引再批量插入会导致性能下降 10x+
+
 ## Capabilities
 
 ### New Capabilities
@@ -43,6 +49,7 @@
 - `ttl-data-cleaner`: TTL 文件解析和清洗能力，支持 Unicode 解码、数据去重、格式标准化
 - `textbook-info-extractor`: 教材信息提取能力，支持标签匹配和年级推断
 - `knowledge-point-importer`: 知识点批量导入 Neo4j 能力，支持层级结构创建
+- `kp-index-creator`: 性能索引创建能力，在数据导入后创建查询优化索引
 
 ### Modified Capabilities
 
@@ -50,7 +57,7 @@
 
 ## Impact
 
-- **新脚本**: `clean_math_data.py`, `extract_textbook_info.py`, `merge_math_data.py`, `import_math_kp_to_neo4j.py`
+- **新脚本**: `clean_math_data.py`, `extract_textbook_info.py`, `merge_math_data.py`, `import_math_kp_to_neo4j.py`, `create_kp_indexes.py`
 - **中间文件**: `math_knowledge_points.json`, `math_textbook_mapping.json`, `math_final_data.json`
-- **Neo4j**: 新增约 4,490 个 KnowledgePoint 节点，及相关层级节点
-- **依赖**: 依赖 `kg-neo4j-schema` change 完成并测试通过
+- **Neo4j**: 新增约 4,490 个 KnowledgePoint 节点，5 个性能索引（数据导入后创建）
+- **依赖**: 依赖 `kg-neo4j-schema` change 完成并测试通过（仅需要唯一性约束）
