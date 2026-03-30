@@ -6,8 +6,16 @@ The system SHALL provide a script to extract textbook information from main.ttl.
 
 #### Scenario: Extract textbook entities
 
-- **WHEN** the textbook extractor script is executed against `main.ttl`
-- **THEN** it SHALL extract textbook entities with properties: name, isbn, subject, grade
+- **WHEN** the textbook extractor script is executed against `split/main-math.ttl`
+- **THEN** it SHALL extract textbook entities with properties:
+  - name: 教材名称
+  - isbn: ISBN（唯一标识）
+  - subject: 学科代码
+  - grade: 适用年级
+  - curriculum_year: 课标年份（2019 或 2003）
+  - curriculum_name: 课标名称
+  - publisher: 出版社
+  - edition: 教材版本（如 "人教A版"）
 
 #### Scenario: Extract chapter information
 

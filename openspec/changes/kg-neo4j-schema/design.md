@@ -71,6 +71,59 @@ Subject (学科)
 - `external_id` 支持跨源映射
 - `type` 分类支持按类型查询（定义优先学习）
 
+### D2.1: 教材节点属性（新增版本信息）
+
+**决策**: 教材节点需包含版本信息，以区分不同课标的教材
+
+```cypher
+(:Textbook {
+  name: STRING,           // 教材名称，如 "高中数学必修第一册A版"
+  isbn: STRING,           // ISBN，唯一标识
+  subject: STRING,        // 学科代码: math/physics/chemistry/biology等
+  grade: STRING,          // 适用年级: g10/g11/g12
+
+  // 版本信息（新增）
+  curriculum_year: STRING,    // 课标年份: "2019" 或 "2003"
+  curriculum_name: STRING,    // 课标名称: "普通高中课程标准（2017年版2020年修订）"
+  publisher: STRING,          // 出版社: "人民教育出版社"、"中国地图出版社"
+  edition: STRING,            // 教材版本: "人教A版"、"人教B版"、"中图版"
+  stage: STRING,              // 学段: "高中"
+})
+```
+
+**当前数据中的教材版本分布**:
+
+| 课标年份 | 占比 | 示例教材 | ISBN 前缀 |
+|----------|------|----------|-----------|
+| 2019版课标 | ~90% | 高中数学必修第一册A版 | 9787107 |
+| 2003版课标 | ~10% | 普通高中课程标准实验教科书生物2必修 | 9787107176722 |
+
+**主要出版社**:
+- 人民教育出版社（ISBN 9787107）：数学、物理、化学、生物、历史、语文、政治
+- 中国地图出版社（ISBN 97875204）：地理
+
+**为什么需要版本信息？**
+
+1. **知识点可能不同**：不同版本教材的知识点编排、名称、定义可能有差异
+2. **学习路径不同**：A版和B版的章节顺序可能不同
+3. **查询过滤**：按教材版本筛选知识点
+4. **数据溯源**：追踪知识点来源于哪个版本教材
+
+**示例数据**:
+```json
+{
+  "name": "高中数学必修第一册A版",
+  "isbn": "9787107335655",
+  "subject": "math",
+  "grade": "g10",
+  "curriculum_year": "2019",
+  "curriculum_name": "普通高中课程标准（2017年版2020年修订）",
+  "publisher": "人民教育出版社",
+  "edition": "人教A版",
+  "stage": "高中"
+}
+```
+
 ### D3: 关系类型设计
 
 **决策**: 定义 12 种关系类型
@@ -143,6 +196,9 @@ CREATE CONSTRAINT IF NOT EXISTS kp_uri_unique FOR (n:KnowledgePoint) REQUIRE n.u
 
 // 学科代码唯一（防止学科重复创建）
 CREATE CONSTRAINT IF NOT EXISTS subject_code_unique FOR (n:Subject) REQUIRE n.code IS UNIQUE
+
+// 教材 ISBN 唯一（防止教材重复导入）
+CREATE CONSTRAINT IF NOT EXISTS textbook_isbn_unique FOR (n:Textbook) REQUIRE n.isbn IS UNIQUE
 ```
 
 **理由**:

@@ -23,12 +23,17 @@
 // 年级节点
 (:Grade {name: "高一", code: "g10", order: 1})
 
-// 教材节点
+// 教材节点（包含版本信息）
 (:Textbook {
-name: "高中数学必修第一册",
-isbn: "9787107336270",
+name: "高中数学必修第一册A版",
+isbn: "9787107335655",
 subject: "math",
-grade: "g10"
+grade: "g10",
+// 版本信息
+curriculum_year: "2019",           // 课标年份: 2019 或 2003
+curriculum_name: "普通高中课程标准（2017年版2020年修订）",
+publisher: "人民教育出版社",        // 出版社
+edition: "人教A版"                 // 教材版本
 })
 
 // 章节节点
