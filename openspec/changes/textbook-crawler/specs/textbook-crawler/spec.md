@@ -1,18 +1,18 @@
 ## ADDED Requirements
 
-### Requirement: 爬取 sitemap.xml 解析教材页面 URL
+### Requirement: 解析入口页面获取教材链接
 
-系统 SHALL 能够从教师之家 sitemap.xml 中解析出数学教材页面的 URL 列表。
+系统 SHALL 能够从教师之家人教版数学入口页面解析出小学、初中、高中三个学段的教材链接。
 
-#### Scenario: 解析 sitemap 成功
-- **WHEN** 访问 https://www.renjiaoshe.com/sitemap.xml
-- **THEN** 系统返回所有数学教材页面的 URL 列表
-- **AND** URL 按小学/初中分组
+#### Scenario: 访问入口页面
+- **WHEN** 访问 https://www.renjiaoshe.com/renjiaoshuxue/
+- **THEN** 系统正确解析页面编码（GBK 或 UTF-8）
+- **AND** 系统提取小学、初中、高中三个学段的区块结构
 
-#### Scenario: 筛选人教版数学 URL
-- **WHEN** 解析 sitemap.xml
-- **THEN** 系统筛选出匹配 `/shuxue/renjiaoban/` 的 URL
-- **AND** 排除非数学学科和非人教版的 URL
+#### Scenario: 提取教材链接
+- **WHEN** 解析入口页面学段区块
+- **THEN** 系统提取每个学段下的教材册数链接
+- **AND** 链接包含教材名称和对应 URL
 
 ---
 
@@ -28,6 +28,10 @@
 - **WHEN** 爬取初中数学教材页面
 - **THEN** 系统提取年级、学期、章节名称、小节名称、知识点列表
 
+#### Scenario: 爬取高中数学目录
+- **WHEN** 爬取高中数学教材页面
+- **THEN** 系统提取教材类型（必修/选修）、章节名称、小节名称、知识点列表
+
 #### Scenario: 处理解析失败
 - **WHEN** 页面结构无法识别
 - **THEN** 系统记录失败 URL 和错误信息
@@ -41,13 +45,21 @@
 
 #### Scenario: 生成小学数学 JSON
 - **WHEN** 完成小学数学目录爬取
-- **THEN** 系统生成 `primary_math_textbook.json` 文件
+- **THEN** 系统生成 `data/textbook/math/renjiao/primary/primary_textbook.json` 文件
 - **AND** 文件包含 1-6 年级共 12 册教材目录
+- **AND** 每年级单独目录 `grade1/`, `grade2/`, ... `grade6/`
 
 #### Scenario: 生成初中数学 JSON
 - **WHEN** 完成初中数学目录爬取
-- **THEN** 系统生成 `middle_math_textbook.json` 文件
+- **THEN** 系统生成 `data/textbook/math/renjiao/middle/middle_textbook.json` 文件
 - **AND** 文件包含 7-9 年级共 6 册教材目录
+- **AND** 每年级单独目录 `grade7/`, `grade8/`, `grade9/`
+
+#### Scenario: 生成高中数学 JSON
+- **WHEN** 完成高中数学目录爬取
+- **THEN** 系统生成 `data/textbook/math/renjiao/high/high_textbook.json` 文件
+- **AND** 文件包含必修、选修教材目录
+- **AND** 每册单独目录
 
 ---
 
@@ -57,7 +69,7 @@
 
 #### Scenario: 生成 TTL 文件
 - **WHEN** 完成教材目录爬取
-- **THEN** 系统生成 `k12_textbook.ttl` 文件
+- **THEN** 系统生成 `k12_math_textbook.ttl` 文件
 - **AND** 文件格式与 EDUKG main.ttl 兼容
 - **AND** 包含 temp 字段记录教材章节信息
 
