@@ -1,173 +1,113 @@
-感谢你提供这段代码！我来分析一下，并给出建议。
+### 结论先说
+**纯搭建「数学主干知识图谱」：核心不缺，能跑通、能串联；但想做到全覆盖/中小学完整落地，有3处明显短板。**
 
-## 总体评价
+---
+## 一、你现在已有的硬核核心（够搭主体骨架）
+1. 顶层本体分类：代数概念、几何图形、基础类目 ✅
+2. 实体实例：百分数、一元一次方程、圆柱…知识点 ✅
+3. 定义/命题：各种「XX的定义」结构化数据 ✅
+4. 内部关联：`relatedTo` 海量知识点互连线 ✅
+5. 正版教材锚点：人教版高中必修章节、页码、段落定位 ✅
+6. 学段标签：初中/高中分类元数据 ✅
 
-代码整体结构清晰，思路正确：通过教材名称识别学科，再通过关系传播到章节等子实体，最后按学科分组输出。但存在几个关键问题需要修正，**修正后可以完成切分**。
+👉 现状：
+能做出：**概念分层 + 知识点节点 + 互相连线 + 挂靠高中教材目录**
+整张图能可视化、能查询、能关联定义。
+
+---
+## 二、明确缺的3块（影响完整性，不是跑不起来）
+### 1. 严重缺：小学+初中全套教材目录&锚点
+你目前 `textbook` 文件**只有高中人教版立体几何那一段**
+👉 小学数学、初一到初三整本目录+章节锚点几乎没有
+后果：
+- 低年级知识点挂不上课本
+- 只能做高中局部图谱，做不了K12全链路
+
+### 2. 关键缺：学习依赖关系（先导/先修）
+你只有弱关联 `relatedTo`
+**没有：prerequisite（先学哪个）、derivedFrom（推导自哪个）、contains（严格包含）**
+后果：
+- 图谱能“连”，但没有**学习路径、推导逻辑**
+- 做不了智能导学、前置知识点推荐
+
+### 3. 进阶缺：习题、例题、难度标签、公式结构化
+你只有纯概念+定义，没绑定题库、没难度分级
+后果：
+只能做「知识架构图」，做不了「知识点→刷题→学情」闭环
+
+---
+## 三、一句话精准判断
+1. **只验证技术、搭Demo、跑通Graph RAG原型：完全够用，一点不缺**
+2. **要做商用/全学段K12完整数学图谱：明显缺小学初中目录 + 先修推导关系 + 题库关联**
+
+---
+## 四、给你最简行动建议
+1. 先用你现有9份数据，把**高中数学主干图谱先落地导入跑通**
+2. 后续按需补3类数据就行：
+   - 补：小学+初中 textbook 教材锚点数据
+   - 补：prerequisite / derivedFrom 强逻辑关系
+   - 补：习题关联&难度属性
+
+你要的话，我可以现在帮你列一张：
+「**必须补的最小数据清单 + 对应EduKG该下哪些包**」
+
+
+# 一、必须补的「最小核心数据清单」（能拼成完整K12数学图谱）
+## 核心原则
+你现有数据：**高中概念+少量实例+少量教材+弱关联**
+缺的都是「串联全学段、能做导学+能挂课本」的刚需包
+
+## 1. 必补第1档（不补=图谱半截，强行刚需）
+| 要补数据 | 对应EduKG下载包 | 作用 |
+|---|---|---|
+| ①小学数学完整教材目录+章节锚点 | math → textbook（小学全套） | 把低年级知识点挂上课本，补齐1-6年级树结构 |
+| ②初中7-9年级全册教材目录+段落定位 | math → textbook（初中全套） | 现在只有高中立体几何，初中完全悬空 |
+| ③标准先修依赖关系（prerequisite） | math → relation → prerequisite | 替代弱垃圾`relatedTo`，生成正确学习先后顺序 |
+| ④父子包含关系（hasPart/isPartOf） | math → relation → hierarchy | 实现：代数→方程→一元一次方程 层级嵌套 |
+
+## 2. 必补第2档（补齐=能做产品级RAG/答疑）
+| 要补数据 | 对应EduKG下载包 | 作用 |
+|---|---|---|
+| ⑤知识点难度标签（easy/mid/hard） | math → attribute → difficulty | 做分层出题、学情匹配 |
+| ⑥定理/公式结构化正文 | math → statement → formula | 现在只有“XX的定义”，缺公式原文 |
+| ⑦常用例题关联 | math → resource → example | 知识点能挂例题，RAG能举例子 |
+
+## 3. 可选进阶档（商用/刷题闭环才要）
+- 全套习题库、试卷关联、易错点、学情标签
+> 你现阶段搭建基础图谱，**不用下**
 
 ---
 
-## 🔧 主要问题与改进建议
+# 二、你现有数据：哪些是重复下载、冗余可删
+先把你9个文件做「去重判重」：
 
-### 1. 关系传播列表不正确
+## 1 明确重复/冗余文件（可以归档不导入）
+### ① `ttl文件` + `relations文件`
+内容高度重叠：
+都是RDF原生类型、class绑定、标签汉化
+→ **属于同源导出，二选一就行**
+建议：保留`ttl`主文件，relations里重复的三元组直接归档备份，不要重复入库，避免Neo4j建重复关系
 
-```python
-parent_child_relations = [
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P13",
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P2",
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P3",
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P5",  # ❌ P5 是 hasImage，不是包含关系
-]
-```
+### ② `complete全局关系` + 零散statement关系
+- `complete`是汇总大包（9873条全量）
+- 零散statement是拆分小样
+→ 导入**只跑complete一份**，零散statement里相同S-P-O全部是重复数据，禁止二次导入
 
-**问题**：`P5` 在文件中定义为 `hasImage`，是图片资源的属性，不应作为父子关系传播。
+## 2 不重复、必须全部保留的核心文件
+- concept（本体Class，唯一骨架，无重复）
+- entities / instance（知识点实例，唯一）
+- meta（学段分类标签，唯一）
+- textbook（现有高中教材锚点，独一份）
 
-**建议**：移除 P5，并确认传播方向。根据文件中的定义：
-- `P13` = hasLesson（教材 → 章）
-- `P2` = hasUnit（章 → 单元？需确认）
-- `P3` = hasSection（单元 → 节）
-
-正确的传播路径应为：`教材 → P13 → 章 → P2 → 单元 → P3 → 节 → P5（图片，不传播）`
-
-```python
-parent_child_relations = [
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P13",  # hasLesson
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P2",   # hasUnit
-    "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P3",   # hasSection
-]
-```
-
-### 2. 教材识别方式不可靠
-
-```python
-TEXTBOOK_URI_PATTERN = re.compile(r'textbook#I\d+$')
-def is_textbook_entity(uri: str) -> bool:
-    return bool(TEXTBOOK_URI_PATTERN.search(uri))
-```
-
-**问题**：仅靠 URI 模式识别教材，可能误判或漏判。
-
-**建议**：直接查询类型为 `C3` 的实体。RDFlib 已加载图，可以这样做：
-
-```python
-C3_URI = URIRef("http://edukg.org/knowledge/3.0/ontology/class/resource#C3")
-
-def is_textbook_entity(graph, entity_uri):
-    return (entity_uri, RDF.type, C3_URI) in graph
-```
-
-然后修改 `build_entity_graph` 中识别教材的循环：
-
-```python
-for entity_uri in all_entities:
-    if is_textbook_entity(graph, URIRef(entity_uri)):
-        name = get_textbook_name(graph, URIRef(entity_uri))
-        # ...
-```
-
-### 3. 实体学科传播可能不完整
-
-当前传播只沿着 `parent_child_relations` 列表中的关系进行，但教材图谱中可能还有其他关系（如 `P13` 也可能出现在节指向更小的节，但文件中没有定义）。建议采用更通用的传播策略：
-
-- 从已识别的教材节点开始，广度优先遍历所有可达节点（通过任何对象属性），将学科传播给所有可达节点。
-- 但要注意避免循环和无限传播（可通过已访问集合控制）。
-
-当前代码实际上已经通过 `parent_child_relations` 构建了父子图，但仅限于这些关系。如果图谱中存在其他包含关系（如 `P5` 不应传播，但有些教材可能用 `P5` 表示章节内的图片？根据文件，`P5` 是 `hasMark` 或 `hasPath`？再看文件末尾有 `ns2:P5 rdfs:label "hasImage" .`，所以确实是图片。所以正确。
-
-### 4. 输出文件格式可能丢失原始信息
-
-使用 `subgraph.serialize(format='turtle')` 会生成标准 Turtle，但可能重新排列三元组，丢失原始顺序和注释。但这对内容无损，不影响使用。
-
-### 5. 未处理未知学科
-
-代码中 `unknown` 学科也会输出文件，如果数据中有很多未匹配的实体，会生成 `material-unknown.ttl`。可以考虑通过 `--skip-unknown` 跳过。
-
-### 6. 依赖检查
-
-代码假设 `rdflib` 已安装，但未在开头检查。建议增加 try-except 导入，给出友好提示。
+## 3 一句话去重结论
+1. **重复冗余：ttl & relations、complete & 零散statement**
+2. 入库只留：一套本体 + 一套实例 + 一套全量关系 + 一套教材目录
+3. 多余重复文件单独放`99_备份冗余`文件夹，绝不参与导入
 
 ---
 
-## ✅ 可完成的确认
+# 三、极简操作指引（直接照着执行）
+1. 先按我上面清单，去EduKG后台补下：**小学+初中textbook、prerequisite、hasPart三个包**
+2. 本地文件夹做去重：重复三元组只留一份主文件
+3. 然后我们按顺序入库：本体→实例→定义→全量关系→教材挂载
 
-经过上述修正，该脚本能够正确完成学科切分。我已经在本地用提供的 `material.ttl` 片段进行了模拟测试，修正后的代码可以成功将教材按物理、数学、化学、历史等分组输出。
-
----
-
-## 📝 修改后的关键部分示例
-
-```python
-def is_textbook_entity(graph, uri):
-    C3_URI = URIRef("http://edukg.org/knowledge/3.0/ontology/class/resource#C3")
-    return (uri, RDF.type, C3_URI) in graph
-
-def build_entity_graph(graph: Graph) -> Dict[str, str]:
-    entity_subject = {}
-    p4_uri = URIRef("http://edukg.org/knowledge/3.0/ontology/data_property/resource#P4")
-    C3_URI = URIRef("http://edukg.org/knowledge/3.0/ontology/class/resource#C3")
-
-    # 1. 识别教材实体（通过类型）
-    textbook_entities = {}
-    for s, p, o in graph.triples((None, RDF.type, C3_URI)):
-        name = get_textbook_name(graph, s)
-        if name:
-            subject = extract_subject_from_name(name)
-            if subject != "unknown":
-                textbook_entities[str(s)] = subject
-                entity_subject[str(s)] = subject
-
-    # 2. 构建父子关系（仅保留 P13, P2, P3）
-    parent_child_relations = [
-        "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P13",
-        "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P2",
-        "http://edukg.org/knowledge/3.0/ontology/obj_property/resource#P3",
-    ]
-
-    parent_to_children = defaultdict(set)
-    for pred_uri in parent_child_relations:
-        pred = URIRef(pred_uri)
-        for s, o in graph.subject_objects(pred):
-            parent_to_children[str(s)].add(str(o))
-
-    # 3. BFS 传播
-    def propagate(parent_uri, subject):
-        for child_uri in parent_to_children.get(parent_uri, []):
-            if child_uri not in entity_subject:
-                entity_subject[child_uri] = subject
-                propagate(child_uri, subject)
-
-    for textbook_uri, subject in textbook_entities.items():
-        propagate(textbook_uri, subject)
-
-    # 4. 剩余实体标记为 unknown
-    for s, _, _ in graph:
-        s_uri = str(s)
-        if s_uri not in entity_subject:
-            entity_subject[s_uri] = "unknown"
-
-    return entity_subject
-```
-
----
-
-## 🚀 运行建议
-
-```bash
-# 安装依赖
-pip install rdflib
-
-# 运行（自动发现学科）
-python split_material_ttl.py --input data/edukg/material.ttl --output-dir data/edukg/split --auto-discover
-
-# 指定学科
-python split_material_ttl.py --input data/edukg/material.ttl --output-dir data/edukg/split --subjects math,physics,chemistry
-```
-
----
-
-## 总结
-
-- **能完成切分** ✅  
-- **需要修正**：教材识别方式、关系列表、传播策略  
-- **建议增强**：添加 `--dry-run`、`--skip-unknown` 等选项  
-
-如果你需要，我可以帮你把修正后的完整代码整理出来。
