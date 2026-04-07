@@ -34,7 +34,7 @@ The system SHALL use LLM to extract structured knowledge points from OCR text.
 - **WHEN** LLM processes curriculum text
 - **THEN** system extracts knowledge points organized by:
   - 学段 (第一学段 1-2年级, 第二学段 3-4年级, etc.)
-  - 颍域 (数与代数, 图形与几何, 统计与概率)
+  - 领域 (数与代数, 图形与几何, 统计与概率)
 
 #### Scenario: Use glm-4-flash model
 - **WHEN** extracting knowledge points
@@ -65,11 +65,11 @@ The system SHALL use LLM to extract structured knowledge points from OCR text.
 - **THEN** system retries with clearer prompt or logs error
 
 ### Requirement: Compare with existing EduKG concepts
-The system SHALL compare extracted knowledge points with existing EduKG Concept nodes.
+The system SHALL compare extracted knowledge points with existing EduKG Concept nodes (read-only).
 
 #### Scenario: Query existing concepts
 - **WHEN** starting comparison
-- **THEN** system queries all Concept nodes from Neo4j
+- **THEN** system queries all Concept nodes from Neo4j (read-only)
 
 #### Scenario: Identify matching concepts
 - **WHEN** knowledge point "一元一次方程" exists in EduKG
@@ -88,7 +88,7 @@ The system SHALL generate RDF/TTL format output for knowledge points.
 
 #### Scenario: Create TTL file
 - **WHEN** knowledge points are confirmed
-- **THEN** system generates `curriculum_kps.ttl` with proper namespace
+- **THEN** system generates `textbook_kps.ttl` with proper namespace
 
 #### Scenario: TTL format compliance
 - **WHEN** generating TTL

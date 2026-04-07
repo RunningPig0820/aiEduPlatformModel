@@ -4,8 +4,11 @@ uvicorn>=0.27.0
 python-multipart>=0.0.6
 
 # OCR
-paddleocr>=2.7.0
-paddlepaddle>=2.5.0
+baidu-aip>=4.16.0  # 百度 OCR API
+pdf2image>=1.16.0  # PDF 转图片
+Pillow>=10.0.0     # 图片处理
+# paddleocr>=2.7.0  # 本地 OCR (可选)
+# paddlepaddle>=2.5.0  # 本地 OCR (可选)
 
 # LLM
 langchain>=0.2.0

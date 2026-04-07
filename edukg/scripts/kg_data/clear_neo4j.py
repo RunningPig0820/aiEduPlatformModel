@@ -17,7 +17,7 @@ if AI_SERVICE_DIR not in sys.path:
 os.chdir(AI_SERVICE_DIR)
 
 from edukg.core.neo4j.client import Neo4jClient
-from config.settings import settings
+from edukg.config.settings import settings
 
 client = Neo4jClient()
 

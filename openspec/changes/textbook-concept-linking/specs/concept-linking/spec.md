@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Exact match concept
-The system SHALL match textbook knowledge points to existing Concept by exact label match.
+The system SHALL match textbook knowledge points to existing Concept by exact label match (read-only from Neo4j).
 
 #### Scenario: Exact label match
 - **WHEN** textbook knowledge point "一元一次方程" matches Concept label "一元一次方程"
@@ -24,7 +24,7 @@ The system SHALL use LLM for semantic matching when exact match fails.
 - **THEN** match result has type "none" and confidence 0.0
 
 ### Requirement: Generate matching report
-The system SHALL output a matching report with all results.
+The system SHALL output a matching report (no Neo4j relationship creation).
 
 #### Scenario: Report contains all matches
 - **WHEN** matching completes
@@ -36,26 +36,26 @@ The system SHALL output a matching report with all results.
 
 #### Scenario: Report saved to file
 - **WHEN** matching completes
-- **THEN** report is saved to `kp_matching_result.json`
+- **THEN** report is saved to `matching_report.json`
 
-### Requirement: Create CONTAINS relationship
-The system SHALL create `CONTAINS` relationship between Chapter and Concept after confirmation.
+### Requirement: No automatic relationship creation
+The system SHALL NOT create CONTAINS relationship automatically.
 
-#### Scenario: Create relationship for matched concept
-- **WHEN** user confirms match for "一元一次方程"
-- **THEN** system creates `Chapter -[:CONTAINS]-> Concept` relationship
-
-#### Scenario: Skip unconfirmed matches
-- **WHEN** match is not confirmed
-- **THEN** no relationship is created
-
-### Requirement: Handle missing concepts
-The system SHALL identify concepts that exist in textbook but not in Neo4j.
-
-#### Scenario: List missing concepts
+#### Scenario: Output report only
 - **WHEN** matching completes
-- **THEN** system outputs list of concepts that need to be created
+- **THEN** only generates `matching_report.json`, no Neo4j relationship creation
 
-#### Scenario: Support creating missing concept
-- **WHEN** user confirms creating new Concept "凑十法"
-- **THEN** system creates Concept node with label "凑十法"
+#### Scenario: Manual confirmation required
+- **WHEN** user wants to create relationships
+- **THEN** user manually confirms matches and runs import script
+
+### Requirement: Query Neo4j read-only
+The system SHALL only query Neo4j for Concept labels, no write operations.
+
+#### Scenario: Query all Concepts
+- **WHEN** matching starts
+- **THEN** system queries all Concept labels from Neo4j (read-only)
+
+#### Scenario: No Neo4j modification
+- **WHEN** matching completes
+- **THEN** Neo4j data remains unchanged

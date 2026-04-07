@@ -30,7 +30,7 @@ if AI_SERVICE_DIR not in sys.path:
     sys.path.insert(0, AI_SERVICE_DIR)
 
 from edukg.core.neo4j.client import Neo4jClient
-from config.settings import settings
+from edukg.config.settings import settings
 
 # 配置日志
 logging.basicConfig(

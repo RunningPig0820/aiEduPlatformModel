@@ -2,23 +2,26 @@
 
 当前数学知识图谱已有 1,275 个 Concept 和 2,810 个 Statement，但缺少教材章节与知识点的关联。老师无法按教材查询知识点，学生无法知道自己学习了哪些章节的知识点。
 
-同时，教育局课标 PDF 是扫描版，需要 OCR 识别才能提取知识点作为权威基准。
+同时，教育局课标 PDF 是扫描版，需要 OCR 识别才能提取知识点作为权威基准。EduKG 数据已导入 Neo4j，但缺少小学知识点。
 
 ## What Changes
 
-- 新增教材章节节点 `textbook_chapter`，通过属性区分不同教材版本和学科
-- 新增 `CONTAINS` 关系，关联章节到 Concept
-- 新增教材导入服务，解析 JSON 格式教材数据并导入 Neo4j
-- 新增知识点关联服务，支持精确匹配、模糊匹配、人工确认
-- 新增 PDF OCR 服务，用于课标识别和后续作业切题
+- 解析教材 JSON 数据，生成 `textbook_chapters.json` 章节结构文件
+- 匹配教材知识点与 EduKG Concept，生成 `matching_report.json` 匹配报告
+- 使用百度 OCR API 识别课标 PDF（收费服务），提取文本内容
+- 使用免费 LLM (glm-4-flash) 从课标文本提取结构化知识点
+- 与 Neo4j 已有 Concept 对比分析，生成 `kp_comparison_report.json`
+- 输出 JSON/TTL 格式文件，不直接导入 Neo4j（人工确认后手动导入）
 
 ## Capabilities
 
 ### New Capabilities
 
-- `textbook-import`: 教材导入服务，解析教材 JSON 数据，创建章节节点，关联知识点
-- `concept-linking`: 知识点关联服务，支持教材知识点与 Concept 匹配，输出匹配报告
-- `pdf-ocr`: PDF OCR 服务，支持扫描版 PDF 识别，课标知识点提取，后续支持作业切题
+- `textbook-parse`: 教材解析服务，解析教材 JSON 数据，生成章节结构文件
+- `concept-match`: 知识点匹配服务，查询 Neo4j Concept，生成匹配报告
+- `pdf-ocr`: PDF OCR 服务，使用百度 OCR API（收费）识别扫描版 PDF
+- `kp-extract`: 知识点提取服务，使用 LLM 从课标文本提取结构化知识点
+- `kp-compare`: 知识点对比服务，分析课标知识点与 EduKG Concept 的差异
 
 ### Modified Capabilities
 
@@ -26,45 +29,56 @@
 
 ## Impact
 
+### 输出文件
+
+```
+edukg/data/output/
+├── textbook_chapters.json         # 教材章节结构
+├── matching_report.json           # 教材知识点匹配报告
+├── ocr_result.json                # OCR 识别结果
+├── curriculum_kps.json            # 课标知识点结构
+├── kp_comparison_report.json      # 与 EduKG 对比报告
+└── curriculum_kps.ttl             # TTL 格式输出
+```
+
 ### 新增模块
 
 ```
-ai-edu-ai-service/
-├── core/
-│   ├── ocr/                    # OCR 模块
-│   │   ├── pdf_ocr.py          # PDF 识别
-│   │   └── homework_cutter.py  # 作业切题（后续）
-│   │
-│   └── kg/
-│       └── textbook/           # 教材模块
-│           ├── parser.py       # 教材解析
-│           ├── linker.py       # 知识点关联
-│           └── importer.py     # 导入服务
+edukg/core/
+├── textbook/                      # 教材模块
+│   ├── parser.py                  # 教材解析
+│   ├── matcher.py                 # 知识点匹配
+│   └── main.py                    # 主脚本（整合流程）
 │
-└── api/
-    └── kg/
-        └── textbook.py         # 教材 API
-```
-
-### 数据变更
-
-```
-Neo4j 新增:
-├── textbook_chapter 节点（统一类型，属性区分）
-│   ├── name: "人教版_数学_七年级_上册_第一章_有理数"
-│   ├── publisher: "人教版"      # 人教版/北师大版/苏教版...
-│   ├── subject: "数学"          # 数学/物理/化学/语文...
-│   ├── grade: "七年级"          # 一年级~十二年级
-│   ├── semester: "上册"         # 上册/下册
-│   ├── chapter: "第一章有理数"
-│   └── order: 1
-│
-└── CONTAINS 关系
-    └── Chapter -[:CONTAINS]-> Concept
+└── curriculum/                    # 课标模块
+    ├── pdf_ocr.py                 # PDF OCR（百度 API，收费）
+    ├── kp_extraction.py           # 知识点提取（LLM）
+    ├── kp_comparison.py           # 知识点对比
+    ├── ttl_generator.py           # TTL 生成
+    └── main.py                    # 主脚本（整合流程）
 ```
 
 ### 依赖
 
-- OCR: PaddleOCR 或 PyMuPDF
-- Neo4j: 已有连接
-- LLM: 用于知识点语义匹配
+- OCR: 百度 OCR API（收费，用户已有账号）
+- LLM: 智谱 glm-4-flash（免费）
+- Neo4j: 查询 EduKG Concept（只读，不导入）
+
+### 数据流程
+
+```
+教材 JSON → 解析 → textbook_chapters.json
+         → 匹配 Neo4j Concept → matching_report.json
+
+课标 PDF → 百度 OCR（收费）→ ocr_result.json
+        → LLM 提取（免费）→ curriculum_kps.json
+        → 对比 Neo4j → kp_comparison_report.json
+        → TTL 生成 → curriculum_kps.ttl
+```
+
+### 导入方式
+
+**人工确认后手动导入**：
+- 脚本只生成 JSON/TTL 文件
+- 用户人工确认匹配报告
+- 用户手动执行 Neo4j 导入脚本

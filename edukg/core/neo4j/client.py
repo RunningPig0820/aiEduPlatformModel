@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from neo4j import GraphDatabase, Driver, Session
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
-from config.settings import settings
+from edukg.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

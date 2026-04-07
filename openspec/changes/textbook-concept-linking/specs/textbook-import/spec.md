@@ -1,49 +1,43 @@
 ## ADDED Requirements
 
 ### Requirement: Parse textbook JSON data
-The system SHALL parse textbook JSON files from `edukg/data/textbook/math/renjiao/` directory.
+The system SHALL parse textbook JSON files and generate chapter structure file.
 
 #### Scenario: Parse middle school textbook
-- **WHEN** system parses `middle/grade7/shang.json`
-- **THEN** system extracts grade "七年级", semester "上册", and all chapters with sections
+- **WHEN** system parses textbook JSON file
+- **THEN** system extracts grade, semester, chapters, and knowledge points
 
-#### Scenario: Parse primary school textbook
-- **WHEN** system parses `primary/grade1/shang.json`
-- **THEN** system extracts grade "一年级", semester "上册", and all chapters
+#### Scenario: Generate textbook_chapters.json
+- **WHEN** parsing completes
+- **THEN** system saves result to `textbook_chapters.json` with structure:
+  ```json
+  {
+    "chapters": [
+      {
+        "name": "人教版_数学_七年级_上册_第一章_有理数",
+        "publisher": "人教版",
+        "subject": "数学",
+        "grade": "七年级",
+        "semester": "上册",
+        "chapter": "第一章有理数",
+        "order": 1,
+        "knowledge_points": ["有理数", "数轴", "相反数"]
+      }
+    ]
+  }
+  ```
 
 #### Scenario: Handle missing file
 - **WHEN** textbook file does not exist
 - **THEN** system raises FileNotFoundError with clear message
 
-### Requirement: Create chapter nodes
-The system SHALL create `textbook_chapter` nodes in Neo4j from parsed textbook data.
+### Requirement: No Neo4j import
+The system SHALL NOT import data to Neo4j automatically.
 
-#### Scenario: Create chapter node with all attributes
-- **WHEN** creating chapter for "人教版_数学_七年级_上册_第一章_有理数"
-- **THEN** node has name, publisher, subject, grade, semester, chapter, order attributes
+#### Scenario: Output file only
+- **WHEN** parsing completes
+- **THEN** only generates `textbook_chapters.json`, no Neo4j import
 
-#### Scenario: Avoid duplicate chapters
-- **WHEN** chapter node already exists with same name
-- **THEN** system skips creation (MERGE behavior)
-
-### Requirement: Import all textbooks
-The system SHALL support batch import of all textbook files.
-
-#### Scenario: Import all grades
-- **WHEN** running import with `--all` flag
-- **THEN** all 24 textbooks are imported (12 primary + 6 middle + 6 high)
-
-#### Scenario: Import by stage
-- **WHEN** running import with `--stage middle`
-- **THEN** only middle school textbooks are imported
-
-### Requirement: Query chapters by criteria
-The system SHALL support querying chapters by grade, semester, publisher.
-
-#### Scenario: Query by grade and semester
-- **WHEN** querying chapters where grade="七年级" and semester="上册"
-- **THEN** returns all chapters for 七年级上册
-
-#### Scenario: Query by chapter name
-- **WHEN** querying chapter by name "人教版_数学_七年级_上册_第一章_有理数"
-- **THEN** returns single chapter node
+#### Scenario: Manual import later
+- **WHEN** user wants to import
+- **THEN** user manually runs import script after confirming data

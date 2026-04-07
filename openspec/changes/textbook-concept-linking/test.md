@@ -3,18 +3,18 @@
 ## 1. 测试概述
 
 ### 1.1 测试目标
-验证 `textbook-concept-linking` 模块的所有业务场景，确保教材导入、知识点匹配、PDF OCR 等功能的正确性和健壮性。
+验证 `textbook-concept-linking` 模块的所有业务场景，确保教材解析、知识点匹配、OCR 识别、LLM 提取功能的正确性。
 
 ### 1.2 测试方式
-- **集成测试**：使用 pytest + httpx TestClient 调用真实 API 端点
-- **数据库回滚**：使用 pytest fixture 配合 Neo4j 事务回滚
-- **Mock LLM**：知识点匹配的 LLM 调用使用 Mock，其他真实数据库操作
+- **单元测试**：pytest 测试各服务类的方法
+- **Mock 外部服务**：LLM、Neo4j 使用 Mock，OCR 使用小文件
+- **集成测试**：完整流程测试，验证输出文件格式
 
 ### 1.3 测试环境配置
 - pytest 配置：`pytest.ini`
-- 数据库：Neo4j 测试实例，事务自动回滚
-- 环境：使用 `.env.test` 配置
-- OCR：PaddleOCR CPU 版本
+- LLM：使用 Mock 或 glm-4-flash（小文本）
+- Neo4j：使用测试数据库或 Mock（只读查询）
+- OCR：百度 OCR API（小文件测试）
 
 ---
 
@@ -22,85 +22,96 @@
 
 | 参数 | 值 | 说明 |
 |-----|-----|-----|
-| TEST_CHAPTER_NAME | 人教版_数学_七年级_上册_第一章_有理数 | 测试章节名 |
-| TEST_CONCEPT_LABEL | 一元一次方程 | 测试知识点标签 |
-| TEST_GRADE | 七年级 | 测试年级 |
-| TEST_SEMESTER | 上册 | 测试学期 |
-| TEST_STAGE | middle | 测试学段 |
-| TEST_PDF_PAGES | 1-10 | 测试PDF页码范围 |
-| TEST_SUBJECT | math | 测试学科 |
+| TEST_TEXTBOOK | test_textbook.json | 测试用教材 JSON |
+| TEST_PDF | test_curriculum.pdf | 测试用 PDF（3页） |
+| TEST_OCR_RESULT | test_ocr.json | Mock OCR 结果 |
+| TEST_STAGE | 第一学段 | 测试学段 |
+| TEST_DOMAIN | 数与代数 | 测试领域 |
+| TEST_KP | 20以内数的认识 | 测试知识点 |
 
 ---
 
 ## 3. 测试用例清单
 
-### 3.1 教材导入 (Textbook Import)
+### 3.1 教材解析服务
 
 | 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
 |---------|---------|---------|------|---------|
-| TB-001 | 正常导入-按学段 | Neo4j 连接正常 | `stage: middle` | 返回 imported_count > 0 |
-| TB-002 | 正常导入-全部 | Neo4j 连接正常 | 无参数 | 返回所有学段章节数量 |
-| TB-003 | 正常导入-按年级学期 | Neo4j 连接正常 | `grade: 七年级, semester: 上册` | 返回指定年级学期章节 |
-| TB-004 | 异常-学段参数错误 | 无 | `stage: invalid` | 抛出 10003 参数无效异常 |
-| TB-005 | 异常-学期参数错误 | 无 | `semester: 中册` | 抛出 10003 参数无效异常 |
-| TB-006 | 异常-教材文件不存在 | 教材文件缺失 | `grade: 不存在的年级` | 抛出 20001 教材文件不存在 |
-| TB-007 | 异常-Neo4j连接失败 | Neo4j 服务停止 | 正常参数 | 抛出 20002 Neo4j 连接失败 |
-| TB-008 | 边界-重复导入 | 章节已存在 | 同一章节再次导入 | MERGE 行为，不创建重复节点 |
+| PARSE-001 | 正常解析-教材JSON | 教材文件有效 | 教材 JSON 文件 | 返回章节结构列表 |
+| PARSE-002 | 正常解析-保存结果 | 解析完成 | 正常参数 | 生成 textbook_chapters.json |
+| PARSE-003 | 异常-文件不存在 | 无 | 无效路径 | 抛出 FileNotFoundError |
+| PARSE-004 | 异常-JSON格式错误 | JSON 格式错误 | 损坏的 JSON | 抛出 JSONDecodeError |
+| PARSE-005 | 边界-空教材文件 | 无章节 | 空教材 JSON | 返回空章节列表 |
 
-### 3.2 查询章节列表 (Query Chapters)
+### 3.2 知识点匹配服务
 
 | 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
 |---------|---------|---------|------|---------|
-| QC-001 | 正常查询-全部 | 数据已导入 | 无参数 | 返回 total > 0，包含章节列表 |
-| QC-002 | 正常查询-按年级 | 数据已导入 | `grade: 七年级` | 返回七年级章节 |
-| QC-003 | 正常查询-按学期 | 数据已导入 | `semester: 上册` | 返回上册章节 |
-| QC-004 | 正常查询-模糊匹配 | 数据已导入 | `chapter_name: 有理数` | 返回包含"有理数"的章节 |
-| QC-005 | 边界-无数据 | 数据库清空 | 正常参数 | 返回 total: 0，chapters: [] |
-| QC-006 | 边界-组合查询 | 数据已导入 | `grade + semester` | 返回精确匹配结果 |
+| MATCH-001 | 正常匹配-精确匹配 | Concept 存在"一元一次方程" | 相同知识点 | match_type: exact, confidence: 1.0 |
+| MATCH-002 | 正常匹配-LLM模糊匹配 | 无精确匹配 | 使用 LLM | match_type: fuzzy, confidence < 1.0 |
+| MATCH-003 | 正常匹配-无匹配 | Concept 不存在 | 知识点不存在 | match_type: none, confidence: 0.0 |
+| MATCH-004 | 正常匹配-生成报告 | 匹配完成 | 知识点列表 | 生成 matching_report.json |
+| MATCH-005 | 异常-Neo4j 连接失败 | Neo4j 服务停止 | 正常参数 | 抛出 Neo4jConnectionError |
+| MATCH-006 | 边界-空知识点列表 | 无知识点 | 空列表 | 返回空匹配结果 |
 
-### 3.3 知识点匹配 (Concept Matching)
-
-| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
-|---------|---------|---------|------|---------|
-| KM-001 | 正常匹配-精确匹配 | Concept 存在"一元一次方程" | `use_llm: false` | match_type: exact, confidence: 1.0 |
-| KM-002 | 正常匹配-LLM模糊匹配 | 无精确匹配 | `use_llm: true` | match_type: fuzzy, confidence < 1.0 |
-| KM-003 | 正常匹配-无匹配 | Concept 不存在 | `use_llm: true` | match_type: none, confidence: 0.0 |
-| KM-004 | 正常匹配-生成报告 | 匹配完成 | 正常参数 | 返回匹配统计和详情 |
-| KM-005 | 异常-LLM调用失败 | LLM 服务异常 | `use_llm: true` | 返回部分匹配结果，记录错误 |
-| KM-006 | 边界-空知识点列表 | 章节无知识点 | 空章节 | match_rate: 0% |
-
-### 3.4 确认关联关系 (Confirm Linking)
+### 3.3 PDF OCR 服务
 
 | 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
 |---------|---------|---------|------|---------|
-| CL-001 | 正常确认-已匹配Concept | Concept 存在 | `concept_labels: ["有理数"]` | created_relations: 1 |
-| CL-002 | 正常确认-创建新Concept | Concept 不存在 | `create_missing: [{label: "凑十法"}]` | created_concepts: 1 |
-| CL-003 | 正常确认-批量关联 | 多个知识点 | 多个 concept_labels | created_relations = 数量 |
-| CL-004 | 异常-章节不存在 | 章节不存在 | `chapter_name: 不存在` | 抛出 20004 章节不存在 |
-| CL-005 | 异常-Concept不存在且未创建 | Concept 不存在 | 仅传 concept_labels | 抛出 20003 Concept 不存在 |
-| CL-006 | 边界-空知识点列表 | 无 | `concept_labels: []` | created_relations: 0 |
+| OCR-001 | 正常识别-小文件 | 百度 OCR API 正常 | 3页 PDF | 返回 3 页文本内容 |
+| OCR-002 | 正常识别-保存结果 | OCR 完成 | 正常参数 | 生成 ocr_result.json |
+| OCR-003 | 异常-文件不存在 | 无 | 无效路径 | 抛出 FileNotFoundError |
+| OCR-004 | 异常-文件格式错误 | 非 PDF | txt 文件 | 抛出 InvalidFileFormat |
+| OCR-005 | 异常-API Key 缺失 | 无 BAIDU_OCR_API_KEY | PDF 文件 | 抛出 ConfigurationError |
+| OCR-006 | 异常-API 调用失败 | 百度 OCR 服务异常 | PDF 文件 | 抛出 OCRAPIError |
+| OCR-007 | 边界-API 限流重试 | QPS 达到上限 | 多页 PDF | 等待后重试成功 |
+| OCR-008 | 边界-空PDF | PDF 无内容 | 空白 PDF | 返回 pages text 为空 |
 
-### 3.5 PDF OCR 识别 (PDF OCR)
-
-| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
-|---------|---------|---------|------|---------|
-| OCR-001 | 正常识别-完整PDF | PDF 文件有效 | PDF 文件 | 返回 total_pages, extracted text |
-| OCR-002 | 正常识别-指定页码 | PDF 文件有效 | `pages: 1-10` | 仅返回指定页内容 |
-| OCR-003 | 异常-文件格式错误 | 非 PDF 文件 | 其他格式文件 | 抛出 30001 文件格式错误 |
-| OCR-004 | 异常-页码超出范围 | PDF 共 10 页 | `pages: 1-20` | 抛出 30003 页码范围无效 |
-| OCR-005 | 异常-OCR引擎失败 | PaddleOCR 初始化失败 | PDF 文件 | 抛出 30002 OCR 引擎初始化失败 |
-| OCR-006 | 边界-空PDF | PDF 无内容 | 空白 PDF | 返回 pages text 为空字符串 |
-| OCR-007 | 边界-大文件 | 189 页 PDF | 全部页码 | 分批处理，返回完整内容 |
-
-### 3.6 课标知识点提取 (Curriculum Extraction)
+### 3.4 知识点提取服务
 
 | 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
 |---------|---------|---------|------|---------|
-| CE-001 | 正常提取-数学课标 | 数学课标 PDF | `subject: math` | 返回按学段、领域组织的知识点 |
-| CE-002 | 正常提取-结构化输出 | 提取完成 | 正常参数 | JSON 结构符合规范 |
-| CE-003 | 异常-学科参数错误 | 无 | `subject: invalid` | 抛出 10003 参数无效 |
-| CE-004 | 异常-文件格式错误 | 非 PDF | 其他格式 | 抛出 30001 文件格式错误 |
-| CE-005 | 边界-空课标PDF | PDF 无课标内容 | 空内容 PDF | 返回 stages 为空数组 |
+| KP-001 | 正常提取-结构化输出 | OCR 结果有效 | OCR 文本 | 返回学段-领域-知识点结构 |
+| KP-002 | 正常提取-使用免费模型 | LLM 配置正确 | 文本 | 使用 glm-4-flash |
+| KP-003 | 正常提取-保存结果 | 提取完成 | 正常参数 | 生成 curriculum_kps.json |
+| KP-004 | 异常-API Key 缺失 | 无 ZHIPU_API_KEY | 正常文本 | 抛出 ConfigurationError |
+| KP-005 | 异常-LLM 调用失败 | LLM 服务异常 | 文本 | 抛出 LLMCallError |
+| KP-006 | 异常-输出格式错误 | LLM 返回非 JSON | 文本 | 重试或抛出 OutputFormatError |
+| KP-007 | 边界-长文本分块 | 文本超长 | 10000字文本 | 分块处理，合并结果 |
+| KP-008 | 边界-空文本 | OCR 无内容 | 空文本 | 返回空知识点列表 |
+
+### 3.5 知识点对比服务
+
+| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
+|---------|---------|---------|------|---------|
+| CMP-001 | 正常对比-精确匹配 | Concept 存在"一元一次方程" | 相同知识点 | status: matched |
+| CMP-002 | 正常对比-部分匹配 | Concept 存在"正数" | "正数和负数" | status: partial_match |
+| CMP-003 | 正常对比-新增知识点 | Concept 不存在 | "凑十法" | status: new |
+| CMP-004 | 正常对比-生成报告 | 对比完成 | 知识点列表 | 生成 kp_comparison_report.json |
+| CMP-005 | 异常-Neo4j 连接失败 | Neo4j 服务停止 | 正常参数 | 抛出 Neo4jConnectionError |
+| CMP-006 | 边界-空知识点列表 | 无知识点 | 空列表 | 返回空对比结果 |
+| CMP-007 | 边界-按学段统计 | 多学段数据 | 4学段知识点 | by_stage 包含统计 |
+
+### 3.6 TTL 生成服务
+
+| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
+|---------|---------|---------|------|---------|
+| TTL-001 | 正常生成-TTL 文件 | 知识点有效 | 知识点列表 | 生成 textbook_kps.ttl |
+| TTL-002 | 正常生成-命名空间 | 知识点有效 | 正常参数 | TTL 包含正确 prefix |
+| TTL-003 | 正常生成-属性关系 | 知识点有效 | 正常参数 | TTL 包含 belongsToStage, belongsToDomain |
+| TTL-004 | 边界-跳过 TTL | --skip-ttl | 知识点列表 | 不生成 TTL 文件 |
+| TTL-005 | 边界-空知识点 | 无知识点 | 空列表 | TTL 文件仅包含 prefix |
+
+### 3.7 主脚本整合
+
+| 用例编号 | 场景描述 | 前置条件 | 输入 | 预期结果 |
+|---------|---------|---------|------|---------|
+| MAIN-001 | 正常运行-完整流程 | 所有服务正常 | 无参数 | 生成所有输出文件 |
+| MAIN-002 | 正常运行-跳过 OCR | ocr_result.json 存在 | --skip-ocr | 使用已有 OCR 结果 |
+| MAIN-003 | 正常运行-跳过 TTL | 正常参数 | --skip-ttl | 不生成 TTL |
+| MAIN-004 | 正常运行-调试模式 | 正常参数 | --debug | 输出详细日志 |
+| MAIN-005 | 异常-参数错误 | 无 | 无效参数 | 显示帮助信息 |
+| MAIN-006 | 异常-中间步骤失败 | OCR 失败 | 无参数 | 终止流程，显示错误 |
 
 ---
 
@@ -111,16 +122,17 @@
 | 00000 | SUCCESS | 成功 |
 | 10000 | SYSTEM_ERROR | 系统错误 |
 | 10001 | INVALID_PARAMS | 参数错误 |
-| 10002 | NOT_FOUND | 实体不存在 |
-| 10003 | VALIDATION_FAILED | 参数校验失败 |
-| 10004 | UNAUTHORIZED | 未登录 |
-| 20001 | TEXTBOOK_FILE_NOT_FOUND | 教材文件不存在 |
-| 20002 | NEO4J_CONNECTION_FAILED | Neo4j 连接失败 |
-| 20003 | CONCEPT_NOT_FOUND | Concept 不存在 |
-| 20004 | CHAPTER_NOT_FOUND | 章节不存在 |
+| 10002 | FILE_NOT_FOUND | 文件不存在 |
+| 10003 | CONFIGURATION_ERROR | 配置错误 |
+| 20002 | NEO4J_CONNECTION_ERROR | Neo4j 连接失败 |
+| 20003 | QUERY_FAILED | 查询失败 |
 | 30001 | INVALID_FILE_FORMAT | 文件格式错误 |
-| 30002 | OCR_ENGINE_INIT_FAILED | OCR 引擎初始化失败 |
-| 30003 | INVALID_PAGE_RANGE | 页码范围无效 |
+| 30002 | OCR_API_ERROR | 百度 OCR API 调用失败 |
+| 30003 | OCR_RATE_LIMIT | OCR API 限流 |
+| 30004 | OCR_PROCESSING_ERROR | OCR 处理失败 |
+| 40001 | API_KEY_MISSING | API Key 缺失 |
+| 40002 | LLM_CALL_ERROR | LLM 调用失败 |
+| 40003 | OUTPUT_FORMAT_ERROR | 输出格式错误 |
 
 ---
 
@@ -128,76 +140,97 @@
 
 | 模块 | 用例数量 |
 |-----|---------|
-| 教材导入 (Textbook Import) | 8 |
-| 查询章节 (Query Chapters) | 6 |
-| 知识点匹配 (Concept Matching) | 6 |
-| 确认关联 (Confirm Linking) | 6 |
-| PDF OCR | 7 |
-| 课标提取 (Curriculum Extraction) | 5 |
-| **总计** | **32** |
+| 教材解析服务 | 5 |
+| 知识点匹配服务 | 6 |
+| PDF OCR 服务 | 8 |
+| 知识点提取服务 | 8 |
+| 知识点对比服务 | 7 |
+| TTL 生成服务 | 5 |
+| 主脚本整合 | 6 |
+| **总计** | **35** |
 
 ---
 
 ## 6. 测试执行顺序
 
-测试按文件名和方法名顺序执行：
-
 ```
-tests/kg/
-├── test_textbook_import.py    # 教材导入测试
-├── test_query_chapters.py     # 查询章节测试
-├── test_concept_matching.py   # 知识点匹配测试
-├── test_confirm_linking.py    # 确认关联测试
-├── test_pdf_ocr.py            # PDF OCR 测试
-└── test_curriculum_extraction.py # 课标提取测试
-```
+tests/textbook/
+├── test_parser.py          # 解析测试
+├── test_matcher.py         # 匹配测试
+├── test_main.py            # 主脚本测试
 
-使用 pytest 默认执行顺序（文件名字母序）。
+tests/curriculum/
+├── test_pdf_ocr.py         # OCR 测试
+├── test_kp_extraction.py   # LLM 提取测试
+├── test_kp_comparison.py   # 对比测试
+├── test_ttl_generator.py   # TTL 测试
+├── test_main.py            # 主脚本测试
+```
 
 ---
 
 ## 7. 辅助方法
 
-### 7.1 创建测试章节节点
+### 7.1 Mock 教材 JSON
 ```python
-def create_test_chapter(name: str, grade: str, semester: str) -> dict:
-    """创建测试章节节点"""
-    query = """
-    MERGE (c:textbook_chapter {name: $name})
-    SET c.grade = $grade, c.semester = $semester
-    RETURN c
-    """
-    result = neo4j_session.run(query, name=name, grade=grade, semester=semester)
-    return result.single()
+def mock_textbook_json() -> dict:
+    """生成 Mock 教材 JSON"""
+    return {
+        "textbook": "人教版数学",
+        "chapters": [
+            {
+                "grade": "七年级",
+                "semester": "上册",
+                "chapter": "第一章有理数",
+                "knowledge_points": ["有理数", "数轴", "相反数"]
+            }
+        ]
+    }
 ```
 
-### 7.2 创建测试 Concept 节点
+### 7.2 Mock OCR 结果
 ```python
-def create_test_concept(label: str) -> dict:
-    """创建测试 Concept 节点"""
-    query = """
-    MERGE (c:Concept {label: $label})
-    RETURN c
-    """
-    result = neo4j_session.run(query, label=label)
-    return result.single()
+def mock_ocr_result(pages: int = 3) -> dict:
+    """生成 Mock OCR 结果"""
+    return {
+        "pdf_path": "test.pdf",
+        "total_pages": pages,
+        "pages": [
+            {"page_num": i, "text": f"测试内容第{i}页..."}
+            for i in range(1, pages + 1)
+        ]
+    }
 ```
 
-### 7.3 创建认证头
+### 7.3 Mock LLM 响应
 ```python
-def create_auth_headers(user_id: int) -> dict:
-    """创建 JWT 认证头"""
-    token = create_access_token({"sub": user_id})
-    return {"Authorization": f"Bearer {token}"}
+def mock_llm_response() -> dict:
+    """生成 Mock LLM 提取结果"""
+    return {
+        "stages": [
+            {
+                "stage": "第一学段",
+                "grades": "1-2年级",
+                "domains": [
+                    {
+                        "domain": "数与代数",
+                        "knowledge_points": ["20以内数的认识", "加减法"]
+                    }
+                ]
+            }
+        ]
+    }
 ```
 
-### 7.4 Mock LLM 匹配响应
+### 7.4 Mock Neo4j 查询
 ```python
-def mock_llm_match(textbook_kp: str, concepts: list) -> dict:
-    """Mock LLM 匹配响应"""
-    if textbook_kp == "正数和负数的概念":
-        return {"match_type": "fuzzy", "concept": "正数", "confidence": 0.8}
-    return {"match_type": "none", "confidence": 0.0}
+def mock_neo4j_concepts() -> list:
+    """生成 Mock Concept 列表"""
+    return [
+        {"label": "一元一次方程"},
+        {"label": "有理数"},
+        {"label": "正数"},
+    ]
 ```
 
 ---
@@ -206,58 +239,31 @@ def mock_llm_match(textbook_kp: str, concepts: list) -> dict:
 
 ```bash
 # 运行单个测试文件
-pytest tests/kg/test_textbook_import.py -v
-
-# 运行单个测试方法
-pytest tests/kg/test_textbook_import.py::test_import_by_stage -v
-
-# 运行知识图谱模块所有测试
-pytest tests/kg/ -v
+pytest tests/textbook/test_parser.py -v
 
 # 运行所有测试
-pytest
+pytest tests/ -v
 
-# 运行并显示覆盖率
-pytest --cov=ai_edu_ai_service/core/kg --cov-report=term-missing
+# 跳过需要外部服务的测试
+pytest tests/ -v -m "not external"
 
-# 运行特定标记的测试
-pytest -m "not slow"  # 排除慢速测试（如 OCR）
-pytest -m "ocr"       # 仅运行 OCR 测试
+# 显示覆盖率
+pytest --cov=edukg/scripts --cov-report=term-missing
 ```
 
 ---
 
-## 9. 测试配置文件
+## 9. 测试配置
 
 ### pytest.ini
 ```ini
 [pytest]
 testpaths = tests
 python_files = test_*.py
-python_classes = Test*
-python_functions = test_*
 markers =
-    slow: marks tests as slow (deselect with '-m "not slow"')
-    ocr: marks OCR-related tests
+    external: marks tests requiring external services (LLM, Neo4j, OCR)
+    slow: marks slow tests (OCR)
     integration: marks integration tests
-    unit: marks unit tests
-```
-
-### conftest.py (Neo4j fixture)
-```python
-@pytest.fixture(scope="function")
-def neo4j_session():
-    """Neo4j 测试会话，事务自动回滚"""
-    driver = GraphDatabase.driver(
-        settings.NEO4J_URI,
-        auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
-    )
-    session = driver.session()
-    session.begin_transaction()
-    yield session
-    session.rollback_transaction()
-    session.close()
-    driver.close()
 ```
 
 ---
