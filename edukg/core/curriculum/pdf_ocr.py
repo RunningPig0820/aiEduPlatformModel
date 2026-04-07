@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import fitz  # PyMuPDF
 import httpx
-from pdf2image import convert_from_path
 
 from .config import settings
 
@@ -186,37 +186,48 @@ class BaiduOCRService:
         if verbose:
             print(f"正在处理 PDF: {pdf_path.name}")
 
-        # PDF 转图片
-        if verbose:
-            print("正在将 PDF 转换为图片...")
+        # 使用 PyMuPDF 打开 PDF
+        doc = fitz.open(str(pdf_path))
+        total_pages = len(doc)
 
-        images = convert_from_path(
-            str(pdf_path),
-            dpi=dpi,
-            first_page=start_page,
-            last_page=end_page,
-        )
+        # 确定页码范围
+        start = max(0, (start_page or 1) - 1)  # PyMuPDF 从 0 开始，用户从 1 开始
+        end = min(end_page or total_pages, total_pages)
 
-        total_pages = len(images)
         if verbose:
-            print(f"共 {total_pages} 页需要处理")
+            print(f"PDF 共 {total_pages} 页，处理第 {start+1}-{end} 页")
 
         # OCR 识别每一页
         pages = []
-        for i, image in enumerate(images, start=1):
+        processed_count = 0
+        pages_to_process = end - start
+
+        for page_num in range(start, end):
+            processed_count += 1
             if verbose:
-                progress = i / total_pages * 100
-                print(f"正在识别第 {i}/{total_pages} 页 ({progress:.1f}%)...")
+                progress = processed_count / pages_to_process * 100
+                print(f"正在识别第 {page_num + 1}/{total_pages} 页 ({progress:.1f}%)...")
+
+            # 获取页面
+            page = doc[page_num]
+
+            # 将页面渲染为图片
+            mat = fitz.Matrix(dpi / 72, dpi / 72)  # 缩放矩阵
+            pix = page.get_pixmap(matrix=mat)
+
+            # 转换为 PNG 字节
+            img_bytes = pix.tobytes("png")
 
             # 保存临时图片
-            temp_image_path = f"/tmp/pdf_page_{i}.png"
-            image.save(temp_image_path, "PNG")
+            temp_image_path = f"/tmp/pdf_page_{page_num + 1}.png"
+            with open(temp_image_path, "wb") as f:
+                f.write(img_bytes)
 
             # OCR 识别
             text = self._ocr_image(temp_image_path)
 
             pages.append({
-                "page_num": start_page + i - 1 if start_page else i,
+                "page_num": page_num + 1,
                 "text": text,
             })
 
@@ -226,15 +237,17 @@ class BaiduOCRService:
             # QPS 限制：每秒最多 2 次请求
             time.sleep(0.5)
 
+        doc.close()
+
         result = OCRResult(
             pdf_path=str(pdf_path),
-            total_pages=total_pages,
+            total_pages=pages_to_process,
             pages=pages,
             processed_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         )
 
         if verbose:
-            print(f"OCR 识别完成，共处理 {total_pages} 页")
+            print(f"OCR 识别完成，共处理 {pages_to_process} 页")
 
         return result
 

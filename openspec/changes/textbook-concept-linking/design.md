@@ -67,13 +67,25 @@ Neo4j 数学知识图谱:
 
 ```
 输出文件:
-├── textbook_chapters.json       # 章节结构
-├── matching_report.json         # 匹配报告
-├── ocr_result.json              # OCR 结果
-├── curriculum_kps.json          # 课标知识点
-├── kp_comparison_report.json    # 对比报告
-└── curriculum_kps.ttl           # TTL 格式
+├── edukg/data/eduBureau/math/
+│   ├── ocr_result.json              # OCR 结果
+│   ├── classes.json                 # Class 定义（Neo4j格式）
+│   ├── concepts.json                # Concept 知识点（Neo4j格式）
+│   ├── statements.json              # Statement 定义（Neo4j格式）
+│   └── relations.json               # 关系（Neo4j格式）
+├── edukg/data/output/
+│   ├── curriculum_kps.json          # 课标知识点（中间文件）
+│   ├── kp_comparison_report.json    # 对比报告
+│   ├── textbook_chapters.json       # 章节结构
+│   └── matching_report.json         # 匹配报告
 ```
+
+**JSON 格式要求**:
+- 符合 Neo4j 导入格式
+- 参考 EduKG 现有数据格式:
+  - Class: `edukg/data/edukg/math/1_概念类(Class)/math_classes.json`
+  - Entity: `edukg/data/edukg/math/8_全部关联关系(Complete)/math_entities_complete.json`
+  - Relation: `edukg/data/edukg/math/8_全部关联关系(Complete)/math_knowledge_relations.json`
 
 ### 2. OCR 技术选型
 
@@ -122,8 +134,8 @@ edukg/core/
 └── curriculum/                  # 课标模块
     ├── pdf_ocr.py               # 百度 OCR（收费）
     ├── kp_extraction.py         # LLM 提取
+    ├── relation_builder.py      # 关系构建（Neo4j格式）
     ├── kp_comparison.py         # 对比分析
-    ├── ttl_generator.py         # TTL 生成
     └── main.py                  # 主脚本
 ```
 
@@ -152,7 +164,7 @@ edukg/core/
 
 ### 6. 知识点关系构建策略
 
-**决策**: 使用 LLM 推断知识点的关系结构
+**决策**: 使用 LLM 推断知识点的关系结构，输出符合 Neo4j 导入格式的独立文件
 
 ```
 关系构建流程:
@@ -169,13 +181,29 @@ edukg/core/
    - PART_OF: 20以内加法 → 加法（部分-整体）
    - BELONGS_TO: 凑十法 → 进位加法（所属关系）
 
-4. 输出结构: kp_relations.json
+4. 输出文件（分开存储，符合Neo4j导入格式）:
+   - classes.json: Class 定义
+   - concepts.json: Concept 知识点
+   - statements.json: Statement 定义
+   - relations.json: 关系（RELATED_TO, PART_OF, BELONGS_TO）
 ```
 
 **理由**:
 - EduKG 有完整的关系结构，补充的知识点也需要建立关系
 - LLM 可以理解知识点语义，推断正确的关系
-- 输出 JSON 供人工确认后再导入
+- 分开存储避免单文件过大，便于错误定位
+- 符合 Neo4j 导入格式，可直接使用现有导入脚本
+
+**URI 命名规范**:
+```
+版本号: 0.2 (区分 EduKG 的 0.1，表示我们自己设计的数据)
+ID格式: {label_pinyin}-{md5_32bit}
+MD5: 对 label 字符串计算 MD5，取 32 位小写字符
+
+示例:
+- label: "小学数概念"
+- uri: "http://edukg.org/knowledge/0.2/class/math#xiaoxueshugainian-{md5}"
+```
 
 **可能新增的 Class**:
 | Class | 父类 | 说明 |

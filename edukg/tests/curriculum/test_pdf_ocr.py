@@ -48,18 +48,26 @@ class TestBaiduOCRService:
         with pytest.raises(FileNotFoundError, match="PDF 文件不存在"):
             service.extract_text("/nonexistent/file.pdf")
 
-    @patch("edukg.core.curriculum.pdf_ocr.convert_from_path")
-    @patch("edukg.core.curriculum.pdf_ocr.BaiduOCRService._ocr_image")
     @patch("edukg.core.curriculum.pdf_ocr.Path.exists")
-    def test_extract_text_success(self, mock_exists, mock_ocr, mock_convert):
+    @patch("edukg.core.curriculum.pdf_ocr.fitz.open")
+    @patch("edukg.core.curriculum.pdf_ocr.BaiduOCRService._ocr_image")
+    def test_extract_text_success(self, mock_ocr, mock_fitz_open, mock_exists):
         """测试成功提取文字"""
         # Mock 文件存在
         mock_exists.return_value = True
 
-        # Mock PDF 转图片
-        mock_image = MagicMock()
-        mock_image.save = MagicMock()
-        mock_convert.return_value = [mock_image, mock_image]
+        # Mock PDF 文档
+        mock_doc = MagicMock()
+        mock_doc.__len__ = lambda self: 2
+        mock_doc.__iter__ = lambda self: iter([MagicMock(), MagicMock()])
+        mock_fitz_open.return_value = mock_doc
+
+        # Mock 页面渲染
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b"fake_png_data"
+        mock_page.get_pixmap.return_value = mock_pix
+        mock_doc.__getitem__ = lambda self, idx: mock_page
 
         # Mock OCR 识别
         mock_ocr.return_value = "测试文字内容"
