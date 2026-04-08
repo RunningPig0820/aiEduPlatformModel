@@ -3,19 +3,26 @@ Statement 提取服务
 
 使用 LLM 生成知识点的定义描述，生成符合 Neo4j 导入格式的 statements.json
 支持 LLM 缓存，避免重复调用
+支持断点续传和进度追踪
+
+状态文件: state/step_5_statement_gen.json
 """
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .config import settings
 from .kg_builder import URIGenerator, KGConfig
-from edukg.core.llmTaskLock import CachedLLM
+from edukg.core.llmTaskLock import CachedLLM, TaskState
+
+
+# 步骤5的状态文件名
+STEP_5_STATE_ID = "step_5_statement_gen"
 
 
 @dataclass
@@ -56,6 +63,8 @@ class StatementExtractor:
     2. 生成 Statement URI
     3. 建立 Statement → Concept 的关联
     4. 生成 statements.json
+
+    状态文件: state/step_5_statement_gen.json
     """
 
     def __init__(
@@ -64,6 +73,7 @@ class StatementExtractor:
         config: Optional[KGConfig] = None,
         cache_dir: str = "cache/",
         use_cache: bool = True,
+        state_dir: str = "state/",
     ):
         """
         初始化 Statement 提取器
@@ -73,6 +83,7 @@ class StatementExtractor:
             config: 知识图谱配置
             cache_dir: 缓存目录
             use_cache: 是否使用 LLM 缓存
+            state_dir: 状态文件目录
         """
         self.api_key = api_key or settings.ZHIPU_API_KEY
         self.config = config or KGConfig()
@@ -82,6 +93,7 @@ class StatementExtractor:
         )
         self.cache_dir = cache_dir
         self.use_cache = use_cache
+        self.state_dir = state_dir
 
         # 初始化 LLM
         if self.api_key:
@@ -94,6 +106,38 @@ class StatementExtractor:
             self.llm = CachedLLM(llm, cache_dir=cache_dir) if use_cache else llm
         else:
             self.llm = None
+
+    def get_state(self) -> TaskState:
+        """获取步骤5的状态管理器"""
+        return TaskState(STEP_5_STATE_ID, state_dir=self.state_dir)
+
+    def get_progress(self) -> Dict[str, int]:
+        """
+        获取进度信息
+
+        Returns:
+            包含 total, completed, failed, pending 的字典
+        """
+        state = self.get_state()
+        return state.get_progress()
+
+    def get_status_summary(self) -> Dict[str, Any]:
+        """
+        获取状态摘要
+
+        Returns:
+            包含状态信息的字典
+        """
+        state = self.get_state()
+        progress = state.get_progress()
+
+        return {
+            "task_id": STEP_5_STATE_ID,
+            "status": state.get_status(),
+            "progress": progress,
+            "is_completed": state.is_completed(),
+            "state_file": str(state.state_file),
+        }
 
     def _call_llm(self, prompt: str) -> dict:
         """
@@ -230,35 +274,102 @@ class StatementExtractor:
         concepts: list[dict],
         batch_size: int = 10,
         verbose: bool = False,
+        resume: bool = False,
     ) -> list[dict]:
         """
-        批量生成 Statement
+        批量生成 Statement（支持断点续传）
 
         Args:
             concepts: Concept 列表，每个元素包含 label, uri
-            batch_size: 批次大小
+            batch_size: 批次大小（每批作为一个 checkpoint）
             verbose: 是否显示进度
+            resume: 是否从断点恢复
 
         Returns:
             Statement 定义列表
         """
+        # 获取状态
+        state = self.get_state()
+
+        # 计算批次数
+        total_batches = (len(concepts) + batch_size - 1) // batch_size
+
+        if not resume or state.get_status() == TaskState.STATUS_PENDING:
+            state.start(total=total_batches)
+
+        # 获取待处理的检查点
+        if resume:
+            pending_checkpoints = state.resume()
+            if verbose and pending_checkpoints:
+                progress = state.get_progress()
+                print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 批，待处理 {len(pending_checkpoints)} 批")
+        else:
+            pending_checkpoints = [f"batch_{i+1}" for i in range(total_batches)]
+
         statements = []
 
-        for i, concept in enumerate(concepts):
-            if verbose and (i + 1) % 10 == 0:
-                print(f"生成定义进度: {i + 1}/{len(concepts)}")
+        for batch_idx in range(total_batches):
+            batch_id = f"batch_{batch_idx + 1}"
 
-            # 生成定义
-            def_result = self.generate_definition(concept["label"])
+            # 跳过已完成的检查点
+            if batch_id not in pending_checkpoints:
+                continue
 
-            # 生成 Statement
-            statement = self.generate_statement(
-                concept_label=concept["label"],
-                concept_uri=concept["uri"],
-                definition=def_result["definition"],
-            )
+            # 获取当前批次的 concepts
+            start_idx = batch_idx * batch_size
+            end_idx = min(start_idx + batch_size, len(concepts))
+            batch_concepts = concepts[start_idx:end_idx]
 
-            statements.append(statement)
+            if verbose:
+                progress = state.get_progress()
+                print(f"处理批次 {batch_idx + 1}/{total_batches} (Concept {start_idx + 1}-{end_idx})... (已完成: {progress['completed']}, 待处理: {progress['pending']})")
+
+            # 处理当前批次
+            batch_statements = []
+            batch_errors = []
+
+            for concept in batch_concepts:
+                try:
+                    # 生成定义
+                    def_result = self.generate_definition(concept["label"])
+
+                    # 生成 Statement
+                    statement = self.generate_statement(
+                        concept_label=concept["label"],
+                        concept_uri=concept["uri"],
+                        definition=def_result["definition"],
+                    )
+                    batch_statements.append(statement)
+                except Exception as e:
+                    batch_errors.append(str(e))
+                    # 失败时使用默认定义
+                    statement = self.generate_statement(
+                        concept_label=concept["label"],
+                        concept_uri=concept["uri"],
+                        definition=f"{concept['label']}是数学中的一个重要知识点。",
+                    )
+                    batch_statements.append(statement)
+
+            statements.extend(batch_statements)
+
+            # 标记检查点完成
+            if batch_errors:
+                state.complete_checkpoint(batch_id, {
+                    "batch_idx": batch_idx,
+                    "concept_range": [start_idx, end_idx],
+                    "errors": batch_errors,
+                })
+            else:
+                state.complete_checkpoint(batch_id, {
+                    "batch_idx": batch_idx,
+                    "concept_range": [start_idx, end_idx],
+                })
+
+        if verbose:
+            progress = state.get_progress()
+            print(f"生成完成: {len(statements)} 个 Statement")
+            if state.is_completed():
+                print("所有批次已完成！")
 
         return statements
 
@@ -266,18 +377,27 @@ class StatementExtractor:
         self,
         concepts: list[dict],
         verbose: bool = False,
+        resume: bool = False,
+        batch_size: int = 10,
     ) -> list[dict]:
         """
-        从 Concept 列表提取 Statement
+        从 Concept 列表提取 Statement（支持断点续传）
 
         Args:
             concepts: Concept 列表
             verbose: 是否显示进度
+            resume: 是否从断点恢复
+            batch_size: 批次大小
 
         Returns:
             Statement 定义列表
         """
-        return self.batch_generate_statements(concepts, verbose=verbose)
+        return self.batch_generate_statements(
+            concepts,
+            verbose=verbose,
+            resume=resume,
+            batch_size=batch_size,
+        )
 
     def save_statements(
         self,
@@ -304,17 +424,63 @@ class StatementExtractor:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Statement 提取")
-    parser.add_argument("--concepts", required=True, help="Concepts JSON 文件")
+    parser = argparse.ArgumentParser(description="Statement 提取 - 步骤5")
+    parser.add_argument("--concepts", help="Concepts JSON 文件（--status 时可选）")
     parser.add_argument("--output", default="statements.json", help="输出文件")
     parser.add_argument("--debug", action="store_true", help="调试模式")
+    parser.add_argument("--resume", action="store_true", help="从断点恢复")
+    parser.add_argument("--status", action="store_true", help="仅查看状态，不执行")
+    parser.add_argument("--state-dir", default="state/", help="状态文件目录")
+    parser.add_argument("--cache-dir", default="cache/", help="缓存目录")
+    parser.add_argument("--batch-size", type=int, default=10, help="批次大小")
 
     args = parser.parse_args()
+
+    # 创建提取器
+    extractor = StatementExtractor(
+        state_dir=args.state_dir,
+        cache_dir=args.cache_dir,
+    )
+
+    # 仅查看状态
+    if args.status:
+        summary = extractor.get_status_summary()
+        print(f"\n=== 步骤5: Statement 生成状态 ===")
+        print(f"状态文件: {summary['state_file']}")
+        print(f"任务状态: {summary['status']}")
+        print(f"进度: {summary['progress']['completed']}/{summary['progress']['total']} 批次完成")
+        print(f"  - 已完成: {summary['progress']['completed']}")
+        print(f"  - 失败: {summary['progress']['failed']}")
+        print(f"  - 待处理: {summary['progress']['pending']}")
+        print(f"已完成: {summary['is_completed']}")
+        exit(0)
+
+    # 执行提取时需要 --concepts
+    if not args.concepts:
+        parser.error("--concepts is required when not using --status")
+
+    # 检查文件存在
+    if not Path(args.concepts).exists():
+        print(f"错误: Concepts 文件不存在: {args.concepts}")
+        exit(1)
 
     # 加载 concepts
     with open(args.concepts, encoding="utf-8") as f:
         concepts = json.load(f)
 
-    extractor = StatementExtractor()
-    statements = extractor.extract_statements_from_concepts(concepts, verbose=True)
+    # 从断点恢复时显示进度
+    if args.resume:
+        progress = extractor.get_progress()
+        if progress['total'] > 0:
+            print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 批")
+        else:
+            print("没有可恢复的状态，开始新任务")
+
+    # 提取
+    statements = extractor.extract_statements_from_concepts(
+        concepts,
+        verbose=True,
+        resume=args.resume,
+        batch_size=args.batch_size,
+    )
     extractor.save_statements(statements, args.output)

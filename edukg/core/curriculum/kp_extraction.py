@@ -3,13 +3,15 @@
 
 使用 LLM (glm-4-flash) 从 OCR 文本中提取结构化知识点
 支持断点续传和进度追踪
+
+状态文件: state/step_2_kp_extraction.json
 """
 import json
 import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -17,6 +19,10 @@ from langchain_core.output_parsers import JsonOutputParser
 
 from .config import settings
 from edukg.core.llmTaskLock import TaskState
+
+
+# 步骤2的状态文件名
+STEP_2_STATE_ID = "step_2_kp_extraction"
 
 
 @dataclass
@@ -74,22 +80,152 @@ EXTRACTION_PROMPT = """你是一个教育专家，专门从课程标准中提取
 """
 
 
+# 学段页码范围（根据文档结构）
+STAGE_PAGE_RANGES = {
+    "第一学段": (25, 35),   # 大约页码范围
+    "第二学段": (36, 50),
+    "第三学段": (51, 70),
+    "第四学段": (71, 100),
+}
+
+
+class PageChunker:
+    """
+    页面分块器
+
+    将 OCR 结果按页或页面范围分块，支持语义边界
+    """
+
+    def __init__(self, pages_per_chunk: int = 10):
+        """
+        初始化分块器
+
+        Args:
+            pages_per_chunk: 每块包含的页数，默认10页
+        """
+        self.pages_per_chunk = pages_per_chunk
+
+    def chunk_by_page_count(
+        self,
+        pages: List[Dict[str, Any]],
+        pages_per_chunk: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """
+        按页数分块
+
+        Args:
+            pages: OCR 页面列表
+            pages_per_chunk: 每块页数
+
+        Returns:
+            分块后的列表，每个元素包含 page_range 和 text
+        """
+        chunks = []
+        for i in range(0, len(pages), pages_per_chunk):
+            chunk_pages = pages[i:i + pages_per_chunk]
+            chunk_text = "\n\n".join([
+                p.get("text", "")
+                for p in chunk_pages
+            ])
+            chunks.append({
+                "id": f"chunk_{i // pages_per_chunk + 1}",
+                "page_range": (
+                    chunk_pages[0].get("page_num", i + 1),
+                    chunk_pages[-1].get("page_num", i + len(chunk_pages)),
+                ),
+                "text": chunk_text,
+                "page_count": len(chunk_pages),
+            })
+        return chunks
+
+    def chunk_by_stage(
+        self,
+        pages: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        按学段分块（基于内容检测）
+
+        Args:
+            pages: OCR 页面列表
+
+        Returns:
+            按学段分块的列表
+        """
+        # 学段关键词
+        stage_keywords = [
+            ("第一学段", "1~2年级"),
+            ("第二学段", "3~4年级"),
+            ("第三学段", "5~6年级"),
+            ("第四学段", "7~9年级"),
+        ]
+
+        # 找到每个学段的起始页
+        stage_starts = {}
+        for page in pages:
+            text = page.get("text", "")
+            page_num = page.get("page_num", 0)
+            for stage_name, grades in stage_keywords:
+                if stage_name in text and stage_name not in stage_starts:
+                    stage_starts[stage_name] = page_num
+
+        # 按学段分块
+        chunks = []
+        sorted_stages = sorted(stage_starts.items(), key=lambda x: x[1])
+
+        for i, (stage_name, start_page) in enumerate(sorted_stages):
+            # 结束页是下一个学段的起始页，或最后一页
+            if i + 1 < len(sorted_stages):
+                end_page = sorted_stages[i + 1][1] - 1
+            else:
+                end_page = pages[-1].get("page_num", len(pages))
+
+            # 收集该学段的页面
+            stage_pages = [
+                p for p in pages
+                if start_page <= p.get("page_num", 0) <= end_page
+            ]
+
+            if stage_pages:
+                chunk_text = "\n\n".join([
+                    p.get("text", "")
+                    for p in stage_pages
+                ])
+                chunks.append({
+                    "id": f"stage_{i + 1}",
+                    "stage_name": stage_name,
+                    "page_range": (start_page, end_page),
+                    "text": chunk_text,
+                    "page_count": len(stage_pages),
+                })
+
+        return chunks
+
+
 class LLMExtractor:
     """
     知识点提取服务
 
     使用 LLM 从课标文本中提取结构化知识点
+
+    状态文件: state/step_2_kp_extraction.json
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "glm-4-flash"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "glm-4-flash",
+        state_dir: str = "state/",
+    ):
         """
         初始化 LLM 提取器
 
         Args:
             api_key: 智谱 API Key，默认从环境变量读取
             model: 模型名称，默认 glm-4-flash（免费）
+            state_dir: 状态文件目录
         """
         self.api_key = api_key or settings.ZHIPU_API_KEY
+        self.state_dir = state_dir
 
         if not self.api_key:
             raise ValueError(
@@ -103,6 +239,41 @@ class LLMExtractor:
             temperature=0.1,  # 低温度，稳定输出
             max_tokens=4096,
         )
+
+        # 页面分块器
+        self.chunker = PageChunker()
+
+    def get_state(self) -> TaskState:
+        """获取步骤2的状态管理器"""
+        return TaskState(STEP_2_STATE_ID, state_dir=self.state_dir)
+
+    def get_progress(self) -> Dict[str, int]:
+        """
+        获取进度信息
+
+        Returns:
+            包含 total, completed, failed, pending 的字典
+        """
+        state = self.get_state()
+        return state.get_progress()
+
+    def get_status_summary(self) -> Dict[str, Any]:
+        """
+        获取状态摘要
+
+        Returns:
+            包含状态信息的字典
+        """
+        state = self.get_state()
+        progress = state.get_progress()
+
+        return {
+            "task_id": STEP_2_STATE_ID,
+            "status": state.get_status(),
+            "progress": progress,
+            "is_completed": state.is_completed(),
+            "state_file": str(state.state_file),
+        }
 
     def _chunk_text(self, text: str, max_chars: int = 8000) -> list[str]:
         """
@@ -245,7 +416,7 @@ class LLMExtractor:
         Args:
             text: OCR 识别的文本
             verbose: 是否显示进度
-            state: TaskState 实例，用于断点续传
+            state: TaskState 实例（可选，默认使用 step_2 状态）
             resume: 是否从断点恢复
 
         Returns:
@@ -257,9 +428,9 @@ class LLMExtractor:
         if verbose:
             print(f"文本分为 {len(chunks)} 块进行处理")
 
-        # 初始化或恢复任务状态
+        # 使用 step_2 专用状态
         if state is None:
-            state = TaskState("kp_extraction", state_dir="state/")
+            state = self.get_state()
 
         if not resume or state.get_status() == TaskState.STATUS_PENDING:
             state.start(total=len(chunks))
@@ -268,7 +439,8 @@ class LLMExtractor:
         if resume:
             pending_checkpoints = state.resume()
             if verbose and pending_checkpoints:
-                print(f"从断点恢复，待处理: {len(pending_checkpoints)} 块")
+                progress = state.get_progress()
+                print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 块，待处理 {len(pending_checkpoints)} 块")
         else:
             pending_checkpoints = [f"checkpoint_{i+1}" for i in range(len(chunks))]
 
@@ -329,10 +501,126 @@ class LLMExtractor:
 
         return result
 
+    def extract_from_pages(
+        self,
+        pages: List[Dict[str, Any]],
+        chunk_strategy: str = "page_count",
+        pages_per_chunk: int = 10,
+        verbose: bool = True,
+        resume: bool = False,
+    ) -> CurriculumKnowledgePoints:
+        """
+        从页面列表提取知识点（支持多种分块策略）
+
+        Args:
+            pages: OCR 页面列表，每个元素包含 page_num 和 text
+            chunk_strategy: 分块策略
+                - "page_count": 按页数分块（默认）
+                - "stage": 按学段分块
+            pages_per_chunk: 每块页数（仅 page_count 策略）
+            verbose: 是否显示进度
+            resume: 是否从断点恢复
+
+        Returns:
+            CurriculumKnowledgePoints: 提取的知识点结构
+        """
+        # 根据策略分块
+        if chunk_strategy == "stage":
+            chunks = self.chunker.chunk_by_stage(pages)
+        else:
+            chunks = self.chunker.chunk_by_page_count(pages, pages_per_chunk)
+
+        if verbose:
+            print(f"使用 {chunk_strategy} 策略分为 {len(chunks)} 块")
+            for chunk in chunks:
+                if "stage_name" in chunk:
+                    print(f"  - {chunk['id']}: {chunk['stage_name']} (页 {chunk['page_range'][0]}-{chunk['page_range'][1]})")
+                else:
+                    print(f"  - {chunk['id']}: 页 {chunk['page_range'][0]}-{chunk['page_range'][1]}")
+
+        # 获取状态
+        state = self.get_state()
+
+        if not resume or state.get_status() == TaskState.STATUS_PENDING:
+            state.start(total=len(chunks))
+
+        # 获取待处理的检查点
+        if resume:
+            pending_checkpoints = state.resume()
+            if verbose and pending_checkpoints:
+                progress = state.get_progress()
+                print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 块，待处理 {len(pending_checkpoints)} 块")
+        else:
+            pending_checkpoints = [chunk["id"] for chunk in chunks]
+
+        all_stages = []
+
+        for chunk in chunks:
+            chunk_id = chunk["id"]
+
+            # 跳过已完成的检查点
+            if chunk_id not in pending_checkpoints:
+                continue
+
+            if verbose:
+                progress = state.get_progress()
+                page_range = chunk.get("page_range", (0, 0))
+                print(f"正在处理 {chunk_id} (页 {page_range[0]}-{page_range[1]})... (已完成: {progress['completed']}, 待处理: {progress['pending']})")
+
+            prompt = EXTRACTION_PROMPT.format(text=chunk["text"])
+
+            try:
+                response = self.llm.invoke([
+                    SystemMessage(content="你是一个教育专家，专门从课程标准中提取知识点。"),
+                    HumanMessage(content=prompt),
+                ])
+
+                result = self._extract_json_from_response(response.content)
+                stages = result.get("stages", [])
+                all_stages.append(stages)
+
+                # 标记检查点完成
+                state.complete_checkpoint(chunk_id, {
+                    "stages": stages,
+                    "page_range": page_range,
+                })
+
+            except Exception as e:
+                print(f"处理 {chunk_id} 时出错: {e}")
+                state.fail_checkpoint(chunk_id, str(e))
+                continue
+
+        # 合并结果
+        merged_stages = self._merge_stages(all_stages)
+
+        # 统计知识点数量
+        total_kps = 0
+        for stage in merged_stages:
+            for domain in stage.get("domains", []):
+                total_kps += len(domain.get("knowledge_points", []))
+
+        result = CurriculumKnowledgePoints(
+            source="课标文本",
+            extracted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            total_stages=len(merged_stages),
+            total_knowledge_points=total_kps,
+            stages=merged_stages,
+        )
+
+        if verbose:
+            print(f"提取完成：{len(merged_stages)} 个学段，{total_kps} 个知识点")
+            if state.is_completed():
+                print("所有检查点已完成！")
+
+        return result
+
     def extract_from_ocr_result(
         self,
         ocr_result_path: str,
         verbose: bool = True,
+        resume: bool = False,
+        chunk_strategy: str = "page_count",
+        pages_per_chunk: int = 10,
     ) -> CurriculumKnowledgePoints:
         """
         从 OCR 结果文件中提取知识点
@@ -340,6 +628,9 @@ class LLMExtractor:
         Args:
             ocr_result_path: OCR 结果 JSON 文件路径
             verbose: 是否显示进度
+            resume: 是否从断点恢复
+            chunk_strategy: 分块策略 ("page_count" 或 "stage")
+            pages_per_chunk: 每块页数
 
         Returns:
             CurriculumKnowledgePoints: 提取的知识点结构
@@ -351,16 +642,18 @@ class LLMExtractor:
         with open(ocr_result_path, encoding="utf-8") as f:
             ocr_data = json.load(f)
 
-        # 合并所有页面的文本
-        text = "\n\n".join([
-            page.get("text", "")
-            for page in ocr_data.get("pages", [])
-        ])
+        pages = ocr_data.get("pages", [])
 
         if verbose:
-            print(f"从 {ocr_result_path.name} 读取了 {len(text)} 个字符")
+            print(f"从 {ocr_result_path.name} 读取了 {len(pages)} 页")
 
-        result = self.extract_knowledge_points(text, verbose)
+        result = self.extract_from_pages(
+            pages=pages,
+            chunk_strategy=chunk_strategy,
+            pages_per_chunk=pages_per_chunk,
+            verbose=verbose,
+            resume=resume,
+        )
         result.source = ocr_data.get("pdf_path", str(ocr_result_path))
 
         return result
@@ -398,30 +691,67 @@ class LLMExtractor:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="知识点提取")
-    parser.add_argument("--ocr-result", required=True, help="OCR 结果 JSON 文件路径")
+    parser = argparse.ArgumentParser(description="知识点提取 - 步骤2")
+    parser.add_argument("--ocr-result", help="OCR 结果 JSON 文件路径（--status 时可选）")
     parser.add_argument("--output", default="curriculum_kps.json", help="输出文件路径")
     parser.add_argument("--debug", action="store_true", help="调试模式")
     parser.add_argument("--resume", action="store_true", help="从断点恢复")
+    parser.add_argument("--status", action="store_true", help="仅查看状态，不执行")
     parser.add_argument("--state-dir", default="state/", help="状态文件目录")
+    parser.add_argument(
+        "--chunk-strategy",
+        choices=["page_count", "stage"],
+        default="page_count",
+        help="分块策略: page_count (按页数) 或 stage (按学段)"
+    )
+    parser.add_argument(
+        "--pages-per-chunk",
+        type=int,
+        default=10,
+        help="每块页数 (仅 page_count 策略)"
+    )
 
     args = parser.parse_args()
 
-    # 创建任务状态
-    state = TaskState("kp_extraction", state_dir=args.state_dir)
+    # 创建提取器
+    extractor = LLMExtractor(state_dir=args.state_dir)
 
+    # 仅查看状态
+    if args.status:
+        summary = extractor.get_status_summary()
+        print(f"\n=== 步骤2: 知识点提取状态 ===")
+        print(f"状态文件: {summary['state_file']}")
+        print(f"任务状态: {summary['status']}")
+        print(f"进度: {summary['progress']['completed']}/{summary['progress']['total']} 完成")
+        print(f"  - 已完成: {summary['progress']['completed']}")
+        print(f"  - 失败: {summary['progress']['failed']}")
+        print(f"  - 待处理: {summary['progress']['pending']}")
+        print(f"已完成: {summary['is_completed']}")
+        exit(0)
+
+    # 执行提取时需要 --ocr-result
+    if not args.ocr_result:
+        parser.error("--ocr-result is required when not using --status")
+
+    # 检查文件存在
+    if not Path(args.ocr_result).exists():
+        print(f"错误: OCR 结果文件不存在: {args.ocr_result}")
+        exit(1)
+
+    # 从断点恢复时显示进度
     if args.resume:
-        progress = state.get_progress()
-        print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 块")
+        progress = extractor.get_progress()
+        if progress['total'] > 0:
+            print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 块")
+        else:
+            print("没有可恢复的状态，开始新任务")
 
-    extractor = LLMExtractor()
-    result = extractor.extract_knowledge_points(
-        text="\n\n".join([
-            page.get("text", "")
-            for page in json.load(open(args.ocr_result, encoding="utf-8")).get("pages", [])
-        ]),
+    # 执行提取
+    result = extractor.extract_from_ocr_result(
+        ocr_result_path=args.ocr_result,
         verbose=True,
-        state=state,
         resume=args.resume,
+        chunk_strategy=args.chunk_strategy,
+        pages_per_chunk=args.pages_per_chunk,
     )
     extractor.save_result(result, args.output)

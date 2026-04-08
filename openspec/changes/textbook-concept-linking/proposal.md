@@ -22,6 +22,11 @@
 - `pdf-ocr`: PDF OCR 服务，使用百度 OCR API（收费）识别扫描版 PDF
 - `kp-extract`: 知识点提取服务，使用 LLM 从课标文本提取结构化知识点
 - `kp-compare`: 知识点对比服务，分析课标知识点与 EduKG Concept 的差异
+- **`step-control`: 分步执行控制，支持按步骤手动执行和断点续传**
+  - 使用 `edukg/core/llmTaskLock` 模块（TaskState, CachedLLM, ProcessLock）
+  - 支持 `--step 2-6` 参数执行特定步骤
+  - 支持 `--resume` 从断点恢复
+  - 支持 `--status` 查询各步骤进度
 
 ### Modified Capabilities
 
@@ -45,6 +50,11 @@ edukg/data/output/
 
 ```
 edukg/core/
+├── llmTaskLock/                   # 任务锁模块（已完成）
+│   ├── state_manager.py           # TaskState 状态管理
+│   ├── llm_cache.py               # CachedLLM 缓存
+│   └── process_lock.py            # ProcessLock 进程锁
+│
 ├── textbook/                      # 教材模块
 │   ├── parser.py                  # 教材解析
 │   ├── matcher.py                 # 知识点匹配
@@ -52,10 +62,14 @@ edukg/core/
 │
 └── curriculum/                    # 课标模块
     ├── pdf_ocr.py                 # PDF OCR（百度 API，收费）
-    ├── kp_extraction.py           # 知识点提取（LLM）
+    ├── kp_extraction.py           # 知识点提取（LLM）- 已集成 TaskState
+    ├── class_extractor.py         # 类型推断（LLM）- 已集成 CachedLLM
+    ├── concept_extractor.py       # Concept 生成
+    ├── statement_extractor.py     # 定义生成（LLM）- 已集成 CachedLLM
+    ├── relation_extractor.py      # 关系提取（LLM）
+    ├── kg_main.py                 # 主脚本（增强：--step, --status, --resume）
     ├── kp_comparison.py           # 知识点对比
-    ├── ttl_generator.py           # TTL 生成
-    └── main.py                    # 主脚本（整合流程）
+    └── ttl_generator.py           # TTL 生成
 ```
 
 ### 依赖

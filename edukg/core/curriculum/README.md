@@ -2,21 +2,46 @@
 
 从课标 PDF 构建 Neo4j 知识图谱的完整流程。
 
+**特性**：
+- 支持断点续传（TaskState）
+- 支持 LLM 缓存（CachedLLM）
+- 支持进度查询（--status）
+
 ---
 
 ## 快速开始
 
-```bash
-# 完整流程（从 OCR 结果生成 4 个 JSON 文件）
-python -m edukg.core.curriculum.kg_main
+### 查看状态
 
-# 分步执行
-python -m edukg.core.curriculum.pdf_ocr --pdf-path 课标.pdf           # 步骤1: OCR
-python -m edukg.core.curriculum.kp_extraction --ocr-result ocr.json   # 步骤2: 提取知识点
-python -m edukg.core.curriculum.class_extractor --kps kps.json        # 步骤3: 类型推断
-python -m edukg.core.curriculum.concept_extractor --kps kps.json      # 步骤4: 生成 Concept
-python -m edukg.core.curriculum.statement_extractor --concepts c.json # 步骤5: 生成定义
-python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6: 提取关系
+```bash
+# 查看各步骤执行状态
+python -m edukg.core.curriculum.kp_extraction --status
+python -m edukg.core.curriculum.class_extractor --status
+python -m edukg.core.curriculum.concept_extractor --status
+python -m edukg.core.curriculum.statement_extractor --status
+python -m edukg.core.curriculum.relation_extractor --status
+```
+
+### 分步执行（支持断点续传）
+
+```bash
+# 步骤1: OCR（百度收费，一次性执行）
+python -m edukg.core.curriculum.pdf_ocr --pdf-path 课标.pdf
+
+# 步骤2: 知识点提取（支持断点续传）
+python -m edukg.core.curriculum.kp_extraction --ocr-result ocr.json --resume
+
+# 步骤3: 类型推断（支持断点续传）
+python -m edukg.core.curriculum.class_extractor --kps kps.json --resume
+
+# 步骤4: 生成 Concept（支持断点续传）
+python -m edukg.core.curriculum.concept_extractor --kps kps.json --resume
+
+# 步骤5: 生成定义（支持断点续传）
+python -m edukg.core.curriculum.statement_extractor --concepts c.json --resume
+
+# 步骤6: 提取关系（支持断点续传）
+python -m edukg.core.curriculum.relation_extractor --statements s.json --concepts c.json --resume
 ```
 
 ---
@@ -27,7 +52,7 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        输入: 课标 PDF                                │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
 │  步骤1: PDF OCR (pdf_ocr.py)                                         │
 │  ─────────────────────────────────────────────────────────────────  │
@@ -35,57 +60,61 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 │  技术: 百度 OCR API（收费）                                           │
 │  输出: ocr_result.json                                               │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  步骤2: 知识点提取 (kp_extraction.py)                                │
+│  步骤2: 知识点提取 (kp_extraction.py) ✅ 断点续传                     │
 │  ─────────────────────────────────────────────────────────────────  │
 │  服务: LLMExtractor                                                  │
-│  技术: 智谱 glm-4-flash（免费）                                       │
+│  技术: 智谱 glm-4-flash（免费）+ CachedLLM                           │
 │  功能: 从 OCR 文本提取结构化知识点                                     │
+│  状态: state/step_2_kp_extraction.json                              │
 │  输出: curriculum_kps.json                                           │
-│    └─ 学段 → 领域 → 知识点列表                                        │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  步骤3: Class 类型推断 (class_extractor.py)                          │
+│  步骤3: Class 类型推断 (class_extractor.py) ✅ 断点续传               │
 │  ─────────────────────────────────────────────────────────────────  │
 │  服务: ClassExtractor                                                │
-│  技术: 智谱 glm-4-flash                                              │
+│  技术: 智谱 glm-4-flash + CachedLLM                                  │
 │  功能: LLM 判断知识点属于哪个概念类                                    │
 │  现有: 38 个 Class（数学概念、数学方法、数学定义...）                  │
+│  状态: state/step_3_class_inference.json                            │
 │  输出: classes.json                                                  │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  步骤4: Concept 生成 (concept_extractor.py)                          │
+│  步骤4: Concept 生成 (concept_extractor.py) ✅ 断点续传               │
 │  ─────────────────────────────────────────────────────────────────  │
 │  服务: ConceptExtractor                                              │
 │  技术: pypinyin + hashlib（无 LLM）                                  │
 │  功能: 生成知识点实体 URI，添加 HAS_TYPE 关系                         │
+│  状态: state/step_4_concept_gen.json                                │
 │  输出: concepts.json                                                 │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  步骤5: Statement 生成 (statement_extractor.py)                      │
+│  步骤5: Statement 生成 (statement_extractor.py) ✅ 断点续传           │
 │  ─────────────────────────────────────────────────────────────────  │
 │  服务: StatementExtractor                                            │
-│  技术: 智谱 glm-4-flash                                              │
+│  技术: 智谱 glm-4-flash + CachedLLM                                  │
 │  功能: LLM 为每个知识点生成定义描述                                    │
+│  状态: state/step_5_statement_gen.json                              │
 │  输出: statements.json                                               │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  步骤6: Relation 提取 (relation_extractor.py)                        │
+│  步骤6: Relation 提取 (relation_extractor.py) ✅ 断点续传             │
 │  ─────────────────────────────────────────────────────────────────  │
 │  服务: RelationExtractor                                             │
-│  技术: 规则匹配 + 智谱 glm-4-flash                                    │
+│  技术: 规则匹配 + 智谱 glm-4-flash + CachedLLM                        │
 │  关系类型:                                                           │
 │    - RELATED_TO: Statement → Concept（规则匹配）                     │
 │    - PART_OF: Concept → Concept（LLM 分析，部分-整体）               │
 │    - BELONGS_TO: Concept → Concept（LLM 分析，所属关系）             │
+│  状态: state/step_6_relation_extract.json                           │
 │  输出: relations.json                                                │
 └─────────────────────────────────────────────────────────────────────┘
-                                    ↓
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
 │  输出: 4 个 JSON 文件（符合 Neo4j 导入格式）                          │
 │    - classes.json                                                   │
@@ -94,6 +123,59 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 │    - relations.json                                                 │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 断点续传与状态管理
+
+### 状态文件
+
+| 步骤 | 状态文件 | 说明 |
+|------|----------|------|
+| 步骤2 | `state/step_2_kp_extraction.json` | 知识点提取进度 |
+| 步骤3 | `state/step_3_class_inference.json` | 类型推断进度 |
+| 步骤4 | `state/step_4_concept_gen.json` | Concept 生成进度 |
+| 步骤5 | `state/step_5_statement_gen.json` | Statement 生成进度 |
+| 步骤6 | `state/step_6_relation_extract.json` | 关系提取进度 |
+
+### 状态文件结构
+
+```json
+{
+  "task_id": "step_2_kp_extraction",
+  "status": "in_progress",
+  "progress": {
+    "total": 20,
+    "completed": 5,
+    "failed": 0,
+    "pending": 15
+  },
+  "checkpoints": [
+    {"id": "chunk_1", "status": "completed", "timestamp": "..."},
+    {"id": "chunk_2", "status": "completed", "timestamp": "..."}
+  ]
+}
+```
+
+### 命令行参数
+
+所有步骤2-6的模块都支持以下参数：
+
+| 参数 | 说明 |
+|------|------|
+| `--status` | 仅查看状态，不执行 |
+| `--resume` | 从断点恢复执行 |
+| `--state-dir` | 状态文件目录（默认 `state/`） |
+| `--cache-dir` | LLM 缓存目录（默认 `cache/`） |
+| `--batch-size` | 批次大小 |
+
+### LLM 缓存
+
+使用 `CachedLLM` 缓存 LLM 响应，避免重复调用：
+
+- 缓存键：`SHA256(prompt)[:16]`
+- 缓存文件：`cache/{cache_key}.json`
+- 好处：节省 API 调用，加速重复执行
 
 ---
 
@@ -108,9 +190,9 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 │  文件: 义务教育数学课程标准（2022年版）.pdf                                  │
 │  页数: 189 页                                                                │
 └─────────────────────────────────────────────────────────────────────────────┘
-                                    ↓
-                              百度 OCR 识别
-                                    ↓
+                                ↓
+                          百度 OCR 识别
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     ocr_result.json (OCR 识别结果)                           │
 │  ─────────────────────────────────────────────────────────────────────────  │
@@ -181,9 +263,9 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 │  课标文本：                                                                 │
 │  {OCR识别的原文}                                                            │
 └─────────────────────────────────────────────────────────────────────────────┘
-                                    ↓
-                              LLM 处理 (glm-4-flash)
-                                    ↓
+                                ↓
+                          LLM 处理 (glm-4-flash)
+                                ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                   curriculum_kps.json (LLM 输出)                            │
 │  ─────────────────────────────────────────────────────────────────────────  │
@@ -221,39 +303,22 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 | **domain（领域）** | 课标原文分类 | 数与代数、图形与几何、统计与概率、综合与实践 |
 | **knowledge_points** | LLM 从原文提取 | 具体的知识点名称 |
 
-### 数据流总结
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   课标 PDF    │ ──▶ │  百度 OCR    │ ──▶ │  LLM 提取    │ ──▶ │ curriculum_  │
-│  (189页)      │     │ ocr_result   │     │ glm-4-flash  │     │ kps.json     │
-│              │     │   .json      │     │              │     │              │
-│ 原始文档      │     │ 原始文本      │     │ 结构化提取    │     │ 知识点列表   │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-                                                │
-                                                ▼
-                                         按 stage/domain
-                                         组织知识点
-```
-
-**LLM 的作用**：理解课标原文结构，提取知识点名称，按学段/领域组织成 JSON。
-
 ---
 
 ## 模块说明
 
-| 文件 | 类 | 功能 | LLM | 输入 | 输出 |
-|------|-----|------|-----|------|------|
-| `pdf_ocr.py` | `BaiduOCRService` | PDF OCR 识别 | ❌ | PDF 文件 | ocr_result.json |
-| `kp_extraction.py` | `LLMExtractor` | 提取知识点 | ✅ | OCR JSON | curriculum_kps.json |
-| `class_extractor.py` | `ClassExtractor` | 类型推断 | ✅ | 知识点列表 | classes.json |
-| `concept_extractor.py` | `ConceptExtractor` | 生成 Concept | ❌ | 知识点+类型 | concepts.json |
-| `statement_extractor.py` | `StatementExtractor` | 生成定义 | ✅ | Concepts | statements.json |
-| `relation_extractor.py` | `RelationExtractor` | 提取关系 | ✅ | Statements+Concepts | relations.json |
+| 文件 | 类 | 功能 | LLM | 断点续传 | 状态文件 |
+|------|-----|------|-----|----------|----------|
+| `pdf_ocr.py` | `BaiduOCRService` | PDF OCR 识别 | ❌ | ❌ | - |
+| `kp_extraction.py` | `LLMExtractor` | 提取知识点 | ✅ | ✅ | step_2_kp_extraction.json |
+| `class_extractor.py` | `ClassExtractor` | 类型推断 | ✅ | ✅ | step_3_class_inference.json |
+| `concept_extractor.py` | `ConceptExtractor` | 生成 Concept | ❌ | ✅ | step_4_concept_gen.json |
+| `statement_extractor.py` | `StatementExtractor` | 生成定义 | ✅ | ✅ | step_5_statement_gen.json |
+| `relation_extractor.py` | `RelationExtractor` | 提取关系 | ✅ | ✅ | step_6_relation_extract.json |
 | `kg_builder.py` | `KGBuilder`, `URIGenerator` | 基础设施 | ❌ | - | - |
-| `kg_main.py` | `build_knowledge_graph()` | 主流程 | ✅ | OCR JSON | 4个JSON |
-| `kp_comparison.py` | `ConceptComparator` | 对比分析 | ❌ | 知识点列表 | 对比报告 |
-| `ttl_generator.py` | `TTLGenerator` | TTL 生成 | ❌ | 知识点列表 | .ttl 文件 |
+| `kg_main.py` | `build_knowledge_graph()` | 主流程 | ✅ | ⏳ | 待整合 |
+| `kp_comparison.py` | `ConceptComparator` | 对比分析 | ❌ | - | - |
+| `ttl_generator.py` | `TTLGenerator` | TTL 生成 | ❌ | - | - |
 | `config.py` | `Settings` | 配置管理 | ❌ | - | - |
 
 ---
@@ -270,14 +335,14 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
         │                           │                           │
         ▼                           ▼                           ▼
 ┌───────────────┐           ┌───────────────┐           ┌───────────────┐
-│ kp_extraction │           │ kg_builder.py │           │               │
+│ kp_extraction │           │ kg_builder.py │           │ llmTaskLock/  │
 │     .py       │           │ (URI生成器)    │           │               │
-│               │           │               │           │               │
-│ LLMExtractor  │           │ URIGenerator  │           │               │
-└───────────────┘           │ KGConfig      │           │               │
-                            └───────┬───────┘           │
-                                    │                   │
-        ┌───────────────────────────┼───────────────────┘
+│               │           │               │           │ TaskState     │
+│ LLMExtractor  │           │ URIGenerator  │           │ CachedLLM     │
+│ + TaskState   │           │ KGConfig      │           │ ProcessLock   │
+└───────────────┘           └───────┬───────┘           └───────┬───────┘
+                                    │                           │
+        ┌───────────────────────────┼───────────────────────────┘
         │                           │
         │     ┌─────────────────────┼─────────────────────┐
         │     │                     │                     │
@@ -287,6 +352,8 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 │     .py       │           │extractor.py   │     │extractor.py   │
 │               │           │               │     │               │
 │ClassExtractor │           │ConceptExtractor│    │StatementExtractor│
+│+ TaskState    │           │+ TaskState    │     │+ CachedLLM    │
+│+ CachedLLM    │           │               │     │+ TaskState    │
 └───────────────┘           └───────────────┘     └───────────────┘
         │                           │                     │
         │                           │                     │
@@ -298,6 +365,8 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
                             │extractor.py   │
                             │               │
                             │RelationExtractor│
+                            │+ CachedLLM    │
+                            │+ TaskState    │
                             └───────────────┘
                                     │
                                     ▼
@@ -316,11 +385,12 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 |------|---------|------|
 | `config.py` | 无 | 基础配置 |
 | `kg_builder.py` | `config` | URI生成基础设施 |
-| `kp_extraction.py` | `config` | **独立**，只从OCR提取知识点列表 |
-| `class_extractor.py` | `config`, `kg_builder` | 使用URIGenerator |
-| `concept_extractor.py` | `kg_builder` | 使用URIGenerator |
-| `statement_extractor.py` | `config`, `kg_builder` | 使用URIGenerator |
-| `relation_extractor.py` | `config`, `kg_builder` | 使用URIGenerator |
+| `llmTaskLock/` | 无 | 任务状态管理、LLM缓存 |
+| `kp_extraction.py` | `config`, `llmTaskLock` | 断点续传 + CachedLLM |
+| `class_extractor.py` | `config`, `kg_builder`, `llmTaskLock` | 断点续传 + CachedLLM |
+| `concept_extractor.py` | `kg_builder`, `llmTaskLock` | 断点续传 |
+| `statement_extractor.py` | `config`, `kg_builder`, `llmTaskLock` | 断点续传 + CachedLLM |
+| `relation_extractor.py` | `config`, `kg_builder`, `llmTaskLock` | 断点续传 + CachedLLM |
 | `kg_main.py` | **所有模块** | 整合流程 |
 
 ### 元素与关系映射
@@ -331,8 +401,6 @@ python -m edukg.core.curriculum.relation_extractor --stmts s.json     # 步骤6:
 | `concept_extractor.py` | **Concept** | HAS_TYPE | LLM推断后存入（`types`字段） |
 | `statement_extractor.py` | **Statement** | - | - |
 | `relation_extractor.py` | **Relation** | RELATED_TO, PART_OF, BELONGS_TO | 规则匹配 + LLM分析 |
-
-> 详细映射关系见 [MAPPING.md](./MAPPING.md)
 
 ---
 

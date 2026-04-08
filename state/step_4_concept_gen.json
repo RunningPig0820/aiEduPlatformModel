@@ -1,0 +1,13 @@
+{
+  "task_id": "step_4_concept_gen",
+  "created_at": "2026-04-08T06:04:50.442394+00:00",
+  "updated_at": "2026-04-08T06:04:50.442404+00:00",
+  "status": "pending",
+  "progress": {
+    "total": 0,
+    "completed": 0,
+    "failed": 0,
+    "pending": 0
+  },
+  "checkpoints": []
+}
