@@ -2,19 +2,21 @@
 知识点提取服务
 
 使用 LLM (glm-4-flash) 从 OCR 文本中提取结构化知识点
+支持断点续传和进度追踪
 """
 import json
 import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
 
 from .config import settings
+from edukg.core.llmTaskLock import TaskState
 
 
 @dataclass
@@ -234,6 +236,8 @@ class LLMExtractor:
         self,
         text: str,
         verbose: bool = True,
+        state: Optional[TaskState] = None,
+        resume: bool = False,
     ) -> CurriculumKnowledgePoints:
         """
         从文本中提取知识点
@@ -241,6 +245,8 @@ class LLMExtractor:
         Args:
             text: OCR 识别的文本
             verbose: 是否显示进度
+            state: TaskState 实例，用于断点续传
+            resume: 是否从断点恢复
 
         Returns:
             CurriculumKnowledgePoints: 提取的知识点结构
@@ -251,11 +257,33 @@ class LLMExtractor:
         if verbose:
             print(f"文本分为 {len(chunks)} 块进行处理")
 
+        # 初始化或恢复任务状态
+        if state is None:
+            state = TaskState("kp_extraction", state_dir="state/")
+
+        if not resume or state.get_status() == TaskState.STATUS_PENDING:
+            state.start(total=len(chunks))
+
+        # 获取待处理的检查点
+        if resume:
+            pending_checkpoints = state.resume()
+            if verbose and pending_checkpoints:
+                print(f"从断点恢复，待处理: {len(pending_checkpoints)} 块")
+        else:
+            pending_checkpoints = [f"checkpoint_{i+1}" for i in range(len(chunks))]
+
         all_stages = []
 
         for i, chunk in enumerate(chunks, 1):
+            checkpoint_id = f"checkpoint_{i}"
+
+            # 跳过已完成的检查点
+            if checkpoint_id not in pending_checkpoints:
+                continue
+
             if verbose:
-                print(f"正在处理第 {i}/{len(chunks)} 块...")
+                progress = state.get_progress()
+                print(f"正在处理第 {i}/{len(chunks)} 块... (已完成: {progress['completed']}, 待处理: {progress['pending']})")
 
             prompt = EXTRACTION_PROMPT.format(text=chunk)
 
@@ -269,8 +297,12 @@ class LLMExtractor:
                 stages = result.get("stages", [])
                 all_stages.append(stages)
 
+                # 标记检查点完成
+                state.complete_checkpoint(checkpoint_id, {"stages": stages})
+
             except Exception as e:
                 print(f"处理第 {i} 块时出错: {e}")
+                state.fail_checkpoint(checkpoint_id, str(e))
                 continue
 
         # 合并结果
@@ -292,6 +324,8 @@ class LLMExtractor:
 
         if verbose:
             print(f"提取完成：{len(merged_stages)} 个学段，{total_kps} 个知识点")
+            if state.is_completed():
+                print("所有检查点已完成！")
 
         return result
 
@@ -368,12 +402,26 @@ if __name__ == "__main__":
     parser.add_argument("--ocr-result", required=True, help="OCR 结果 JSON 文件路径")
     parser.add_argument("--output", default="curriculum_kps.json", help="输出文件路径")
     parser.add_argument("--debug", action="store_true", help="调试模式")
+    parser.add_argument("--resume", action="store_true", help="从断点恢复")
+    parser.add_argument("--state-dir", default="state/", help="状态文件目录")
 
     args = parser.parse_args()
 
+    # 创建任务状态
+    state = TaskState("kp_extraction", state_dir=args.state_dir)
+
+    if args.resume:
+        progress = state.get_progress()
+        print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 块")
+
     extractor = LLMExtractor()
-    result = extractor.extract_from_ocr_result(
-        ocr_result_path=args.ocr_result,
+    result = extractor.extract_knowledge_points(
+        text="\n\n".join([
+            page.get("text", "")
+            for page in json.load(open(args.ocr_result, encoding="utf-8")).get("pages", [])
+        ]),
         verbose=True,
+        state=state,
+        resume=args.resume,
     )
     extractor.save_result(result, args.output)

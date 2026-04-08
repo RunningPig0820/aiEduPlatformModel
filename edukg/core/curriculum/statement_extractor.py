@@ -2,6 +2,7 @@
 Statement 提取服务
 
 使用 LLM 生成知识点的定义描述，生成符合 Neo4j 导入格式的 statements.json
+支持 LLM 缓存，避免重复调用
 """
 import json
 import re
@@ -14,6 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from .config import settings
 from .kg_builder import URIGenerator, KGConfig
+from edukg.core.llmTaskLock import CachedLLM
 
 
 @dataclass
@@ -60,6 +62,8 @@ class StatementExtractor:
         self,
         api_key: Optional[str] = None,
         config: Optional[KGConfig] = None,
+        cache_dir: str = "cache/",
+        use_cache: bool = True,
     ):
         """
         初始化 Statement 提取器
@@ -67,6 +71,8 @@ class StatementExtractor:
         Args:
             api_key: 智谱 API Key，默认从环境变量读取
             config: 知识图谱配置
+            cache_dir: 缓存目录
+            use_cache: 是否使用 LLM 缓存
         """
         self.api_key = api_key or settings.ZHIPU_API_KEY
         self.config = config or KGConfig()
@@ -74,14 +80,18 @@ class StatementExtractor:
             version=self.config.version,
             subject=self.config.subject,
         )
+        self.cache_dir = cache_dir
+        self.use_cache = use_cache
 
         # 初始化 LLM
         if self.api_key:
-            self.llm = ChatZhipuAI(
+            llm = ChatZhipuAI(
                 model="glm-4-flash",
                 api_key=self.api_key,
                 temperature=0.3,  # 稍高温度，生成更自然的定义
             )
+            # 使用 CachedLLM 包装
+            self.llm = CachedLLM(llm, cache_dir=cache_dir) if use_cache else llm
         else:
             self.llm = None
 
@@ -102,12 +112,20 @@ class StatementExtractor:
             }
 
         try:
-            response = self.llm.invoke([
-                SystemMessage(content="你是一个数学教育专家。"),
-                HumanMessage(content=prompt),
-            ])
+            # 使用 CachedLLM 或原始 LLM
+            if isinstance(self.llm, CachedLLM):
+                response = self.llm.invoke(prompt, use_cache=self.use_cache)
+            else:
+                response = self.llm.invoke([
+                    SystemMessage(content="你是一个数学教育专家。"),
+                    HumanMessage(content=prompt),
+                ])
 
-            content = response.content
+            # 解析响应
+            if hasattr(response, 'content'):
+                content = response.content
+            else:
+                content = str(response)
 
             # 解析 JSON
             try:
@@ -163,7 +181,13 @@ class StatementExtractor:
         if context:
             prompt += f"\n\n上下文信息：{context}"
 
-        result = self._call_llm(prompt)
+        # 如果使用 CachedLLM，需要把系统提示也加入 prompt
+        if isinstance(self.llm, CachedLLM):
+            full_prompt = f"你是一个数学教育专家。\n\n{prompt}"
+        else:
+            full_prompt = prompt
+
+        result = self._call_llm(full_prompt)
 
         # 如果生成失败，使用默认定义
         if not result.get("definition"):

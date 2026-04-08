@@ -1,0 +1,8 @@
+# EDUKG Core Dependencies
+
+# Process Lock - 跨平台文件锁
+portalocker>=2.8.2
+
+# LangChain for LLM integration
+langchain-community>=0.0.20
+langchain-core>=0.1.0

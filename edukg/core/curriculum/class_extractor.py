@@ -2,6 +2,7 @@
 Class 提取服务
 
 使用 LLM 推断知识点类型，生成符合 Neo4j 导入格式的 classes.json
+支持 LLM 缓存，避免重复调用
 """
 import json
 import re
@@ -14,6 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from .config import settings
 from .kg_builder import URIGenerator, KGConfig
+from edukg.core.llmTaskLock import CachedLLM
 
 
 # 已有的 38 个 Class 列表
@@ -154,6 +156,8 @@ class ClassExtractor:
         self,
         api_key: Optional[str] = None,
         config: Optional[KGConfig] = None,
+        cache_dir: str = "cache/",
+        use_cache: bool = True,
     ):
         """
         初始化 Class 提取器
@@ -161,6 +165,8 @@ class ClassExtractor:
         Args:
             api_key: 智谱 API Key，默认从环境变量读取
             config: 知识图谱配置
+            cache_dir: 缓存目录
+            use_cache: 是否使用 LLM 缓存
         """
         self.api_key = api_key or settings.ZHIPU_API_KEY
         self.config = config or KGConfig()
@@ -168,6 +174,8 @@ class ClassExtractor:
             version=self.config.version,
             subject=self.config.subject,
         )
+        self.cache_dir = cache_dir
+        self.use_cache = use_cache
 
         # 加载现有 Class
         self.existing_classes = EXISTING_CLASSES
@@ -175,11 +183,13 @@ class ClassExtractor:
 
         # 初始化 LLM
         if self.api_key:
-            self.llm = ChatZhipuAI(
+            llm = ChatZhipuAI(
                 model="glm-4-flash",
                 api_key=self.api_key,
                 temperature=0.1,
             )
+            # 使用 CachedLLM 包装
+            self.llm = CachedLLM(llm, cache_dir=cache_dir) if use_cache else llm
         else:
             self.llm = None
 
@@ -210,13 +220,20 @@ class ClassExtractor:
                 "reason": "未配置 LLM，使用默认类别",
             }
 
-        response = self.llm.invoke([
-            SystemMessage(content="你是一个数学教育专家。"),
-            HumanMessage(content=prompt),
-        ])
+        # 使用 CachedLLM 或原始 LLM
+        if isinstance(self.llm, CachedLLM):
+            response = self.llm.invoke(prompt, use_cache=self.use_cache)
+        else:
+            response = self.llm.invoke([
+                SystemMessage(content="你是一个数学教育专家。"),
+                HumanMessage(content=prompt),
+            ])
 
         # 解析 JSON
-        content = response.content
+        if hasattr(response, 'content'):
+            content = response.content
+        else:
+            content = str(response)
 
         # 尝试提取 JSON
         try:
@@ -272,7 +289,13 @@ class ClassExtractor:
         if context:
             prompt += f"\n\n上下文信息：{context}"
 
-        result = self._call_llm(prompt)
+        # 如果使用 CachedLLM，需要把系统提示也加入 prompt
+        if isinstance(self.llm, CachedLLM):
+            full_prompt = f"你是一个数学教育专家。\n\n{prompt}"
+        else:
+            full_prompt = prompt
+
+        result = self._call_llm(full_prompt)
 
         return ClassExtractionResult(
             knowledge_point=knowledge_point,

@@ -6,6 +6,8 @@
 - concepts.json
 - statements.json
 - relations.json
+
+支持断点续传和 LLM 缓存
 """
 import argparse
 import json
@@ -19,6 +21,7 @@ from .concept_extractor import ConceptExtractor
 from .statement_extractor import StatementExtractor
 from .relation_extractor import RelationExtractor
 from .kg_builder import KGConfig
+from edukg.core.llmTaskLock import TaskState, ProcessLock, clear_cache
 
 
 def build_knowledge_graph(
@@ -224,12 +227,37 @@ def main():
         help="跳过知识点提取，使用已有 curriculum_kps.json",
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="从断点恢复",
+    )
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="清理 LLM 缓存",
+    )
+    parser.add_argument(
+        "--state-dir",
+        default="state/",
+        help="状态文件目录",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default="cache/",
+        help="LLM 缓存目录",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="调试模式",
     )
 
     args = parser.parse_args()
+
+    # 清理缓存
+    if args.clear_cache:
+        deleted = clear_cache(args.cache_dir)
+        print(f"已清理 {deleted} 个缓存文件")
 
     # 检查文件存在
     if not Path(args.ocr_result).exists():
@@ -241,13 +269,31 @@ def main():
         print("警告: ZHIPU_API_KEY 未配置，将使用默认值")
         print("建议在 ai-edu-ai-service/.env 中配置 ZHIPU_API_KEY")
 
-    # 构建
-    result = build_knowledge_graph(
-        ocr_result_path=args.ocr_result,
-        output_dir=args.output_dir,
-        skip_extraction=args.skip_extraction,
-        verbose=True,
-    )
+    # 使用进程锁防止并发
+    lock_file = Path(args.state_dir) / "kg_build.lock"
+    try:
+        with ProcessLock(str(lock_file), timeout=7200):
+            # 创建任务状态
+            state = TaskState("kg_build", state_dir=args.state_dir)
+
+            if args.resume:
+                progress = state.get_progress()
+                if progress['total'] > 0:
+                    print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 阶段")
+                else:
+                    print("没有可恢复的状态，开始新任务")
+
+            # 构建
+            result = build_knowledge_graph(
+                ocr_result_path=args.ocr_result,
+                output_dir=args.output_dir,
+                skip_extraction=args.skip_extraction,
+                verbose=True,
+            )
+
+    except TimeoutError:
+        print("错误: 另一个构建进程正在运行")
+        return 1
 
     return 0
 
