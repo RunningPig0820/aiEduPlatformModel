@@ -11,7 +11,10 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+# 默认状态目录
+DEFAULT_STATE_DIR = Path(__file__).parent.parent.parent / "state"
 
 
 class TaskState:
@@ -24,7 +27,7 @@ class TaskState:
     - 状态持久化（JSON 文件）
 
     Example:
-        >>> state = TaskState("curriculum_extraction", state_dir="state/")
+        >>> state = TaskState("curriculum_extraction")
         >>> state.start(total=15)
         >>> state.complete_checkpoint("chunk_1", {"result": "..."})
         >>> progress = state.get_progress()
@@ -44,7 +47,7 @@ class TaskState:
     CHECKPOINT_COMPLETED = "completed"
     CHECKPOINT_FAILED = "failed"
 
-    def __init__(self, task_id: str, state_dir: str = "state/"):
+    def __init__(self, task_id: str, state_dir: Union[str, Path] = None):
         """初始化任务状态
 
         Args:
@@ -52,7 +55,7 @@ class TaskState:
             state_dir: 状态文件存储目录
         """
         self.task_id = task_id
-        self.state_dir = Path(state_dir)
+        self.state_dir = Path(state_dir or DEFAULT_STATE_DIR)
         self.state_file = self.state_dir / f"{task_id}.json"
 
         # 确保目录存在

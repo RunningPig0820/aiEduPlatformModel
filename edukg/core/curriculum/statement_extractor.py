@@ -11,7 +11,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -71,9 +71,9 @@ class StatementExtractor:
         self,
         api_key: Optional[str] = None,
         config: Optional[KGConfig] = None,
-        cache_dir: str = "cache/",
+        cache_dir: Union[str, Path] = None,
         use_cache: bool = True,
-        state_dir: str = "state/",
+        state_dir: Union[str, Path] = None,
     ):
         """
         初始化 Statement 提取器
@@ -91,9 +91,9 @@ class StatementExtractor:
             version=self.config.version,
             subject=self.config.subject,
         )
-        self.cache_dir = cache_dir
+        self.cache_dir = cache_dir or settings.CACHE_DIR
         self.use_cache = use_cache
-        self.state_dir = state_dir
+        self.state_dir = state_dir or settings.STATE_DIR
 
         # 初始化 LLM
         if self.api_key:
@@ -103,7 +103,7 @@ class StatementExtractor:
                 temperature=0.3,  # 稍高温度，生成更自然的定义
             )
             # 使用 CachedLLM 包装
-            self.llm = CachedLLM(llm, cache_dir=cache_dir) if use_cache else llm
+            self.llm = CachedLLM(llm, cache_dir=self.cache_dir) if use_cache else llm
         else:
             self.llm = None
 
@@ -304,12 +304,12 @@ class StatementExtractor:
                 progress = state.get_progress()
                 print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 批，待处理 {len(pending_checkpoints)} 批")
         else:
-            pending_checkpoints = [f"batch_{i+1}" for i in range(total_batches)]
+            pending_checkpoints = [f"checkpoint_{i+1}" for i in range(total_batches)]
 
         statements = []
 
         for batch_idx in range(total_batches):
-            batch_id = f"batch_{batch_idx + 1}"
+            batch_id = f"checkpoint_{batch_idx + 1}"
 
             # 跳过已完成的检查点
             if batch_id not in pending_checkpoints:
@@ -430,16 +430,16 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="调试模式")
     parser.add_argument("--resume", action="store_true", help="从断点恢复")
     parser.add_argument("--status", action="store_true", help="仅查看状态，不执行")
-    parser.add_argument("--state-dir", default="state/", help="状态文件目录")
-    parser.add_argument("--cache-dir", default="cache/", help="缓存目录")
+    parser.add_argument("--state-dir", default=None, help="状态文件目录")
+    parser.add_argument("--cache-dir", default=None, help="缓存目录")
     parser.add_argument("--batch-size", type=int, default=10, help="批次大小")
 
     args = parser.parse_args()
 
     # 创建提取器
     extractor = StatementExtractor(
-        state_dir=args.state_dir,
-        cache_dir=args.cache_dir,
+        state_dir=args.state_dir or settings.STATE_DIR,
+        cache_dir=args.cache_dir or settings.CACHE_DIR,
     )
 
     # 仅查看状态
@@ -466,7 +466,13 @@ if __name__ == "__main__":
 
     # 加载 concepts
     with open(args.concepts, encoding="utf-8") as f:
-        concepts = json.load(f)
+        data = json.load(f)
+
+    # 处理不同的 JSON 结构
+    if isinstance(data, dict) and "concepts" in data:
+        concepts = data["concepts"]
+    else:
+        concepts = data
 
     # 从断点恢复时显示进度
     if args.resume:

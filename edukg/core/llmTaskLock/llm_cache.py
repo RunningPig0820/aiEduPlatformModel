@@ -4,14 +4,16 @@ LLM Cache - LLM 调用缓存模块
 支持 LLM 响应缓存，避免重复调用。
 使用 SHA256 哈希作为缓存键，JSON 文件存储。
 """
-
 import hashlib
 import json
 import os
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
+
+# 默认缓存目录
+DEFAULT_CACHE_DIR = Path(__file__).parent.parent.parent / "cache"
 
 
 def get_cache_key(prompt: str) -> str:
@@ -31,7 +33,7 @@ def get_cache_key(prompt: str) -> str:
 def save_cache(
     cache_key: str,
     result: Any,
-    cache_dir: str = "cache/",
+    cache_dir: Union[str, Path] = None,
     prompt: Optional[str] = None
 ) -> str:
     """保存缓存到文件
@@ -45,6 +47,7 @@ def save_cache(
     Returns:
         缓存文件路径
     """
+    cache_dir = cache_dir or DEFAULT_CACHE_DIR
     cache_path = Path(cache_dir)
     cache_path.mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +72,7 @@ def save_cache(
 
 def load_cache(
     cache_key: str,
-    cache_dir: str = "cache/",
+    cache_dir: Union[str, Path] = None,
     cache_ttl: Optional[int] = None
 ) -> Optional[Any]:
     """从文件加载缓存
@@ -82,6 +85,7 @@ def load_cache(
     Returns:
         缓存的结果，如果不存在或已过期则返回 None
     """
+    cache_dir = cache_dir or DEFAULT_CACHE_DIR
     cache_file = Path(cache_dir) / f"{cache_key}.json"
 
     if not cache_file.exists():
@@ -105,7 +109,7 @@ def load_cache(
         return None
 
 
-def clear_cache(cache_dir: str = "cache/", older_than: Optional[int] = None) -> int:
+def clear_cache(cache_dir: Union[str, Path] = None, older_than: Optional[int] = None) -> int:
     """清理缓存文件
 
     Args:
@@ -115,6 +119,7 @@ def clear_cache(cache_dir: str = "cache/", older_than: Optional[int] = None) -> 
     Returns:
         删除的文件数量
     """
+    cache_dir = cache_dir or DEFAULT_CACHE_DIR
     cache_path = Path(cache_dir)
 
     if not cache_path.exists():
@@ -165,13 +170,13 @@ class CachedLLM:
     Example:
         >>> from langchain_community.chat_models import ChatZhipuAI
         >>> llm = ChatZhipuAI(model="glm-4-flash")
-        >>> cached_llm = CachedLLM(llm, cache_dir="cache/")
+        >>> cached_llm = CachedLLM(llm)
         >>> result = cached_llm.invoke("请解释什么是机器学习")
         >>> # 第二次调用相同提示词会直接返回缓存
         >>> result2 = cached_llm.invoke("请解释什么是机器学习")
     """
 
-    def __init__(self, llm: Any, cache_dir: str = "cache/"):
+    def __init__(self, llm: Any, cache_dir: Union[str, Path] = None):
         """初始化缓存 LLM
 
         Args:
@@ -179,7 +184,7 @@ class CachedLLM:
             cache_dir: 缓存目录
         """
         self.llm = llm
-        self.cache_dir = cache_dir
+        self.cache_dir = cache_dir or DEFAULT_CACHE_DIR
 
     def invoke(
         self,
@@ -208,10 +213,15 @@ class CachedLLM:
         # 调用 LLM
         result = self.llm.invoke(prompt)
 
-        # 保存缓存
-        save_cache(cache_key, result, self.cache_dir, prompt=prompt)
+        # 保存缓存 - 只保存 content 字符串，而不是整个 AIMessage 对象
+        if hasattr(result, 'content'):
+            cache_content = result.content
+        else:
+            cache_content = str(result)
 
-        return result
+        save_cache(cache_key, cache_content, self.cache_dir, prompt=prompt)
+
+        return cache_content
 
     def clear_cache(self, older_than: Optional[int] = None) -> int:
         """清理缓存

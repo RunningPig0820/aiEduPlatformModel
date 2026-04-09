@@ -11,7 +11,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -44,9 +44,20 @@ class CurriculumKnowledgePoints:
 
 
 # 结构化 Prompt
-EXTRACTION_PROMPT = """你是一个教育专家，专门从课程标准中提取知识点。
+EXTRACTION_PROMPT = """你是一个数学教育专家，专门从课程标准中提取**核心数学知识点**。
 
-请从以下课标文本中提取所有知识点，按照学段和领域进行组织。
+请从以下课标文本中提取数学核心知识点，按照学段和领域进行组织。
+
+⚠️ **重要过滤规则**：
+1. **只提取核心数学概念**：数、运算、几何图形、统计、概率、函数、方程等
+2. **排除以下内容**：
+   - 教学活动/主题活动（如"数学游戏分享"、"主题活动2：曹冲称象的故事"）
+   - 教学故事/案例（如"曹冲称象的故事"、"数学史料"）
+   - 教学目标描述（如"形成量感、空间观念和初步的几何直观"）
+   - 开篇话语/前言内容
+   - 跨学科应用场景（如"体育运动与心率"、"理解GDP等经济学概念的意义"）
+   - 教学建议/教学方法
+3. **知识点必须是具体的数学概念或技能**，如"20以内加法"、"轴对称图形"等
 
 输出格式要求（JSON）：
 {{
@@ -74,6 +85,7 @@ EXTRACTION_PROMPT = """你是一个教育专家，专门从课程标准中提取
 3. 知识点要具体、准确，使用课标中的原话
 4. 如果文本中没有明确提到学段，请根据内容推断
 5. 只输出 JSON，不要输出其他内容
+6. 如果某块文本没有核心数学知识点，返回空列表
 
 课标文本：
 {text}
@@ -214,7 +226,7 @@ class LLMExtractor:
         self,
         api_key: Optional[str] = None,
         model: str = "glm-4-flash",
-        state_dir: str = "state/",
+        state_dir: Union[str, Path] = None,
     ):
         """
         初始化 LLM 提取器
@@ -225,7 +237,7 @@ class LLMExtractor:
             state_dir: 状态文件目录
         """
         self.api_key = api_key or settings.ZHIPU_API_KEY
-        self.state_dir = state_dir
+        self.state_dir = state_dir or settings.STATE_DIR
 
         if not self.api_key:
             raise ValueError(
@@ -697,7 +709,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="调试模式")
     parser.add_argument("--resume", action="store_true", help="从断点恢复")
     parser.add_argument("--status", action="store_true", help="仅查看状态，不执行")
-    parser.add_argument("--state-dir", default="state/", help="状态文件目录")
+    parser.add_argument("--state-dir", default=None, help="状态文件目录")
     parser.add_argument(
         "--chunk-strategy",
         choices=["page_count", "stage"],
@@ -710,11 +722,12 @@ if __name__ == "__main__":
         default=10,
         help="每块页数 (仅 page_count 策略)"
     )
+    parser.add_argument("--verbose", action="store_true", help="显示详细进度")
 
     args = parser.parse_args()
 
     # 创建提取器
-    extractor = LLMExtractor(state_dir=args.state_dir)
+    extractor = LLMExtractor(state_dir=args.state_dir or settings.STATE_DIR)
 
     # 仅查看状态
     if args.status:
@@ -749,7 +762,7 @@ if __name__ == "__main__":
     # 执行提取
     result = extractor.extract_from_ocr_result(
         ocr_result_path=args.ocr_result,
-        verbose=True,
+        verbose=args.verbose,
         resume=args.resume,
         chunk_strategy=args.chunk_strategy,
         pages_per_chunk=args.pages_per_chunk,

@@ -11,7 +11,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -165,9 +165,9 @@ class ClassExtractor:
         self,
         api_key: Optional[str] = None,
         config: Optional[KGConfig] = None,
-        cache_dir: str = "cache/",
+        cache_dir: Union[str, Path] = None,
         use_cache: bool = True,
-        state_dir: str = "state/",
+        state_dir: Union[str, Path] = None,
     ):
         """
         初始化 Class 提取器
@@ -185,9 +185,9 @@ class ClassExtractor:
             version=self.config.version,
             subject=self.config.subject,
         )
-        self.cache_dir = cache_dir
+        self.cache_dir = cache_dir or settings.CACHE_DIR
         self.use_cache = use_cache
-        self.state_dir = state_dir
+        self.state_dir = state_dir or settings.STATE_DIR
 
         # 加载现有 Class
         self.existing_classes = EXISTING_CLASSES
@@ -385,12 +385,12 @@ class ClassExtractor:
                 progress = state.get_progress()
                 print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 批，待处理 {len(pending_checkpoints)} 批")
         else:
-            pending_checkpoints = [f"batch_{i+1}" for i in range(total_batches)]
+            pending_checkpoints = [f"checkpoint_{i+1}" for i in range(total_batches)]
 
         results = []
 
         for batch_idx in range(total_batches):
-            batch_id = f"batch_{batch_idx + 1}"
+            batch_id = f"checkpoint_{batch_idx + 1}"
 
             # 跳过已完成的检查点
             if batch_id not in pending_checkpoints:
@@ -588,20 +588,22 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Class 提取 - 步骤3")
     parser.add_argument("--kps", help="知识点 JSON 文件（--status 时可选）")
-    parser.add_argument("--output", default="classes.json", help="输出文件")
+    parser.add_argument("--output", default="classes.json", help="Class 输出文件")
+    parser.add_argument("--output-kps", help="带类型的知识点输出文件")
     parser.add_argument("--debug", action="store_true", help="调试模式")
     parser.add_argument("--resume", action="store_true", help="从断点恢复")
     parser.add_argument("--status", action="store_true", help="仅查看状态，不执行")
-    parser.add_argument("--state-dir", default="state/", help="状态文件目录")
-    parser.add_argument("--cache-dir", default="cache/", help="缓存目录")
+    parser.add_argument("--state-dir", default=None, help="状态文件目录")
+    parser.add_argument("--cache-dir", default=None, help="缓存目录")
     parser.add_argument("--batch-size", type=int, default=10, help="批次大小")
+    parser.add_argument("--verbose", action="store_true", help="显示详细进度")
 
     args = parser.parse_args()
 
     # 创建提取器
     extractor = ClassExtractor(
-        state_dir=args.state_dir,
-        cache_dir=args.cache_dir,
+        state_dir=args.state_dir or settings.STATE_DIR,
+        cache_dir=args.cache_dir or settings.CACHE_DIR,
     )
 
     # 仅查看状态
@@ -630,11 +632,20 @@ if __name__ == "__main__":
     with open(args.kps, encoding="utf-8") as f:
         data = json.load(f)
 
-    # 提取知识点列表
+    # 提取知识点列表（支持两种格式）
     kps = []
-    for stage in data.get("stages", []):
-        for domain in stage.get("domains", []):
-            kps.extend(domain.get("knowledge_points", []))
+    if isinstance(data, list):
+        # 列表格式：[{"knowledge_point": "...", ...}, ...] 或 ["kp1", "kp2", ...]
+        for item in data:
+            if isinstance(item, dict):
+                kps.append(item.get("knowledge_point", item.get("name", str(item))))
+            else:
+                kps.append(item)
+    else:
+        # 完整格式：{"stages": [...]}
+        for stage in data.get("stages", []):
+            for domain in stage.get("domains", []):
+                kps.extend(domain.get("knowledge_points", []))
 
     # 去重
     kps = list(set(kps))
@@ -647,11 +658,48 @@ if __name__ == "__main__":
         else:
             print("没有可恢复的状态，开始新任务")
 
-    # 提取
-    classes = extractor.extract_classes_from_kps(
+    # 批量推断类型
+    results = extractor.batch_infer_types(
         kps,
-        verbose=True,
+        verbose=args.verbose,
         resume=args.resume,
         batch_size=args.batch_size,
     )
-    extractor.save_classes(classes, args.output)
+
+    # 输出带类型的知识点列表
+    if args.output_kps:
+        kps_with_types = []
+        for result in results:
+            # 确定正确的 class_id
+            if result.is_new_class:
+                # 新推断的 Class 使用 0.2 版本
+                class_id = extractor.uri_generator.generate_class_uri(result.class_label)
+            else:
+                # 已存在的 Class 使用 0.1 版本
+                class_id = extractor.get_existing_class_uri(result.class_label) or extractor.uri_generator.generate_class_uri(result.class_label)
+
+            kps_with_types.append({
+                "knowledge_point": result.knowledge_point,
+                "class_label": result.class_label,
+                "class_id": class_id,
+                "confidence": result.confidence,
+                "is_new_class": result.is_new_class,
+            })
+
+        output_path = Path(args.output_kps)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(kps_with_types, f, ensure_ascii=False, indent=2)
+        print(f"知识点类型已保存到: {output_path}")
+
+    # 收集并输出新 Class
+    new_classes = {}
+    for result in results:
+        if result.is_new_class and result.class_label not in new_classes:
+            parent_uri = extractor.get_parent_uri(result.parent_class) if result.parent_class else extractor.get_parent_uri(result.class_label)
+            new_classes[result.class_label] = extractor.generate_class_definition(
+                label=result.class_label,
+                parent_uri=parent_uri,
+            )
+
+    extractor.save_classes(list(new_classes.values()), args.output)

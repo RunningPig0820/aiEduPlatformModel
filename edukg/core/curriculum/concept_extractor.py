@@ -9,9 +9,10 @@ Concept 提取服务
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 from .kg_builder import URIGenerator, KGConfig
+from .config import settings
 from edukg.core.llmTaskLock import TaskState
 
 
@@ -42,7 +43,7 @@ class ConceptExtractor:
     def __init__(
         self,
         config: Optional[KGConfig] = None,
-        state_dir: str = "state/",
+        state_dir: Union[str, Path] = None,
     ):
         """
         初始化 Concept 提取器
@@ -56,7 +57,7 @@ class ConceptExtractor:
             version=self.config.version,
             subject=self.config.subject,
         )
-        self.state_dir = state_dir
+        self.state_dir = state_dir or settings.STATE_DIR
 
     def get_state(self) -> TaskState:
         """获取步骤4的状态管理器"""
@@ -150,12 +151,12 @@ class ConceptExtractor:
                 progress = state.get_progress()
                 print(f"从断点恢复: 已完成 {progress['completed']}/{progress['total']} 批，待处理 {len(pending_checkpoints)} 批")
         else:
-            pending_checkpoints = [f"batch_{i+1}" for i in range(total_batches)]
+            pending_checkpoints = [f"checkpoint_{i+1}" for i in range(total_batches)]
 
         concepts = []
 
         for batch_idx in range(total_batches):
-            batch_id = f"batch_{batch_idx + 1}"
+            batch_id = f"checkpoint_{batch_idx + 1}"
 
             # 跳过已完成的检查点
             if batch_id not in pending_checkpoints:
@@ -255,13 +256,13 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="调试模式")
     parser.add_argument("--resume", action="store_true", help="从断点恢复")
     parser.add_argument("--status", action="store_true", help="仅查看状态，不执行")
-    parser.add_argument("--state-dir", default="state/", help="状态文件目录")
+    parser.add_argument("--state-dir", default=None, help="状态文件目录")
     parser.add_argument("--batch-size", type=int, default=50, help="批次大小")
 
     args = parser.parse_args()
 
     # 创建提取器
-    extractor = ConceptExtractor(state_dir=args.state_dir)
+    extractor = ConceptExtractor(state_dir=args.state_dir or settings.STATE_DIR)
 
     # 仅查看状态
     if args.status:

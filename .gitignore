@@ -80,3 +80,9 @@ service-account.json
 
 */edukg/data/*
 **/edukg/data/**
+
+# LLM Task State & Cache
+edukg/state/
+edukg/cache/
+*/state/*
+*/cache/*

@@ -37,6 +37,12 @@ class Settings:
     # 输出目录
     OUTPUT_DIR: Path = Path(__file__).parent.parent.parent / "data" / "output"
 
+    # LLM 缓存目录（统一放在 edukg/cache/）
+    CACHE_DIR: Path = Path(__file__).parent.parent.parent / "cache"
+
+    # 任务状态目录（统一放在 edukg/state/）
+    STATE_DIR: Path = Path(__file__).parent.parent.parent / "state"
+
     @classmethod
     def validate(cls) -> bool:
         """验证必要的环境变量是否配置"""
