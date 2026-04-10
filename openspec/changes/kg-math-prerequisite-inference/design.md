@@ -3,14 +3,15 @@
 前置关系推断是知识图谱项目的**核心设计成本**部分。需要区分教学顺序（TEACHES_BEFORE）和学习依赖（PREREQUISITE），通过多证据融合生成高质量的前置关系数据。
 
 当前状态：
-- **知识点**: 已导入 4,490 个数学知识点
-- **原生关系**: 已导入 RELATED_TO, SUB_CATEGORY
+- **知识点**: 已导入 EduKG 数据（Class 39, Concept 1,295, Statement 2,932）
+- **原生关系**: 已导入 RELATED_TO 10,183, SUB_CLASS_OF 38, PART_OF 298, BELONGS_TO 619
 - **LLM Gateway**: 支持 GLM-4-flash（免费）和 DeepSeek（低成本）
 
 设计约束：
 - 区分教学顺序 vs 学习依赖
 - 使用多模型投票提高准确率
 - 保留低置信度关系作为候选
+- **核心代码放入 `edukg/core/llm_inference/`，scripts 只做命令行入口**
 
 ## Goals / Non-Goals
 
@@ -19,7 +20,7 @@
 - 从定义文本抽取定义依赖
 - LLM 多模型投票推断 PREREQUISITE
 - 融合多证据来源
-- 导入 Neo4j 并验证 DAG 合规性
+- 输出 JSON 文件（手动验证后导入）
 
 **Non-Goals:**
 - 不处理其他学科（物理/化学等）
@@ -28,50 +29,83 @@
 
 ## Decisions
 
-### D1: TEACHES_BEFORE 推断策略
+### D1: 目录结构设计
 
-**决策**: 基于教材章节顺序生成 TEACHES_BEFORE
+**核心代码放入 `edukg/core/llm_inference/`**：
 
-```python
-# 章节内顺序
-for chapter in chapters:
-    for i, kp in enumerate(chapter.knowledge_points):
-        if i > 0:
-            teaches_before.append((kp.uri, chapter.knowledge_points[i-1].uri))
+```
+edukg/core/llm_inference/
+├── __init__.py
+├── dual_model_voter.py      # 双模型投票核心逻辑
+├── prompt_templates.py       # LLM Prompt 模板
+├── prerequisite_inferer.py   # 前置关系推断
+├── definition_extractor.py   # 定义依赖抽取
+├── teaches_before_inferer.py # 教学顺序推断
+└── config.py                 # 配置（模型、阈值等）
+```
+
+**scripts 只做命令行入口**：
+
+```
+edukg/scripts/kg_inference/
+├── infer_prerequisites.py    # 命令行入口
+└── validate_dag.py           # DAG 验证入口
 ```
 
 **理由**:
-- 教材章节顺序代表教学安排
-- 仅限章节内部，跨章节不推断（避免错误）
+- 核心逻辑可复用（其他模块也可调用双模型投票）
+- scripts 保持轻量，只做参数解析和调用
+- 便于单元测试
 
-**替代方案**: 全教材顺序推断
-- **缺点**: 教材顺序不代表跨章节的教学依赖
-
-### D2: 定义依赖抽取策略
-
-**决策**: 从知识点定义文本匹配其他知识点名称
+### D2: 双模型投票模块 (dual_model_voter.py)
 
 ```python
-# 定义匹配规则
-def extract_definition_deps(definition: str, kp_names: List[str]) -> List[str]:
-    """从定义文本中匹配知识点名称"""
-    deps = []
-    for name in kp_names:
-        if name in definition:
-            deps.append(name)
-    return deps
+"""
+双模型投票核心模块
+支持 GLM-4-flash + DeepSeek 两模型投票
+"""
+
+class DualModelVoter:
+    """双模型投票器"""
+
+    def __init__(self, primary_model: str = "glm-4-flash",
+                 secondary_model: str = "deepseek-chat"):
+        self.primary_model = primary_model
+        self.secondary_model = secondary_model
+
+    async def vote(self, prompt: str) -> Dict:
+        """
+        两模型投票
+
+        Returns:
+            {
+                'consensus': bool,       # 是否达成一致
+                'result': Any,           # 投票结果
+                'confidence': float,     # 置信度
+                'primary_response': ..., # 主模型响应
+                'secondary_response': ... # 副模型响应
+            }
+        """
+
+    def vote_prerequisite(self, glm_result, deepseek_result) -> Optional[Tuple]:
+        """
+        前置关系投票规则
+
+        规则:
+        - 两模型一致 + confidence >= 0.8 → PREREQUISITE
+        - 两模型一致 + confidence < 0.8 → PREREQUISITE_CANDIDATE
+        - 两模型不一致 → None（不采纳）
+        """
 ```
 
-**理由**:
-- 定义中出现其他知识点名称是强证据
-- 例："一元二次方程的解法" → 包含"一元二次方程"
-
-### D3: LLM Prompt 设计
-
-**决策**: 设计区分教学顺序 vs 学习依赖的 prompt
+### D3: LLM Prompt 模板 (prompt_templates.py)
 
 ```python
-PROMPT_TEMPLATE = """
+"""
+LLM Prompt 模板集合
+"""
+
+PREREQUISITE_PROMPT = """
 你是一位教育专家，请判断以下知识点之间的学习依赖关系。
 
 **学习依赖**：不学A就学不懂B（核心前置）
@@ -90,100 +124,109 @@ PROMPT_TEMPLATE = """
 
 注意：区分"教学顺序"和"学习依赖"。
 """
+
+# 用于 kg-math-complete-graph 的知识点匹配 Prompt
+KP_MATCH_PROMPT = """
+你是一位教育专家，请判断以下两个知识点是否表示同一个概念。
+
+教材知识点: {textbook_kp_name}
+
+知识图谱知识点: {kg_kp_name}
+知识图谱描述: {kg_kp_description}
+
+请回答：
+1. 是否表示同一概念？(是/否)
+2. 置信度：(0.0-1.0)
+3. 原因：(简短说明)
+"""
 ```
 
-**理由**:
-- 明确区分两种关系语义
-- 要求解释原因，提高判断质量
-
-### D4: 多模型投票机制
-
-**决策**: 使用 GLM-4-flash + DeepSeek 两模型投票
+### D4: 前置关系推断模块 (prerequisite_inferer.py)
 
 ```python
-# 投票规则
-def vote_prerequisite(glm_result, deepseek_result):
-    """两模型投票"""
-    if glm_result['is_prerequisite'] and deepseek_result['is_prerequisite']:
-        # 两模型一致认为存在依赖
-        confidence = min(glm_result['confidence'], deepseek_result['confidence'])
-        if confidence >= 0.8:
-            return ('PREREQUISITE', confidence)
-        else:
-            return ('PREREQUISITE_CANDIDATE', confidence)
-    else:
-        # 两模型不一致，暂不采纳
-        return None
+"""
+前置关系推断模块
+"""
+
+class PrerequisiteInferer:
+    """前置关系推断器"""
+
+    def __init__(self, voter: DualModelVoter):
+        self.voter = voter
+
+    async def infer_batch(self, kp_pairs: List[Dict]) -> List[Dict]:
+        """
+        批量推断前置关系
+
+        Args:
+            kp_pairs: [{'kp_a': {...}, 'kp_b': {...}}, ...]
+
+        Returns:
+            [{'kp_a_uri': ..., 'kp_b_uri': ..., 'relation': 'PREREQUISITE',
+              'confidence': 0.9, 'source': 'llm_vote'}, ...]
+        """
+
+    def infer_from_textbook_order(self, chapters: List[Dict]) -> List[Dict]:
+        """
+        基于教材顺序推断 TEACHES_BEFORE
+
+        规则: 仅限章节内部，跨章节不推断
+        """
+
+    def extract_from_definition(self, definition: str,
+                                 kp_names: List[str]) -> List[str]:
+        """
+        从定义文本中匹配知识点名称
+        """
 ```
 
-**理由**:
-- 两模型一致提高准确率
-- 低置信度关系保留为候选，待后续验证
-- 降低错误率
-
-### D5: LLM Gateway Scene 配置
-
-**决策**: 新增 `prerequisite_inference` scene
+### D5: 配置 (config.py)
 
 ```python
-# config/model_config.py
-SCENE_MODEL_MAPPING = {
-    'prerequisite_inference': {
-        'provider': 'zhipu',
-        'model': 'glm-4-flash',  # 主模型
-        'fallback': 'deepseek',   # 备用模型
-        'temperature': 0.3,       # 低温度，提高一致性
-    }
-}
-```
+"""
+推理配置
+"""
 
-**理由**:
-- glm-4-flash 免费，降低成本
-- deepseek 作为备用和投票模型
-- 低温度提高输出一致性
+# 模型配置
+PRIMARY_MODEL = "glm-4-flash"      # 免费
+SECONDARY_MODEL = "deepseek-chat"  # 低成本
 
-### D6: 成本控制策略
-
-**决策**: 使用免费模型 + 批量处理
-
-```python
-# 成本估算
-# glm-4-flash: 免费（智谱免费额度）
-# deepseek: 约 0.001 元/千token
+# 投票阈值
+CONFIDENCE_THRESHOLD_HIGH = 0.8    # >= 此值为 PREREQUISITE
+CONFIDENCE_THRESHOLD_LOW = 0.6     # >= 此值为 CANDIDATE
 
 # 批量处理
-BATCH_SIZE = 10  # 每批 10 个知识点对
-TOTAL_CALLS = 4490 * 2 = 8980  # 两模型各调用一次
+BATCH_SIZE = 10
+RATE_LIMIT_DELAY = 1.0             # 每次调用后等待 1 秒
 
-# 预估成本
-# DeepSeek: 8980 * 100 tokens * 0.001/1000 ≈ 0.9 元
+# 输出路径
+OUTPUT_DIR = "edukg/data/edukg/math/6_推理结果/output/"
 ```
 
-**理由**:
-- 主要使用免费模型
-- DeepSeek 成本极低（<1 元）
+### D6: DAG 验证
 
-### D7: DAG 验证策略
-
-**决策**: 导入后验证无环
+**决策**: 输出 JSON 后验证无环
 
 ```python
-# DAG 验证
-def validate_dag(driver):
-    """验证 PREREQUISITE 关系无环"""
-    with driver.session() as session:
-        result = session.run("""
-            MATCH (a:KnowledgePoint)-[:PREREQUISITE]->(b:KnowledgePoint)
-            MATCH path = (b)-[:PREREQUISITE*]->(a)
-            RETURN count(path) as cycle_count
-        """)
-        cycle_count = result.single()['cycle_count']
-        return cycle_count == 0
+def validate_dag(relations: List[Dict]) -> Tuple[bool, List[str]]:
+    """
+    验证 PREREQUISITE 关系无环
+
+    Returns:
+        (is_valid, cycles) - 是否有效，发现的环列表
+    """
 ```
 
-**理由**:
-- DAG 是学习路径的前提条件
-- 有环则学习路径计算错误
+### D7: 输出文件结构
+
+```
+edukg/data/edukg/math/6_推理结果/output/
+├── teaches_before.json       # TEACHES_BEFORE 关系
+├── definition_deps.json      # 定义依赖
+├── llm_prereq.json           # LLM 推断的前置关系
+├── final_prereq.json         # 融合后的最终前置关系
+└── validation_report.json    # DAG 验证报告
+```
 
 ## Risks / Trade-offs
 
@@ -197,30 +240,28 @@ def validate_dag(driver):
 
 ### Risk 3: DAG 出现环
 **风险**: 前置关系可能形成循环依赖
-**缓解**: 导入前检查 + 导入后验证 + 发现环时报警
-
-### Risk 4: 定义匹配噪音
-**风险**: 定义文本可能包含无关知识点的名称
-**缓解**: 仅匹配学科内知识点 + 设置最小匹配长度
+**缓解**: 输出后验证 + 发现环时报警
 
 ## Migration Plan
 
 **执行步骤**:
-1. 运行 `infer_teaches_before.py` → 输出 `math_teaches_before.csv`
-2. 运行 `extract_definition_deps.py` → 输出 `math_definition_deps.csv`
-3. 运行 `infer_prerequisites_llm.py` → 输出 `math_llm_prereq.csv`
-4. 运行 `fuse_prerequisites.py` → 输出 `math_final_prereq.csv`
-5. 运行 `import_prereq_to_neo4j.py` → 导入 Neo4j
-6. 运行 DAG 验证脚本 → 确认无环
 
-**回滚策略**:
-```cypher
-// 删除所有推断关系
-MATCH ()-[r:TEACHES_BEFORE]->() DELETE r
-MATCH ()-[r:PREREQUISITE]->() DELETE r
-MATCH ()-[r:PREREQUISITE_CANDIDATE]->() DELETE r
-MATCH ()-[r:PREREQUISITE_ON]->() DELETE r
-```
+1. **开发核心模块**:
+   - 创建 `edukg/core/llm_inference/` 目录
+   - 实现 `dual_model_voter.py`
+   - 实现 `prompt_templates.py`
+   - 实现 `prerequisite_inferer.py`
+
+2. **开发命令行入口**:
+   - 创建 `edukg/scripts/kg_inference/infer_prerequisites.py`
+
+3. **运行推理**:
+   - 运行命令行脚本
+   - 输出 JSON 文件
+
+4. **验证和导入**:
+   - 运行 DAG 验证
+   - 人工验证后手动导入 Neo4j
 
 ## Open Questions
 

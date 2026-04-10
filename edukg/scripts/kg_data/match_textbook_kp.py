@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""
+知识点匹配命令行入口
+
+功能:
+1. 加载教材知识点数据
+2. 从 Neo4j 获取 EduKG Concept 列表
+3. 使用双模型投票匹配知识点
+4. 输出 MATCHES_KG 关系
+
+使用方法:
+    python match_textbook_kp.py
+    python match_textbook_kp.py --dry-run  # 仅估算成本
+    python match_textbook_kp.py --stats    # 显示已有统计
+"""
+import os
+import sys
+import json
+import argparse
+import logging
+import asyncio
+from pathlib import Path
+from typing import List, Dict
+
+# 添加项目根目录到 sys.path
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+# 添加 ai-edu-ai-service 目录到 sys.path 以加载 config
+AI_SERVICE_DIR = os.path.join(PROJECT_ROOT, "ai-edu-ai-service")
+if AI_SERVICE_DIR not in sys.path:
+    sys.path.insert(0, AI_SERVICE_DIR)
+
+# 切换工作目录到 ai-edu-ai-service 以正确加载 .env 文件
+os.chdir(AI_SERVICE_DIR)
+
+from edukg.core.textbook import KPMatcher
+from edukg.core.textbook.config import OUTPUT_DIR, OUTPUT_FILES
+from edukg.core.textbook.kp_matcher import estimate_match_cost
+from edukg.core.neo4j.client import Neo4jClient
+from edukg.config.settings import settings
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+class KPMatchRunner:
+    """知识点匹配运行器"""
+
+    def __init__(self):
+        self.neo4j_client = Neo4jClient()
+        self.matcher = KPMatcher()
+
+    def close(self):
+        self.neo4j_client.close()
+
+    def load_textbook_kps(self) -> List[Dict]:
+        """加载教材知识点"""
+        filepath = Path(OUTPUT_DIR) / OUTPUT_FILES["textbook_kps"]
+        if not filepath.exists():
+            raise FileNotFoundError(f"教材知识点文件不存在: {filepath}")
+
+        with open(filepath, 'r', encoding='utf-8') as f:
+            kps = json.load(f)
+
+        logger.info(f"加载 {len(kps)} 个教材知识点")
+        return kps
+
+    def load_kg_concepts(self) -> List[Dict]:
+        """从 Neo4j 加载图谱知识点"""
+        with self.neo4j_client.session() as session:
+            result = session.run("""
+                MATCH (c:Concept)
+                OPTIONAL MATCH (s:Statement)-[:RELATED_TO]->(c)
+                WITH c, collect(s.content) AS descriptions
+                RETURN c.uri AS uri, c.label AS label, descriptions[0] AS description
+                ORDER BY c.label
+            """)
+
+            concepts = []
+            for record in result:
+                concepts.append({
+                    'uri': record['uri'],
+                    'label': record['label'],
+                    'description': record['description'] or ''
+                })
+
+            logger.info(f"从 Neo4j 加载 {len(concepts)} 个图谱知识点")
+            return concepts
+
+    async def run_match(self, dry_run: bool = False) -> Dict:
+        """
+        运行匹配流程
+
+        Args:
+            dry_run: 是否仅估算成本
+
+        Returns:
+            运行结果
+        """
+        # 加载数据
+        textbook_kps = self.load_textbook_kps()
+
+        if dry_run:
+            # 仅估算成本
+            cost = estimate_match_cost(len(textbook_kps))
+            logger.info("\n=== 成本估算 ===")
+            logger.info(f"教材知识点数量: {cost['textbook_kp_count']}")
+            logger.info(f"预估精确匹配: {cost['estimated_exact_match']}")
+            logger.info(f"预估 LLM 匹配: {cost['estimated_llm_match']}")
+            logger.info(f"LLM 调用次数: {cost['llm_calls']}")
+            logger.info(f"预估成本: {cost['estimated_cost_rmb']} 元")
+            logger.info(f"说明: {cost['note']}")
+            return cost
+
+        # 加载图谱知识点
+        kg_concepts = self.load_kg_concepts()
+
+        # 执行匹配
+        logger.info(f"\n=== 开始匹配 ===")
+        results = await self.matcher.match_all(textbook_kps, kg_concepts)
+
+        # 保存结果
+        output_path = Path(OUTPUT_DIR) / OUTPUT_FILES["matches_kg_relations"]
+        self.matcher.save_results(results, str(output_path))
+
+        # 统计
+        exact_count = sum(1 for r in results if r['method'] == 'exact_match')
+        llm_count = sum(1 for r in results if r['method'] == 'llm_vote')
+        unmatched = len(textbook_kps) - len(results)
+
+        logger.info("\n=== 匹配结果 ===")
+        logger.info(f"精确匹配: {exact_count}")
+        logger.info(f"LLM 匹配: {llm_count}")
+        logger.info(f"未匹配: {unmatched}")
+        logger.info(f"匹配率: {len(results) / len(textbook_kps) * 100:.1f}%")
+        logger.info(f"输出文件: {output_path}")
+
+        return {
+            'total': len(textbook_kps),
+            'exact_match': exact_count,
+            'llm_match': llm_count,
+            'unmatched': unmatched,
+            'output_file': str(output_path)
+        }
+
+    def show_stats(self):
+        """显示已有统计"""
+        output_path = Path(OUTPUT_DIR) / OUTPUT_FILES["matches_kg_relations"]
+        if not output_path.exists():
+            logger.warning(f"匹配结果文件不存在: {output_path}")
+            return
+
+        with open(output_path, 'r', encoding='utf-8') as f:
+            results = json.load(f)
+
+        exact = sum(1 for r in results if r['method'] == 'exact_match')
+        llm = sum(1 for r in results if r['method'] == 'llm_vote')
+
+        logger.info("\n=== 匹配统计 ===")
+        logger.info(f"文件: {output_path}")
+        logger.info(f"总匹配数: {len(results)}")
+        logger.info(f"  - 精确匹配: {exact}")
+        logger.info(f"  - LLM 匹配: {llm}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='知识点匹配')
+    parser.add_argument('--dry-run', action='store_true', help='仅估算成本，不实际调用 LLM')
+    parser.add_argument('--stats', action='store_true', help='显示已有结果统计')
+
+    args = parser.parse_args()
+
+    runner = KPMatchRunner()
+
+    try:
+        # 显示统计
+        if args.stats:
+            runner.show_stats()
+            return
+
+        # 运行匹配
+        result = asyncio.run(runner.run_match(args.dry_run))
+
+        if not args.dry_run:
+            logger.info("\n✅ 匹配完成!")
+
+    except FileNotFoundError as e:
+        logger.error(f"文件不存在: {e}")
+        logger.info("请先运行 'python generate_textbook_data.py' 生成教材数据")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"匹配失败: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        runner.close()
+
+
+if __name__ == '__main__':
+    main()
