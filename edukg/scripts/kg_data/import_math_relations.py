@@ -48,15 +48,16 @@ logger = logging.getLogger(__name__)
 DATA_FILE = os.path.join(
     PROJECT_ROOT,
     "edukg", "data", "edukg", "math",
-    "8_全部关联关系(Complete)", "math_knowledge_relations.json"
+    "4_知识点关联关系(Relation)", "math_knowledge_relations.json"
 )
 
 
 class MathRelationImporter:
     """数学知识点关联关系导入器"""
 
-    def __init__(self):
+    def __init__(self, data_file: str = None):
         self.client = Neo4jClient()
+        self.data_file = data_file or DATA_FILE
         logger.info(f"已连接 Neo4j: {settings.NEO4J_URI}")
 
     def close(self):
@@ -72,14 +73,15 @@ class MathRelationImporter:
 
     def load_data(self) -> List[Dict]:
         """加载关系数据"""
-        if not os.path.exists(DATA_FILE):
-            raise FileNotFoundError(f"数据文件不存在: {DATA_FILE}")
+        if not os.path.exists(self.data_file):
+            raise FileNotFoundError(f"数据文件不存在: {self.data_file}")
 
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+        with open(self.data_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         relations = data.get('relations', [])
-        logger.info(f"加载数据: {len(relations)} 个 relatedTo 关系")
+        logger.info(f"加载数据文件: {self.data_file}")
+        logger.info(f"关系数量: {len(relations)}")
         return relations
 
     def import_relations(self, relations: List[Dict], batch_size: int = 1000) -> int:
@@ -111,11 +113,12 @@ class MathRelationImporter:
             for i in range(0, len(rel_data), batch_size):
                 batch = rel_data[i:i + batch_size]
 
-                # 只匹配已存在的实体，MERGE 创建关系
+                # 判断 from 的节点类型 (statement 或 instance)
+                # Statement → Concept 的 RELATED_TO 关系
                 cypher = """
                 UNWIND $relations AS rel
-                MATCH (from:Entity {uri: rel.from_uri})
-                MATCH (to:Entity {uri: rel.to_uri})
+                MATCH (from {uri: rel.from_uri})
+                MATCH (to {uri: rel.to_uri})
                 MERGE (from)-[r:RELATED_TO]->(to)
                 """
 
@@ -140,59 +143,90 @@ class MathRelationImporter:
             result = session.run("MATCH ()-[r:RELATED_TO]->() RETURN count(r) AS count")
             rel_count = result.single()["count"]
 
-            # 出度最多的实体
+            # 出度最多的节点
             result = session.run("""
-                MATCH (e:Entity)-[r:RELATED_TO]->()
-                RETURN e.label AS entity, count(r) AS out_count
+                MATCH (n)-[r:RELATED_TO]->()
+                RETURN n.label AS label, labels(n)[0] AS type, count(r) AS out_count
                 ORDER BY out_count DESC
                 LIMIT 10
             """)
             top_out = list(result)
 
-            # 入度最多的实体
+            # 入度最多的节点
             result = session.run("""
-                MATCH ()-[r:RELATED_TO]->(e:Entity)
-                RETURN e.label AS entity, count(r) AS in_count
+                MATCH ()-[r:RELATED_TO]->(n)
+                RETURN n.label AS label, labels(n)[0] AS type, count(r) AS in_count
                 ORDER BY in_count DESC
                 LIMIT 10
             """)
             top_in = list(result)
 
+            # 小学 Statement 的 RELATED_TO 统计
+            result = session.run("""
+                MATCH (s:Statement)-[r:RELATED_TO]->()
+                WHERE s.uri CONTAINS '0.2'
+                RETURN count(r) AS count
+            """)
+            v02_count = result.single()["count"]
+
         logger.info("\n=== 统计信息 ===")
         logger.info(f"  RELATED_TO 关系总数: {rel_count}")
+        logger.info(f"  小学 Statement 关联数 (v0.2): {v02_count}")
 
-        logger.info("\n  出度最多的实体（关联出去最多）:")
+        logger.info("\n  出度最多的节点（关联出去最多）:")
         for row in top_out:
-            logger.info(f"    {row['entity']}: {row['out_count']}")
+            logger.info(f"    {row['label']} ({row['type']}): {row['out_count']}")
 
-        logger.info("\n  入度最多的实体（被关联最多）:")
+        logger.info("\n  入度最多的节点（被关联最多）:")
         for row in top_in:
-            logger.info(f"    {row['entity']}: {row['in_count']}")
+            logger.info(f"    {row['label']} ({row['type']}): {row['in_count']}")
 
     def show_sample(self, limit: int = 10):
         """显示示例关系"""
         logger.info(f"\n=== 示例关系 (前{limit}个) ===")
 
         with self.client.session() as session:
+            # 小学 Statement 的 RELATED_TO 示例
             result = session.run("""
-                MATCH (from:Entity)-[r:RELATED_TO]->(to:Entity)
+                MATCH (from:Statement)-[r:RELATED_TO]->(to:Concept)
+                WHERE from.uri CONTAINS '0.2'
                 RETURN from.label AS from_label, to.label AS to_label
                 LIMIT $limit
             """, limit=limit)
 
-            for i, row in enumerate(result, 1):
-                logger.info(f"  {i}. {row['from_label']} → RELATED_TO → {row['to_label']}")
+            count = 0
+            for row in result:
+                count += 1
+                logger.info(f"  {count}. {row['from_label']} → RELATED_TO → {row['to_label']}")
+
+            if count == 0:
+                # 如果没有小学数据，显示一般示例
+                result = session.run("""
+                    MATCH (from)-[r:RELATED_TO]->(to)
+                    RETURN from.label AS from_label, labels(from)[0] AS from_type,
+                           to.label AS to_label, labels(to)[0] AS to_type
+                    LIMIT $limit
+                """, limit=limit)
+                for row in result:
+                    logger.info(f"  {row['from_label']} ({row['from_type']}) → {row['to_label']} ({row['to_type']})")
 
 
 def main():
     parser = argparse.ArgumentParser(description='导入数学知识点关联关系到 Neo4j')
+    parser.add_argument('--file', type=str, help='指定数据文件路径')
     parser.add_argument('--dry-run', action='store_true', help='仅打印信息，不执行导入')
     parser.add_argument('--stats', action='store_true', help='仅显示统计信息')
-    parser.add_argument('--batch-size', type=int, default=1000, help='批量导入大小')
+    parser.add_argument('--batch-size', type=int, default=500, help='批量导入大小')
 
     args = parser.parse_args()
 
-    importer = MathRelationImporter()
+    # 确定数据文件
+    if args.file:
+        data_file = args.file if os.path.isabs(args.file) else os.path.join(PROJECT_ROOT, args.file)
+    else:
+        data_file = DATA_FILE
+
+    importer = MathRelationImporter(data_file)
 
     try:
         # 测试连接
@@ -203,6 +237,7 @@ def main():
         # 仅显示统计
         if args.stats:
             importer.show_statistics()
+            importer.show_sample()
             return
 
         # 加载数据
@@ -211,6 +246,7 @@ def main():
         # Dry-run 模式
         if args.dry_run:
             logger.info(f"[DRY-RUN] 将导入 {len(relations)} 个 RELATED_TO 关系")
+            importer.show_sample()
             return
 
         # 导入关系

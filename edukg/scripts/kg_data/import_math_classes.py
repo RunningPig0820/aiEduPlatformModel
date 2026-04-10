@@ -269,11 +269,18 @@ MERGE (child)-[:SUB_CLASS_OF]->(parent)
 
 def main():
     parser = argparse.ArgumentParser(description='导入数学概念类到 Neo4j')
+    parser.add_argument('--file', type=str, help='指定数据文件路径（默认使用 math_classes.json）')
     parser.add_argument('--dry-run', action='store_true', help='仅打印 Cypher 语句，不执行')
     parser.add_argument('--clear', action='store_true', help='导入前清除已有的 Class 节点')
     parser.add_argument('--stats', action='store_true', help='仅显示统计信息')
 
     args = parser.parse_args()
+
+    # 确定数据文件路径
+    if args.file:
+        data_file = args.file if os.path.isabs(args.file) else os.path.join(PROJECT_ROOT, args.file)
+    else:
+        data_file = DATA_FILE
 
     importer = MathClassImporter()
 
@@ -289,8 +296,15 @@ def main():
             return
 
         # 加载数据
-        data = importer.load_data()
+        if not os.path.exists(data_file):
+            raise FileNotFoundError(f"数据文件不存在: {data_file}")
+
+        with open(data_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
         classes = data['classes']
+        logger.info(f"加载数据文件: {data_file}")
+        logger.info(f"概念类数量: {len(classes)}")
 
         # Dry-run 模式
         if args.dry_run:

@@ -39,10 +39,11 @@ logger = logging.getLogger(__name__)
 
 # 数据文件路径
 CLASS_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/1_概念类(Class)/math_classes.json")
-ENTITIES_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/8_全部关联关系(Complete)/math_entities_complete.json")
-STATEMENT_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/3_定义_定理(Statement)/math_statement.json")
-INSTANCE_TTL = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/2_知识点实体(Instance)/知识点实例 _类型标签/math_instance.ttl")
-RELATIONS_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/8_全部关联关系(Complete)/math_knowledge_relations.json")
+CONCEPTS_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/2_知识点实体(complete)/math_concepts.json")
+STATEMENTS_URI_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/3_定义_定理(Statement)/math_statements_uri.json")
+STATEMENT_CONTENT_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/3_定义_定理(Statement)/math_statement.json")
+INSTANCE_TTL = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/2_知识点实体(complete)/知识点实例 _类型标签/math_instance.ttl")
+RELATIONS_FILE = os.path.join(PROJECT_ROOT, "edukg/data/edukg/math/4_知识点关联关系(Relation)/math_knowledge_relations.json")
 
 
 class KGImporter:
@@ -121,12 +122,10 @@ class KGImporter:
         """导入知识点实体 (instance/math#xxx)"""
         logger.info("\n=== 导入知识点实体 (Concept) ===")
 
-        with open(ENTITIES_FILE, 'r', encoding='utf-8') as f:
-            all_entities = json.load(f)
+        with open(CONCEPTS_FILE, 'r', encoding='utf-8') as f:
+            entities = json.load(f)
 
-        # 只导入 instance/math#xxx 前缀的实体
-        entities = [e for e in all_entities if 'instance/math#' in e['uri']]
-        logger.info(f"加载数据: {len(entities)} 个知识点实体 (instance 前缀)")
+        logger.info(f"加载数据: {len(entities)} 个知识点实体")
 
         with self.client.session() as session:
             for i in range(0, len(entities), batch_size):
@@ -154,15 +153,13 @@ class KGImporter:
         """导入定义/定理 (statement/math#xxx)"""
         logger.info("\n=== 导入定义/定理 (Statement) ===")
 
-        with open(ENTITIES_FILE, 'r', encoding='utf-8') as f:
-            all_entities = json.load(f)
+        with open(STATEMENTS_URI_FILE, 'r', encoding='utf-8') as f:
+            statement_entities = json.load(f)
 
-        with open(STATEMENT_FILE, 'r', encoding='utf-8') as f:
+        with open(STATEMENT_CONTENT_FILE, 'r', encoding='utf-8') as f:
             statements_data = json.load(f)
 
-        # 只导入 statement/math#xxx 前缀的实体
-        statement_entities = [e for e in all_entities if 'statement/math#' in e['uri']]
-        logger.info(f"加载数据: {len(statement_entities)} 个定义/定理 (statement 前缀)")
+        logger.info(f"加载数据: {len(statement_entities)} 个定义/定理")
 
         # 建立 URI → content 映射
         content_map = {}
@@ -209,23 +206,31 @@ class KGImporter:
         """导入 HAS_TYPE 关系"""
         logger.info("\n=== 导入 HAS_TYPE 关系 ===")
 
-        with open(ENTITIES_FILE, 'r', encoding='utf-8') as f:
-            all_entities = json.load(f)
+        # 加载 Concept
+        with open(CONCEPTS_FILE, 'r', encoding='utf-8') as f:
+            concepts = json.load(f)
+
+        # 加载 Statement
+        with open(STATEMENTS_URI_FILE, 'r', encoding='utf-8') as f:
+            statements = json.load(f)
 
         # 为 Concept 和 Statement 分别导入
         entity_types = []
         statement_types = []
 
-        for e in all_entities:
+        for e in concepts:
             if not e.get('types'):
                 continue
-
             for t in e['types']:
                 type_uri = f"http://edukg.org/knowledge/0.1/class/math#{t}"
-                if 'instance/math#' in e['uri']:
-                    entity_types.append({'uri': e['uri'], 'type_uri': type_uri})
-                elif 'statement/math#' in e['uri']:
-                    statement_types.append({'uri': e['uri'], 'type_uri': type_uri})
+                entity_types.append({'uri': e['uri'], 'type_uri': type_uri})
+
+        for s in statements:
+            if not s.get('types'):
+                continue
+            for t in s['types']:
+                type_uri = f"http://edukg.org/knowledge/0.1/class/math#{t}"
+                statement_types.append({'uri': s['uri'], 'type_uri': type_uri})
 
         logger.info(f"Concept HAS_TYPE: {len(entity_types)}")
         logger.info(f"Statement HAS_TYPE: {len(statement_types)}")

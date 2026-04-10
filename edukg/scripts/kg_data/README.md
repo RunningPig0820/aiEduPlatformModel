@@ -46,7 +46,7 @@ python import_math_classes.py --stats      # 显示统计
 
 | 数据源 | 导入内容 | 数量 |
 |--------|----------|------|
-| `8_全部关联关系(Complete)/math_entities_complete.json` | Entity 节点 | 4,085 个 |
+| `2_知识点实体(complete)/math_complete_statement.json` | Entity 节点 | 4,085 个 |
 | | HAS_TYPE 关系 | 5,469 个 |
 
 **使用方法**:
@@ -64,7 +64,7 @@ python import_math_entities.py --stats      # 显示统计
 
 | 数据源 | 导入内容 | 数量 |
 |--------|----------|------|
-| `8_全部关联关系(Complete)/math_knowledge_relations.json` | RELATED_TO 关系 | 9,871 个 |
+| `4_知识点关联关系(Relation)/math_knowledge_relations.json` | RELATED_TO 关系 | 9,871 个 |
 
 **使用方法**:
 ```bash
@@ -81,7 +81,7 @@ python import_math_relations.py --stats      # 显示统计
 
 | 数据源 | 导入内容 | 数量 |
 |--------|----------|------|
-| `2_知识点实体(Instance)/知识点实例 _类型标签/math_instance.ttl` | PART_OF 关系 | 298 个 |
+| `2_知识点实体(complete)/知识点实例_类型标签/math_instance.ttl` | PART_OF 关系 | 298 个 |
 | | BELONGS_TO 关系 | 619 个 |
 
 **使用方法**:
@@ -128,10 +128,10 @@ python import_math_content.py
 | 数据文件 | 用途 | 脚本 |
 |----------|------|------|
 | `1_概念类(Class)/math_classes.json` | 概念类定义 | `import_math_classes.py` |
-| `8_.../math_entities_complete.json` | 知识点实体 | `import_math_entities.py` |
-| `8_.../math_knowledge_relations.json` | 关联关系 | `import_math_relations.py` |
-| `2_.../math_instance.ttl` | partOf/belongsTo | `import_partof_belongsto.py` |
-| `3_.../math_statement.json` | 定义内容 | `import_math_content.py` |
+| `2_知识点实体(complete)/math_complete_statement.json` | 知识点实体 | `import_math_entities.py` |
+| `4_知识点关联关系(Relation)/math_knowledge_relations.json` | 关联关系 | `import_math_relations.py` |
+| `2_知识点实体(complete)/知识点实例_类型标签/math_instance.ttl` | partOf/belongsTo | `import_partof_belongsto.py` |
+| `3_定义_定理(Statement)/math_statement.json` | 定义内容 | `import_math_content.py` |
 
 ---
 
@@ -221,7 +221,7 @@ pip install neo4j
 
 ### 1. 无类型的实体 (89个)
 
-部分实体缺少 `types` 字段，无法关联到概念类。详见 `8_全部关联关系(Complete)/README.md`。
+部分实体缺少 `types` 字段，无法关联到概念类。
 
 ### 2. 小学知识点缺失
 

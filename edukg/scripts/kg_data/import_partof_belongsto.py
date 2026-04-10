@@ -148,8 +148,8 @@ class PartOfBelongsToImporter:
 
                 cypher = f"""
                 UNWIND $relations AS rel
-                MATCH (from:Entity {{uri: rel.from_uri}})
-                MATCH (to:Entity {{uri: rel.to_uri}})
+                MATCH (from:Concept {{uri: rel.from_uri}})
+                MATCH (to:Concept {{uri: rel.to_uri}})
                 MERGE (from)-[r:{rel_type}]->(to)
                 """
 
@@ -183,14 +183,14 @@ class PartOfBelongsToImporter:
 
             # 示例关系
             result = session.run("""
-                MATCH (from:Entity)-[r:PART_OF]->(to:Entity)
+                MATCH (from:Concept)-[r:PART_OF]->(to:Concept)
                 RETURN from.label AS from_label, to.label AS to_label
                 LIMIT 5
             """)
             partof_samples = list(result)
 
             result = session.run("""
-                MATCH (from:Entity)-[r:BELONGS_TO]->(to:Entity)
+                MATCH (from:Concept)-[r:BELONGS_TO]->(to:Concept)
                 RETURN from.label AS from_label, to.label AS to_label
                 LIMIT 5
             """)
@@ -218,13 +218,13 @@ class PartOfBelongsToImporter:
         for i, (from_uri, to_uri) in enumerate(data['partOf'][:limit], 1):
             from_id = re.search(r'#(\d+)', from_uri).group(1)
             to_id = re.search(r'#(\d+)', to_uri).group(1)
-            logger.info(f"    {i}. Entity #{from_id} → partOf → Entity #{to_id}")
+            logger.info(f"    {i}. Concept #{from_id} → partOf → Concept #{to_id}")
 
         logger.info("\n  belongsTo 示例:")
         for i, (from_uri, to_uri) in enumerate(data['belongsTo'][:limit], 1):
             from_id = re.search(r'#(\d+)', from_uri).group(1)
             to_id = re.search(r'#(\d+)', to_uri).group(1)
-            logger.info(f"    {i}. Entity #{from_id} → belongsTo → Entity #{to_id}")
+            logger.info(f"    {i}. Concept #{from_id} → belongsTo → Concept #{to_id}")
 
 
 def main():

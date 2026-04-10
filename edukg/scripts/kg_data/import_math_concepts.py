@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-导入数学知识点实体到 Neo4j
+导入数学知识点到 Neo4j
 
 功能：
-1. 导入 4,085 个知识点实体
+1. 导入知识点 (Concept) 节点
 2. 创建与概念类的 HAS_TYPE 关系
 3. 支持重复导入（使用 MERGE）
 
 使用方法：
-    python import_math_entities.py
-    python import_math_entities.py --dry-run
-    python import_math_entities.py --stats
+    python import_math_concepts.py
+    python import_math_concepts.py --file <数据文件>
+    python import_math_concepts.py --stats
 """
 import os
 import sys
@@ -49,12 +49,12 @@ logger = logging.getLogger(__name__)
 DATA_FILE = os.path.join(
     PROJECT_ROOT,
     "edukg", "data", "edukg", "math",
-    "8_全部关联关系(Complete)", "math_entities_complete.json"
+    "2_知识点实体(complete)", "math_concepts.json"
 )
 
 
-class MathEntityImporter:
-    """数学知识点实体导入器"""
+class MathConceptImporter:
+    """数学知识点导入器"""
 
     def __init__(self):
         self.client = Neo4jClient()
@@ -72,23 +72,23 @@ class MathEntityImporter:
         return False
 
     def load_data(self) -> List[Dict]:
-        """加载实体数据"""
+        """加载知识点数据"""
         if not os.path.exists(DATA_FILE):
             raise FileNotFoundError(f"数据文件不存在: {DATA_FILE}")
 
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            entities = json.load(f)
+            concepts = json.load(f)
 
-        logger.info(f"加载数据: {len(entities)} 个知识点实体")
-        return entities
+        logger.info(f"加载数据: {len(concepts)} 个知识点")
+        return concepts
 
     def create_constraints(self):
         """创建唯一性约束（防止重复）"""
         constraints = [
-            # 实体 URI 唯一
+            # Concept URI 唯一
             """
-            CREATE CONSTRAINT entity_uri_unique IF NOT EXISTS
-            FOR (e:Entity) REQUIRE e.uri IS UNIQUE
+            CREATE CONSTRAINT concept_uri_unique IF NOT EXISTS
+            FOR (c:Concept) REQUIRE c.uri IS UNIQUE
             """,
         ]
 
@@ -96,7 +96,7 @@ class MathEntityImporter:
             try:
                 with self.client.session() as session:
                     session.run(cypher)
-                logger.info("✓ 实体约束创建成功")
+                logger.info("✓ Concept 约束创建成功")
             except Exception as e:
                 logger.warning(f"约束创建警告: {e}")
 
@@ -115,60 +115,60 @@ class MathEntityImporter:
                 class_map[class_id] = class_id
             return class_map
 
-    def import_entities(self, entities: List[Dict], batch_size: int = 500) -> int:
+    def import_concepts(self, concepts: List[Dict], batch_size: int = 500) -> int:
         """
-        导入实体节点（使用 MERGE 避免重复）
+        导入知识点节点（使用 MERGE 避免重复）
 
         Args:
-            entities: 实体列表
+            concepts: 知识点列表
             batch_size: 批量大小
 
         Returns:
-            导入/更新的实体数量
+            导入/更新的知识点数量
         """
-        logger.info(f"\n=== 导入 {len(entities)} 个知识点实体 ===")
+        logger.info(f"\n=== 导入 {len(concepts)} 个知识点 ===")
 
-        # 批量导入实体节点
+        # 批量导入知识点节点
         imported = 0
         with self.client.session() as session:
-            for i in range(0, len(entities), batch_size):
-                batch = entities[i:i + batch_size]
+            for i in range(0, len(concepts), batch_size):
+                batch = concepts[i:i + batch_size]
 
-                # 使用 MERGE 避免重复
+                # 使用 MERGE 避免重复，创建 Concept 节点
                 cypher = """
-                UNWIND $entities AS ent
-                MERGE (e:Entity {uri: ent.uri})
-                SET e.label = ent.label,
-                    e.subject = 'math'
+                UNWIND $concepts AS c
+                MERGE (concept:Concept {uri: c.uri})
+                SET concept.label = c.label,
+                    concept.subject = 'math'
                 """
 
-                session.run(cypher, entities=batch)
+                session.run(cypher, concepts=batch)
                 imported += len(batch)
 
                 if (i // batch_size + 1) % 10 == 0:
-                    logger.info(f"  已处理 {imported}/{len(entities)} 个实体...")
+                    logger.info(f"  已处理 {imported}/{len(concepts)} 个知识点...")
 
-        logger.info(f"✓ 实体节点导入完成: {imported} 个")
+        logger.info(f"✓ 知识点导入完成: {imported} 个")
         return imported
 
-    def import_type_relations(self, entities: List[Dict], batch_size: int = 500) -> int:
+    def import_type_relations(self, concepts: List[Dict], batch_size: int = 500) -> int:
         """
-        导入实体与概念类的类型关系
+        导入知识点与概念类的类型关系
 
         Args:
-            entities: 实体列表（包含 types 字段）
+            concepts: 知识点列表（包含 types 字段）
 
         Returns:
             创建的关系数量
         """
-        logger.info(f"\n=== 创建实体类型关系 ===")
+        logger.info(f"\n=== 创建类型关系 ===")
 
         # 收集所有类型关系
         relations = []
-        for ent in entities:
-            for type_id in ent.get('types', []):
+        for c in concepts:
+            for type_id in c.get('types', []):
                 relations.append({
-                    'entity_uri': ent['uri'],
+                    'concept_uri': c['uri'],
                     'class_id': type_id
                 })
 
@@ -184,14 +184,14 @@ class MathEntityImporter:
             for i in range(0, len(relations), batch_size):
                 batch = relations[i:i + batch_size]
 
-                # MATCH 实体，OPTIONAL MATCH 概念类（可能不存在）
+                # MATCH 知识点，OPTIONAL MATCH 概念类（可能不存在）
                 cypher = """
                 UNWIND $relations AS rel
-                MATCH (e:Entity {uri: rel.entity_uri})
-                OPTIONAL MATCH (c:Class {id: rel.class_id})
-                WITH e, c, rel
-                WHERE c IS NOT NULL
-                MERGE (e)-[:HAS_TYPE]->(c)
+                MATCH (c:Concept {uri: rel.concept_uri})
+                OPTIONAL MATCH (cl:Class {id: rel.class_id})
+                WITH c, cl, rel
+                WHERE cl IS NOT NULL
+                MERGE (c)-[:HAS_TYPE]->(cl)
                 """
 
                 session.run(cypher, relations=batch)
@@ -209,7 +209,7 @@ class MathEntityImporter:
         """显示导入统计"""
         with self.client.session() as session:
             # 实体数量
-            result = session.run("MATCH (e:Entity) RETURN count(e) AS count")
+            result = session.run("MATCH (c:Concept) RETURN count(c) AS count")
             entity_count = result.single()["count"]
 
             # 关系数量
@@ -218,8 +218,8 @@ class MathEntityImporter:
 
             # 按类型统计实体
             result = session.run("""
-                MATCH (e:Entity)-[:HAS_TYPE]->(c:Class)
-                RETURN c.label AS type, count(e) AS count
+                MATCH (c:Concept)-[:HAS_TYPE]->(cl:Class)
+                RETURN cl.label AS type, count(c) AS count
                 ORDER BY count DESC
                 LIMIT 15
             """)
@@ -227,14 +227,14 @@ class MathEntityImporter:
 
             # 没有类型的实体
             result = session.run("""
-                MATCH (e:Entity)
-                WHERE NOT (e)-[:HAS_TYPE]->()
-                RETURN count(e) AS count
+                MATCH (c:Concept)
+                WHERE NOT (c)-[:HAS_TYPE]->()
+                RETURN count(c) AS count
             """)
             no_type_count = result.single()["count"]
 
         logger.info("\n=== 导入统计 ===")
-        logger.info(f"  Entity 节点数: {entity_count}")
+        logger.info(f"  Concept 节点数: {entity_count}")
         logger.info(f"  HAS_TYPE 关系数: {rel_count}")
         logger.info(f"  无类型的实体: {no_type_count}")
 
@@ -248,8 +248,8 @@ class MathEntityImporter:
 
         with self.client.session() as session:
             result = session.run("""
-                MATCH (e:Entity)-[:HAS_TYPE]->(c:Class)
-                RETURN e.label AS entity, c.label AS type
+                MATCH (c:Concept)-[:HAS_TYPE]->(cl:Class)
+                RETURN c.label AS entity, cl.label AS type
                 LIMIT $limit
             """, limit=limit)
 
@@ -258,14 +258,21 @@ class MathEntityImporter:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='导入数学知识点实体到 Neo4j')
+    parser = argparse.ArgumentParser(description='导入数学知识点到 Neo4j')
+    parser.add_argument('--file', type=str, help='指定数据文件路径（默认使用 math_concepts.json）')
     parser.add_argument('--dry-run', action='store_true', help='仅打印信息，不执行导入')
     parser.add_argument('--stats', action='store_true', help='仅显示统计信息')
     parser.add_argument('--batch-size', type=int, default=500, help='批量导入大小')
 
     args = parser.parse_args()
 
-    importer = MathEntityImporter()
+    # 确定数据文件路径
+    if args.file:
+        data_file = args.file if os.path.isabs(args.file) else os.path.join(PROJECT_ROOT, args.file)
+    else:
+        data_file = DATA_FILE
+
+    importer = MathConceptImporter()
 
     try:
         # 测试连接
@@ -279,21 +286,28 @@ def main():
             return
 
         # 加载数据
-        entities = importer.load_data()
+        if not os.path.exists(data_file):
+            raise FileNotFoundError(f"数据文件不存在: {data_file}")
+
+        with open(data_file, 'r', encoding='utf-8') as f:
+            concepts = json.load(f)
+
+        logger.info(f"加载数据文件: {data_file}")
+        logger.info(f"知识点数量: {len(concepts)}")
 
         # Dry-run 模式
         if args.dry_run:
-            logger.info(f"[DRY-RUN] 将导入 {len(entities)} 个实体")
+            logger.info(f"[DRY-RUN] 将导入 {len(concepts)} 个知识点")
             return
 
         # 创建约束
         importer.create_constraints()
 
-        # 导入实体
-        importer.import_entities(entities, args.batch_size)
+        # 导入知识点
+        importer.import_concepts(concepts, args.batch_size)
 
         # 导入类型关系
-        importer.import_type_relations(entities, args.batch_size)
+        importer.import_type_relations(concepts, args.batch_size)
 
         # 显示统计
         importer.show_statistics()

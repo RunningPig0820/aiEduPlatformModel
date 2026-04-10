@@ -53,9 +53,9 @@ def validate():
         class_count = result.single()["count"]
         logger.info(f"  Class 节点: {class_count}")
 
-        result = session.run("MATCH (e:Entity) RETURN count(e) AS count")
+        result = session.run("MATCH (c:Concept) RETURN count(c) AS count")
         entity_count = result.single()["count"]
-        logger.info(f"  Entity 节点: {entity_count}")
+        logger.info(f"  Concept 节点: {entity_count}")
 
         # 2. 关系统计
         logger.info("\n【2. 关系统计】")
@@ -76,20 +76,20 @@ def validate():
 
         logger.info(f"\n  关系总计: {total_relations}")
 
-        # 3. Entity 属性统计
-        logger.info("\n【3. Entity 属性统计】")
-        result = session.run("MATCH (e:Entity) WHERE e.content IS NOT NULL RETURN count(e) AS count")
+        # 3. Concept 属性统计
+        logger.info("\n【3. Concept 属性统计】")
+        result = session.run("MATCH (c:Concept) WHERE c.content IS NOT NULL RETURN count(c) AS count")
         content_count = result.single()["count"]
         logger.info(f"  有 content 属性: {content_count}")
 
-        result = session.run("MATCH (e:Entity) WHERE e.label IS NOT NULL RETURN count(e) AS count")
+        result = session.run("MATCH (c:Concept) WHERE c.label IS NOT NULL RETURN count(c) AS count")
         label_count = result.single()["count"]
         logger.info(f"  有 label 属性: {label_count}")
 
         # 4. PART_OF 关系示例
         logger.info("\n【4. PART_OF 关系示例】")
         result = session.run("""
-            MATCH (from:Entity)-[:PART_OF]->(to:Entity)
+            MATCH (from:Concept)-[:PART_OF]->(to:Concept)
             RETURN from.label AS from_label, to.label AS to_label
             LIMIT 10
         """)
@@ -99,7 +99,7 @@ def validate():
         # 5. BELONGS_TO 关系示例
         logger.info("\n【5. BELONGS_TO 关系示例】")
         result = session.run("""
-            MATCH (from:Entity)-[:BELONGS_TO]->(to:Entity)
+            MATCH (from:Concept)-[:BELONGS_TO]->(to:Concept)
             RETURN from.label AS from_label, to.label AS to_label
             LIMIT 10
         """)
@@ -119,8 +119,8 @@ def validate():
         # 7. 实体类型分布
         logger.info("\n【7. 实体类型分布 (前10)】")
         result = session.run("""
-            MATCH (e:Entity)-[:HAS_TYPE]->(c:Class)
-            RETURN c.label AS type, count(e) AS count
+            MATCH (c:Concept)-[:HAS_TYPE]->(cl:Class)
+            RETURN cl.label AS type, count(c) AS count
             ORDER BY count DESC
             LIMIT 10
         """)
@@ -130,28 +130,28 @@ def validate():
         # 8. 检查孤立节点
         logger.info("\n【8. 孤立节点检查】")
         result = session.run("""
-            MATCH (e:Entity)
-            WHERE NOT (e)-[]-()
-            RETURN count(e) AS count
+            MATCH (c:Concept)
+            WHERE NOT (c)-[]-()
+            RETURN count(c) AS count
         """)
         isolated = result.single()["count"]
-        logger.info(f"  完全孤立 Entity: {isolated}")
+        logger.info(f"  完全孤立 Concept: {isolated}")
 
         # 9. 检查无类型实体
         logger.info("\n【9. 无类型实体检查】")
         result = session.run("""
-            MATCH (e:Entity)
-            WHERE NOT (e)-[:HAS_TYPE]->()
-            RETURN count(e) AS count
+            MATCH (c:Concept)
+            WHERE NOT (c)-[:HAS_TYPE]->()
+            RETURN count(c) AS count
         """)
         no_type = result.single()["count"]
-        logger.info(f"  无 HAS_TYPE 的 Entity: {no_type}")
+        logger.info(f"  无 HAS_TYPE 的 Concept: {no_type}")
 
         if no_type > 0:
             result = session.run("""
-                MATCH (e:Entity)
-                WHERE NOT (e)-[:HAS_TYPE]->()
-                RETURN e.label AS label
+                MATCH (c:Concept)
+                WHERE NOT (c)-[:HAS_TYPE]->()
+                RETURN c.label AS label
                 LIMIT 10
             """)
             logger.info("  示例:")
@@ -161,7 +161,7 @@ def validate():
         # 10. 知识点层级路径示例
         logger.info("\n【10. 知识点层级路径示例】")
         result = session.run("""
-            MATCH path = (a:Entity)-[:PART_OF*1..3]->(b:Entity)
+            MATCH path = (a:Concept)-[:PART_OF*1..3]->(b:Concept)
             RETURN [n IN nodes(path) | n.label] AS path
             LIMIT 5
         """)
@@ -174,8 +174,8 @@ def validate():
         issues = []
         if class_count != 38:
             issues.append(f"Class 数量异常 (预期 38, 实际 {class_count})")
-        if entity_count != 4085:
-            issues.append(f"Entity 数量异常 (预期 4085, 实际 {entity_count})")
+        if entity_count != 1295:
+            issues.append(f"Concept 数量异常 (预期 1295, 实际 {entity_count})")
         if isolated > 100:
             issues.append(f"孤立节点过多 ({isolated})")
         if no_type > 100:
@@ -198,7 +198,7 @@ def validate():
 ├─────────────────────────────────────────────┤
 │ 节点                                         │
 │   Class (概念类):       {class_count}                   │
-│   Entity (知识点):    {entity_count}                   │
+│   Concept (知识点):    {entity_count}                   │
 │                                              │
 │ 关系                                         │
 │   SUB_CLASS_OF (概念层级):  {session.run("MATCH ()-[r:SUB_CLASS_OF]->() RETURN count(r)").single()['count']}               │
@@ -208,7 +208,7 @@ def validate():
 │   BELONGS_TO (所属):        619              │
 │                                              │
 │ 属性                                         │
-│   Entity.content (定义):  {content_count}              │
+│   Concept.content (定义):  {content_count}              │
 │                                              │
 │ 数据质量                                      │
 │   孤立节点:     {isolated}                       │
