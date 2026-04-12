@@ -158,6 +158,8 @@ result = await inferer.infer_section(
 
 **目标**: 将 TextbookKP 匹配到 EduKG Concept
 
+#### D4.1 匹配流程
+
 ```python
 from edukg.core.llm_inference import DualModelVoter
 from edukg.core.llm_inference.prompt_templates import format_kp_match_prompt
@@ -181,6 +183,97 @@ if result['consensus'] and result['result']['is_match']:
 - ≥ 0.9：MATCHES_KG
 - 0.7 - 0.9：MATCHES_KG_CANDIDATE
 - < 0.7：不匹配
+
+#### D4.2 粗筛机制设计（采纳 DeepSeek 建议）
+
+**问题**: 原方案遍历所有图谱知识点（5000+），LLM调用量爆炸
+
+**解决方案**: 两阶段匹配
+
+```
+教材知识点 → 粗筛(top-20候选) → LLM双模型投票 → 匹配结果
+```
+
+**粗筛方式对比**:
+
+| 方案 | 说明 | 优点 | 缺点 |
+|------|------|------|------|
+| **difflib** (原方案) | 字符相似度匹配 | 无依赖、速度快 | 语义理解弱 |
+| **向量检索** (新方案) | Embedding语义匹配 | 自动理解同义词、语义强 | 需安装依赖 |
+
+#### D4.3 向量检索方案（推荐采用）
+
+**核心思想**: 将知识点转换为语义向量，通过余弦相似度找到语义最接近的候选
+
+```python
+class LocalVectorRetriever:
+    """本地向量检索器"""
+
+    def __init__(self, kg_concepts):
+        from sentence_transformers import SentenceTransformer
+        self.model = SentenceTransformer("BAAI/bge-small-zh-v1.5")
+        self.texts = [f"{c['label']} {c.get('description','')}" for c in kg_concepts]
+        self.vectors = self.model.encode(self.texts, show_progress_bar=True)
+        self.concepts = kg_concepts
+
+    def retrieve(self, query: str, top_k=20):
+        q_vec = self.model.encode([query])[0]
+        scores = np.dot(self.vectors, q_vec) / (np.linalg.norm(self.vectors, axis=1) * np.linalg.norm(q_vec))
+        top_idx = np.argsort(scores)[-top_k:][::-1]
+        return [self.concepts[i] for i in top_idx]
+```
+
+**技术选型**:
+
+| 组件 | 选择 | 理由 |
+|------|------|------|
+| Embedding 模型 | `BAAI/bge-small-zh-v1.5` | 中文小模型 SOTA，内存 2-4GB，维度 512 |
+| 向量索引 | `numpy` 暴力搜索 | 图谱 ≤ 5000 条，暴力计算足够快（< 10ms） |
+| 依赖库 | `sentence-transformers` | 一行代码加载模型，自动处理 tokenization |
+
+**资源评估**:
+
+| 项目 | 数值 | 说明 |
+|------|------|------|
+| 模型内存 | 2.5 GB | bge-small-zh-v1.5 实际占用 |
+| 向量存储 | 5000 × 512 × 4字节 ≈ 10 MB | numpy float32 |
+| 其他开销 | < 1 GB | 原有数据结构 |
+| **总计** | **约 3.5 GB** | 远低于 8GB 限制 |
+
+**预期收益**:
+
+| 指标 | 改进前 (difflib) | 改进后 (向量) |
+|------|------------------|---------------|
+| 候选语义相关性 | 低（仅字符匹配） | 高（理解同义词、语序） |
+| 漏匹配风险 | 中（"勾股定理" vs "毕达哥拉斯定理"） | 极低 |
+| LLM 调用次数 | 不变（仍为 top-20） | 不变 |
+| 总体匹配准确率 | 基准 | **预计提升 10-20%** |
+
+#### D4.4 精确匹配增强
+
+**标准化处理**:
+```python
+def _normalize_name(self, name: str) -> str:
+    # 转小写、去空格、统一括号
+    normalized = name.strip().lower()
+    normalized = normalized.replace(' ', '').replace('　', '')  # 半角/全角空格
+    normalized = normalized.replace('（', '(').replace('）', ')')
+    return normalized
+```
+
+**同义词映射**（完整词匹配，防止过度匹配）:
+```python
+SYNONYM_MAP = {
+    "加法": ["加", "加法运算", "相加", "求和"],
+    "百分数": ["百分比", "百分率"],
+    ...
+}
+```
+
+#### D4.5 异常处理和输出完整性
+
+- LLM 调用失败时 `continue`，不中断整个知识点
+- 输出所有教材知识点（含未匹配），增加 `matched` 字段
 
 ### D5: 断点续传设计（集成 llmTaskLock）
 

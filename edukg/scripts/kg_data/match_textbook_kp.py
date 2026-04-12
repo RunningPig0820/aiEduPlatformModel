@@ -154,25 +154,29 @@ class KPMatchRunner:
         output_path = Path(OUTPUT_DIR) / OUTPUT_FILES["matches_kg_relations"]
         self.matcher.save_results(results, str(output_path))
 
-        # 统计
-        exact_count = sum(1 for r in results if r['method'] == 'exact_match')
-        llm_count = sum(1 for r in results if r['method'] == 'llm_vote')
-        from_cache = sum(1 for r in results if r.get('from_cache'))
-        unmatched = len(textbook_kps) - len(results)
+        # 统计（使用新的 matched 字段）
+        stats = self.matcher.get_stats()
+        matched_count = sum(1 for r in results if r.get('matched', False))
+        unmatched_count = len(results) - matched_count
 
         logger.info("\n=== 匹配结果 ===")
-        logger.info(f"精确匹配: {exact_count}")
-        logger.info(f"LLM 匹配: {llm_count} (其中缓存命中: {from_cache})")
-        logger.info(f"未匹配: {unmatched}")
-        logger.info(f"匹配率: {len(results) / len(textbook_kps) * 100:.1f}%")
+        logger.info(f"总知识点: {len(results)}")
+        logger.info(f"精确匹配: {stats['exact_match']}")
+        logger.info(f"LLM 匹配: {stats['llm_match']} (缓存命中: {stats['cache_hits']})")
+        logger.info(f"未匹配: {stats['unmatched']}")
+        if stats['errors'] > 0:
+            logger.info(f"LLM 调用错误: {stats['errors']}")
+        logger.info(f"匹配率: {matched_count / len(results) * 100:.1f}%")
         logger.info(f"输出文件: {output_path}")
 
         return {
-            'total': len(textbook_kps),
-            'exact_match': exact_count,
-            'llm_match': llm_count,
-            'from_cache': from_cache,
-            'unmatched': unmatched,
+            'total': len(results),
+            'matched': matched_count,
+            'exact_match': stats['exact_match'],
+            'llm_match': stats['llm_match'],
+            'cache_hits': stats['cache_hits'],
+            'unmatched': stats['unmatched'],
+            'errors': stats['errors'],
             'output_file': str(output_path)
         }
 
@@ -186,14 +190,21 @@ class KPMatchRunner:
         with open(output_path, 'r', encoding='utf-8') as f:
             results = json.load(f)
 
+        # 使用新的统计方式
+        matched = sum(1 for r in results if r.get('matched', False))
         exact = sum(1 for r in results if r['method'] == 'exact_match')
         llm = sum(1 for r in results if r['method'] == 'llm_vote')
+        from_cache = sum(1 for r in results if r.get('from_cache'))
+        unmatched = len(results) - matched
 
         logger.info("\n=== 匹配统计 ===")
         logger.info(f"文件: {output_path}")
-        logger.info(f"总匹配数: {len(results)}")
+        logger.info(f"总知识点: {len(results)}")
+        logger.info(f"匹配成功: {matched}")
         logger.info(f"  - 精确匹配: {exact}")
-        logger.info(f"  - LLM 匹配: {llm}")
+        logger.info(f"  - LLM 匹配: {llm} (缓存命中: {from_cache})")
+        logger.info(f"未匹配: {unmatched}")
+        logger.info(f"匹配率: {matched / len(results) * 100:.1f}%")
 
         # 显示进度状态
         self.show_progress()

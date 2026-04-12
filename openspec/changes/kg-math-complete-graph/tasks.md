@@ -182,9 +182,16 @@ Phase 5 (验证导入): 验证和手动导入
 - [x] 15.1 分析并筛选缺失知识点的章节（小学3-6年级、高中）✓ 295个章节
 - [x] 15.2 执行 `infer_textbook_kp.py --resume` ✓ 置信度0.93
 - [x] 15.3 输出 `textbook_kps_inferred.json`（推断的知识点）✓ 1052个知识点
-- [ ] 15.4 执行 `merge_inferred_kps.py` 合并知识点
-- [ ] 15.5 重新生成 `in_unit_relations.json`
-- [ ] 15.6 输出推断日志和置信度报告
+- [x] 15.4 执行 `merge_inferred_kps.py` 合并知识点 ✓ 合并后1350个
+- [x] 15.5 重新生成 `in_unit_relations.json` ✓ 1350条关系
+- [x] 15.6 输出推断日志和置信度报告 ✓ merge_report.json
+- [x] 15.7 为推断知识点补充教学属性（topic, difficulty, importance, cognitive_level） ✓ 1051个全补充
+- [x] 15.8 重新合并知识点到主文件 ✓ 已在 15.7 中完成
+
+**Task 15.7 说明**（采纳 DeepSeek 建议）：
+- 推断的 1051 个知识点缺少 `topic`、`difficulty`、`importance`、`cognitive_level` 字段
+- 使用规则匹配补全属性（复用 Task 14 的 `KPAttributeInferer`）
+- 无需 LLM 调用，零成本
 
 ### 16. 知识图谱匹配（MATCHES_KG 关系）
 
@@ -192,17 +199,49 @@ Phase 5 (验证导入): 验证和手动导入
 
 **前置条件**: Task 15 完成
 
-- [ ] 16.1 加载 EduKG Concept 列表（从 Neo4j）
-- [ ] 16.2 执行 `match_textbook_kp.py --resume`
-- [ ] 16.3 调用 `llm_inference.DualModelVoter` 执行匹配
-- [ ] 16.4 输出 `matches_kg_relations.json`
-- [ ] 16.5 统计匹配率和未匹配知识点
-- [ ] 16.6 基于匹配结果修正知识点 topic（解决专题继承偏差问题，规则匹配，无 LLM）
+**设计方案（采纳 DeepSeek 建议）**:
 
-**Task 16.6 说明**：
+采用 **向量检索方案** 作为粗筛机制，比 difflib 更精准：
+
+| 方案 | 说明 | 语义理解 | 推荐 |
+|------|------|---------|------|
+| difflib | 字符相似度匹配 | 弱（"勾股定理" ≠ "毕达哥拉斯定理"） | ❌ |
+| **向量检索** | Embedding语义匹配 | 强（自动理解同义词） | ✅ |
+
+**向量检索技术选型**:
+- 模型: `BAAI/bge-small-zh-v1.5`（中文小模型，内存 2-4GB）
+- 索引: numpy 暴力搜索（图谱 ≤ 5000 条足够快）
+- 依赖: `sentence-transformers`
+
+**改进清单**:
+- [x] 粗筛机制：先用向量检索筛选 top-20 候选，避免遍历所有图谱知识点
+- [x] 精确匹配标准化：名称标准化 + 同义词映射（加法→加、加法运算）
+- [x] 同义词完整词匹配：防止过度匹配（"加法交换律"不扩展为"加法"）
+- [x] 异常处理：LLM调用失败继续下一个候选
+- [x] 未匹配记录：输出所有知识点，增加 `matched` 字段
+- [x] 进度回调修复：使用实际已完成数量而非循环索引
+
+- [ ] 16.1 安装依赖：`pip install sentence-transformers numpy`
+- [ ] 16.2 验证向量检索器初始化（首次需下载 300MB 模型）
+- [ ] 16.3 加载 EduKG Concept 列表（从 Neo4j）
+- [ ] 16.4 执行 `match_textbook_kp.py --resume`
+- [ ] 16.5 调用向量检索 + LLM双模型投票执行匹配
+- [ ] 16.6 输出 `matches_kg_relations.json`（含未匹配知识点）
+- [ ] 16.7 统计匹配率和未匹配知识点
+- [ ] 16.8 基于匹配结果修正知识点 topic（解决专题继承偏差问题）
+
+**Task 16.8 说明**：
 - 根据匹配的 EduKG Concept 的 Class 类型修正 TextbookKP 的 topic
 - 规则映射：数学概念/数学运算 → 数与代数，几何图形/几何性质 → 图形与几何
 - 解决 Task 14 遗留的"加法"等知识点 topic 继承偏差问题
+
+**资源评估（8GB 内存）**:
+- 模型内存: 2.5 GB
+- 向量存储: ~10 MB
+- 总计: 约 3.5 GB（完全可运行）
+
+**回退机制**:
+- 若 `sentence-transformers` 安装失败，自动回退到 difflib 粗筛
 
 ---
 

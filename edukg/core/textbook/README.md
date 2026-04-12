@@ -12,7 +12,7 @@
 - **数据清洗**：清理"通用"标签、规范 Section 标签格式、保留序号到 `order_in_book` 字段
 - **章节专题增强**：为 Chapter 增加 `topic` 字段，标注所属专题（数与代数、图形与几何、统计与概率、综合与实践）
 - **知识点属性扩展**：为 TextbookKP 增加教学属性（difficulty、importance、cognitive_level）
-- **知识点匹配**：使用双模型投票匹配教材知识点到图谱知识点
+- **知识点匹配**：使用向量检索 + 双模型投票匹配教材知识点到图谱知识点
 
 ## 目录结构
 
@@ -25,8 +25,9 @@ edukg/core/textbook/
 ├── data_generator.py         # 数据生成器
 ├── data_cleaner.py           # 数据清洗器
 ├── chapter_enhancer.py       # 章节专题增强器
-├── kp_attribute_inferer.py   # 知识点属性推断器（新增）
-└── kp_matcher.py             # 知识点匹配器
+├── kp_attribute_inferer.py   # 知识点属性推断器
+├── kp_matcher.py             # 知识点匹配器（含向量检索）
+└── README.md                 # 本文档
 ```
 
 ## 核心组件
@@ -64,9 +65,9 @@ results = generator.generate_all()
 #   textbooks.json: 21 条
 #   chapters.json: 135 条（清洗后）
 #   sections.json: 549 条
-#   textbook_kps.json: 352 条
+#   textbook_kps.json: 1350 条（含 LLM 推断）
 #   contains_relations.json: 684 条
-#   in_unit_relations.json: 352 条
+#   in_unit_relations.json: 1350 条
 ```
 
 ### 3. DataCleaner - 数据清洗器
@@ -114,14 +115,55 @@ distribution = enhancer.get_topic_distribution()
 
 ### 5. KPMatcher - 知识点匹配器
 
+**改进（采纳 DeepSeek 建议）**:
+
+采用 **向量检索 + 双模型投票** 两阶段匹配：
+
+```
+教材知识点 → 向量检索(top-20候选) → LLM双模型投票 → 匹配结果
+```
+
+**核心改进**:
+
+| 改进项 | 说明 |
+|--------|------|
+| **向量检索** | 使用 `BAAI/bge-small-zh-v1.5` 进行语义粗筛 |
+| **精确匹配标准化** | 名称标准化（大小写、空格、括号）+ 同义词映射 |
+| **同义词完整词匹配** | 防止过度匹配（"加法交换律"不扩展为"加法"） |
+| **异常处理** | LLM调用失败继续下一个候选 |
+| **未匹配记录** | 输出所有知识点，增加 `matched` 字段 |
+| **进度回调修复** | 使用实际已完成数量而非循环索引 |
+
 ```python
 from edukg.core.textbook import KPMatcher
 
-matcher = KPMatcher()
+# 默认使用向量检索
+matcher = KPMatcher(use_vector_retrieval=True, candidate_top_n=20)
 
 # 批量匹配
-results = await matcher.match_all(textbook_kps, kg_concepts)
+results = await matcher.match_all(textbook_kps, kg_concepts, resume=True)
+
+# 统计信息
+stats = matcher.get_stats()
+# {'exact_match': 202, 'llm_match': 1148, 'unmatched': 0, 'cache_hits': 150}
 ```
+
+**向量检索技术选型**:
+
+| 组件 | 选择 | 说明 |
+|------|------|------|
+| Embedding 模型 | `BAAI/bge-small-zh-v1.5` | 中文小模型 SOTA，内存 2-4GB |
+| 向量索引 | numpy 暴力搜索 | 图谱 ≤ 5000 条，< 10ms |
+| 依赖库 | sentence-transformers | 首次需下载 300MB |
+
+**资源占用**:
+
+| 项目 | 内存 |
+|------|------|
+| 模型 | 2.5 GB |
+| 向量存储 | ~10 MB |
+| 其他 | < 1 GB |
+| **总计** | **约 3.5 GB** |
 
 ### 6. KPAttributeInferer - 知识点属性推断器
 
@@ -233,11 +275,11 @@ python edukg/scripts/kg_data/enhance_chapters.py --stats
 ### match_textbook_kp.py
 
 ```bash
-# 执行匹配
-python edukg/scripts/kg_data/match_textbook_kp.py
-
-# 估算成本
+# 成本估算
 python edukg/scripts/kg_data/match_textbook_kp.py --dry-run
+
+# 执行匹配（支持断点续传）
+python edukg/scripts/kg_data/match_textbook_kp.py --resume
 
 # 显示已有统计
 python edukg/scripts/kg_data/match_textbook_kp.py --stats
@@ -262,6 +304,39 @@ python edukg/scripts/kg_data/enhance_kp_attributes.py --merge
 python edukg/scripts/kg_data/enhance_kp_attributes.py --stats
 ```
 
+### infer_textbook_kp.py
+
+```bash
+# 分析缺失知识点章节
+python edukg/scripts/kg_data/infer_textbook_kp.py --analyze
+
+# 执行 LLM 推断（支持断点续传）
+python edukg/scripts/kg_data/infer_textbook_kp.py --resume
+
+# 查看进度
+python edukg/scripts/kg_data/infer_textbook_kp.py --progress
+```
+
+### merge_inferred_kps.py
+
+```bash
+# 合并推断知识点
+python edukg/scripts/kg_data/merge_inferred_kps.py
+
+# 显示合并报告
+python edukg/scripts/kg_data/merge_inferred_kps.py --stats
+```
+
+### enhance_inferred_kps.py
+
+```bash
+# 为推断知识点补充属性
+python edukg/scripts/kg_data/enhance_inferred_kps.py
+
+# 显示属性统计
+python edukg/scripts/kg_data/enhance_inferred_kps.py --stats
+```
+
 ## 输出文件
 
 所有输出文件位于 `edukg/data/edukg/math/5_教材目录(Textbook)/output/`：
@@ -271,16 +346,14 @@ python edukg/scripts/kg_data/enhance_kp_attributes.py --stats
 | `textbooks.json` | 教材节点 | 21 |
 | `chapters.json` | 章节节点（含 topic 字段） | 135 |
 | `sections.json` | 小节节点（含 order_in_book 字段） | 549 |
-| `textbook_kps.json` | 教材知识点节点（含属性字段） | 299 |
-| `textbook_kps_enhanced.json` | 增强后的知识点（临时） | 299 |
+| `textbook_kps.json` | 教材知识点节点（含属性字段） | 1350 |
 | `contains_relations.json` | CONTAINS 关系 | 684 |
-| `in_unit_relations.json` | IN_UNIT 关系 | 299 |
+| `in_unit_relations.json` | IN_UNIT 关系 | 1350 |
 | `matches_kg_relations.json` | MATCHES_KG 关系 | 待生成 |
-| `import_summary.json` | 导入统计摘要 | - |
-| `duplicate_detection_report.json` | 数据清洗报告 | - |
-| `clean_log.json` | 清洗日志 | - |
-| `topic_distribution.json` | 专题分布统计 | - |
-| `kp_attributes_distribution.json` | 知识点属性分布统计 | - |
+| `textbook_kps_inferred.json` | LLM 推断的知识点 | 1052 |
+| `merge_report.json` | 合并报告 | - |
+| `progress/` | 断点续传进度文件 | - |
+| `llm_cache/` | LLM 调用缓存 | - |
 
 ## 数据清洗说明
 
@@ -341,6 +414,59 @@ MATH_TOPICS = {
 | 七年级 | g7 | 下册 | x |
 | 必修第一册 | bixiu1 | - | - |
 
+## LLM 推断说明
+
+### 教学知识点推断
+
+针对小学3-6年级、高中数据缺失的知识点，使用 LLM 推断补全：
+
+| 模型 | 用途 |
+|------|------|
+| GLM-4-flash | 免费模型，第一票 |
+| DeepSeek-chat | 第二票，双模型投票 |
+
+**推断结果**:
+
+| 项目 | 数值 |
+|------|------|
+| 缺失章节 | 295 个 |
+| 推断知识点 | 1052 个 |
+| 平均置信度 | 0.93 |
+| 合并后知识点总数 | 1350 个 |
+
+### 知识点匹配
+
+两阶段匹配流程：
+
+```
+Phase 1: 向量检索（语义粗筛）
+  - 模型: BAAI/bge-small-zh-v1.5
+  - 候选: top-20
+
+Phase 2: LLM 双模型投票
+  - 模型: GLM-4-flash + DeepSeek-chat
+  - 决策: 两模型达成共识则匹配
+```
+
+**同义词映射**（精确匹配增强）:
+
+```python
+SYNONYM_MAP = {
+    "加法": ["加", "加法运算", "相加", "求和"],
+    "百分数": ["百分比", "百分率"],
+    "长方形": ["矩形", "长方形图形"],
+    ...
+}
+```
+
+**标准化处理**:
+
+```python
+# 名称标准化（大小写、空格、括号）
+"有理数（概念）" → "有理数(概念)"
+"加 法" → "加法"
+```
+
 ## 测试
 
 ```bash
@@ -348,24 +474,28 @@ MATH_TOPICS = {
 pytest tests/core/textbook/ -v
 
 # 测试数量：20+ 个
-# 覆盖：URI 生成、过滤规则、数据生成、数据清洗、章节增强、属性推断
+# 覆盖：URI 生成、过滤规则、数据生成、数据清洗、章节增强、属性推断、向量检索
 ```
 
 ## 相关 Change
 
 - **kg-math-complete-graph**：教材数据导入（本模块）
 - **kg-math-prerequisite-inference**：前置关系推断（提供 LLM 推理能力）
+- **vector-index-script**：向量索引构建脚本（待实现）
 
 ## 执行顺序
 
 按照 Phase 顺序执行：
 
 ```
-Phase 1: 数据生成 → generate_textbook_data.py
-Phase 2: 数据清洗 → clean_textbook_data.py --analyze → --clean
-Phase 2: 章节增强 → enhance_chapters.py --analyze → --enhance
-Phase 3: 属性扩展 → enhance_kp_attributes.py --analyze → --enhance → --merge ✓
-Phase 4: LLM 推断 → infer_textbook_kp.py, match_textbook_kp.py（待执行）
+Phase 1: 数据生成 → generate_textbook_data.py ✓
+Phase 2: 数据清洗 → clean_textbook_data.py --analyze → --clean ✓
+Phase 2: 章节增强 → enhance_chapters.py --analyze → --enhance ✓
+Phase 3: 属性扩展 → enhance_kp_attributes.py --enhance → --merge ✓
+Phase 4: LLM 推断 → infer_textbook_kp.py --resume ✓
+Phase 4: 合并知识点 → merge_inferred_kps.py ✓
+Phase 4: 补充属性 → enhance_inferred_kps.py ✓
+Phase 4: 知识图谱匹配 → match_textbook_kp.py --resume（待执行）
 Phase 5: 验证导入 → 人工验证后导入 Neo4j（待执行）
 ```
 
@@ -377,33 +507,48 @@ Phase 5: 验证导入 → 人工验证后导入 Neo4j（待执行）
 
 | 难度 | 数量 | 占比 |
 |------|------|------|
-| 1 | 45 | 15.1% |
-| 2 | 12 | 4.0% |
-| 3 | 85 | 28.4% |
-| 4 | 125 | 41.8% |
-| 5 | 32 | 10.7% |
+| 1 | 45 | 3.3% |
+| 2 | 12 | 0.9% |
+| 3 | 881 | 65.6% |
+| 4 | 373 | 27.7% |
+| 5 | 39 | 2.9% |
 
 ### 重要性分布
 
 | 重要性 | 数量 | 占比 |
 |--------|------|------|
-| 核心 | 132 | 44.1% |
-| 重要 | 165 | 55.2% |
-| 了解 | 2 | 0.7% |
+| 核心 | 138 | 10.3% |
+| 重要 | 1201 | 88.9% |
+| 了解 | 11 | 0.8% |
 
 ### 认知层次分布
 
 | 认知层次 | 数量 | 占比 |
 |----------|------|------|
-| 识记 | 19 | 6.4% |
-| 理解 | 174 | 58.2% |
-| 应用 | 80 | 26.8% |
-| 分析 | 26 | 8.7% |
+| 识记 | 26 | 1.9% |
+| 理解 | 901 | 66.7% |
+| 应用 | 391 | 29.0% |
+| 分析 | 32 | 2.4% |
 
 ### 专题分布（知识点）
 
 | 专题 | 数量 | 占比 |
 |------|------|------|
-| 数与代数 | 144 | 48.2% |
-| 图形与几何 | 130 | 43.5% |
-| 统计与概率 | 25 | 8.4% |
+| 数与代数 | 855 | 63.3% |
+| 图形与几何 | 359 | 26.6% |
+| 统计与概率 | 78 | 5.8% |
+| 综合与实践 | 58 | 4.3% |
+
+## 改进历史
+
+### DeepSeek 建议（已采纳）
+
+| 建议 | 状态 | 说明 |
+|------|------|------|
+| 向量检索替代 difflib | ✅ 已实现 | 语义理解更强 |
+| 精确匹配标准化 | ✅ 已实现 | 名称标准化 + 同义词映射 |
+| 同义词完整词匹配 | ✅ 已实现 | 防止过度匹配 |
+| 异常处理 | ✅ 已实现 | LLM调用失败继续 |
+| 未匹配记录 | ✅ 已实现 | 输出所有知识点 |
+| 进度回调修复 | ✅ 已实现 | 使用实际已完成数量 |
+| 向量索引独立脚本 | 📋 待实现 | 预构建索引，复用缓存 |
