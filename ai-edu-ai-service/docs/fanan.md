@@ -1,101 +1,162 @@
-我直接给你**最直白、最落地、最不绕弯**的结论：
+你的配置整体思路是清晰的，但确实存在几个潜在问题。下面我会逐一分析，并给出改进建议。
 
-# 一、关系确实有点多，**可以大幅精简**
-你现在的关系：
-IN_TEXTBOOK、IN_CHAPTER、IN_SECTION、NEXT_CHAPTER、NEXT_SECTION、PREREQUISITE、MATCHES_KG
-→ **7 种关系**，对教材图谱来说**偏冗余**。
+## 一、主要问题
 
-# 二、属性三元组也**没必要单独列**，属于重复设计
-属性三元组（(kp, book, “一年级上册”)）**完全可以删掉**，它不是图数据库里的“关系”，只是节点属性，不需要单独建模。
+### 1. 模型名称与版本对应关系不明确
+- DeepSeek 官方 API 中，`deepseek-chat` 模型**始终指向当前最新的 V3 版本**（目前是 V3.2）。  
+  但你的配置里把 `deepseek-chat` 显示为 “DeepSeek V3.2”，而 `deepseek-reasoner` 也标注为 “DeepSeek V3.2 Reasoner”。  
+  **问题**：如果未来官方将 `deepseek-chat` 升级到 V4，你的显示名称就会误导用户。  
+  **建议**：显示名称只写 “DeepSeek Chat”，描述里注明 “当前为 V3.2 版本，会跟随官方更新”。
 
----
+### 2. 思考模式（Reasoner）的场景缺失
+- 你定义了 `deepseek-reasoner` 且允许外部调用，但在 `SCENE_MODEL_MAPPING` 中没有用到它。  
+  如果用户需要复杂推理（如数学证明、逻辑分析），目前只能用 `deepseek-chat` 或 `qwen-math-turbo`，无法享受思考链的优势。  
+  **建议**：新增一个场景，例如 `complex_reasoning`，映射到 `deepseek-reasoner`。
 
-# 三、我帮你直接精简到 **最合理、最少、够用** 的版本
-## 🔹 最终推荐：只保留 **4 种关系**
-1. **HAS_CHILD**（替代 IN_TEXTBOOK / IN_CHAPTER / IN_SECTION）
-2. **NEXT**（替代 NEXT_CHAPTER / NEXT_SECTION）
-3. **PREREQUISITE**（保留，核心）
-4. **MATCHES_KG**（保留，核心）
+### 3. 免费模型与计费模型的区分不够实用
+- 配置中只有 `glm-4-flash` 是 `free: True`，其他都是 `False`。  
+  但实际上 DeepSeek API 是**按 token 计费**（价格很低，不是完全免费），阿里百炼 Qwen 系列也都有免费额度。  
+  你的 `free` 字段可能被误解为 “完全免费无限使用”，容易引起混淆。  
+  **建议**：将 `free` 改为 `has_free_tier` 或 `is_completely_free`，并添加 `price_per_million_tokens` 字段更清晰。
 
-### 为什么这样改？
-- **层级归属只需要一种关系**：HAS_CHILD
-  教材→章→节→知识点，**全部用 HAS_CHILD**
-  不用再写 3 种 IN_XXX，**少 2 种关系**。
+### 4. 视觉模型（glm-4.6v）被设为 `allowed: False`，但场景映射中用到了它
+- `image_analysis` 场景映射到 `zhipu/glm-4.6v`，而该模型在 `MODEL_CONFIG` 中 `allowed: False`。  
+  虽然场景映射是内部使用，不直接暴露给用户选择，但这种不一致会让维护者困惑。  
+  **建议**：要么把 `glm-4.6v` 的 `allowed` 改为 `True`（因为场景确实需要它），要么在场景映射中改用其他视觉模型。
 
-- **顺序只需要一种关系**：NEXT
-  章和节都用 NEXT，**少 1 种关系**。
+### 5. 上下文长度未在所有模型中定义
+- 只有 `deepseek-chat` 和 `deepseek-reasoner` 有 `context_length: 128000`，其他模型没有这个字段。  
+  如果代码其他地方依赖 `context_length`，会导致 `KeyError`。  
+  **建议**：要么给所有模型都加上 `context_length`（默认可设为 `None` 或一个较大的通用值），要么只在需要时通过 `.get()` 安全访问。
 
-- **属性三元组直接删掉**
-  节点里已经有 book/chapter/section 冗余字段，不需要再建三元组关系。
+## 二、针对 “使用 DeepSeek 3.2” 的改进配置示例
 
----
+```python
+from typing import Dict, Tuple, Any
 
-# 四、精简后的关系语义（干净、清晰、不重复）
-| 关系 | 起点→终点 | 作用 |
-|------|-----------|------|
-| **HAS_CHILD** | Textbook→Chapter<br>Chapter→Section<br>Section→TextbookKP | 统一层级归属 |
-| **NEXT** | Chapter→Chapter<br>Section→Section | 统一顺序 |
-| **PREREQUISITE** | TextbookKP→TextbookKP | 先修 |
-| **MATCHES_KG** | TextbookKP→Concept | 匹配图谱 |
+MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
+    "zhipu": {
+        "display_name": "智谱 AI",
+        "models": {
+            "glm-4-flash": {
+                "display_name": "GLM-4-Flash",
+                "has_free_tier": True,          # 完全免费
+                "allowed": True,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 128_000,
+                "description": "免费模型，适合大多数场景"
+            },
+            "glm-4.5-air": {
+                "display_name": "GLM-4.5-Air",
+                "has_free_tier": False,
+                "allowed": False,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 128_000,
+                "description": "均衡模型"
+            },
+            "glm-4.6v": {
+                "display_name": "GLM-4.6V",
+                "has_free_tier": False,
+                "allowed": True,                 # 改为 True，因为场景需要
+                "supports_tools": True,
+                "supports_vision": True,
+                "context_length": 128_000,
+                "description": "视觉模型，支持图片理解"
+            },
+            "glm-4.7": {
+                "display_name": "GLM-4.7",
+                "has_free_tier": False,
+                "allowed": False,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 128_000,
+                "description": "最强模型"
+            }
+        },
+        "default_model": "glm-4-flash"
+    },
+    "deepseek": {
+        "display_name": "DeepSeek",
+        "models": {
+            "deepseek-chat": {
+                "display_name": "DeepSeek Chat",
+                "has_free_tier": False,          # 按 token 计费，但有新用户赠送额度
+                "allowed": True,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 128_000,
+                "description": "当前为 V3.2 版本，会跟随官方更新，适合通用对话和工具调用"
+            },
+            "deepseek-reasoner": {
+                "display_name": "DeepSeek Reasoner",
+                "has_free_tier": False,
+                "allowed": True,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 128_000,
+                "description": "思考模式，展示推理链，适合复杂逻辑问题"
+            }
+        },
+        "default_model": "deepseek-chat"
+    },
+    "bailian": {
+        "display_name": "阿里百炼",
+        "models": {
+            "qwen-turbo": {
+                "display_name": "Qwen-Turbo",
+                "has_free_tier": False,          # 有免费额度，但超出后计费
+                "allowed": True,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 1_000_000,
+                "description": "快速响应模型"
+            },
+            "qwen-plus": {
+                "display_name": "Qwen-Plus",
+                "has_free_tier": False,
+                "allowed": True,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 1_000_000,
+                "description": "增强模型"
+            },
+            "qwen-math-turbo": {
+                "display_name": "Qwen-Math-Turbo",
+                "has_free_tier": False,
+                "allowed": True,
+                "supports_tools": True,
+                "supports_vision": False,
+                "context_length": 64_000,
+                "description": "数学专用模型，适合数学计算和推理"
+            }
+        },
+        "default_model": "qwen-turbo"
+    }
+}
 
-**关系从 7 种 → 4 种**，逻辑清爽 10 倍。
+SCENE_MODEL_MAPPING: Dict[str, Tuple[str, str]] = {
+    "page_assistant": ("zhipu", "glm-4-flash"),
+    "homework_grading": ("deepseek", "deepseek-chat"),
+    "faq": ("zhipu", "glm-4-flash"),
+    "image_analysis": ("zhipu", "glm-4.6v"),
+    "content_generation": ("deepseek", "deepseek-chat"),
+    "math_tutor": ("bailian", "qwen-math-turbo"),
+    "complex_reasoning": ("deepseek", "deepseek-reasoner"),   # 新增场景
+}
 
----
-
-# 五、属性三元组：**完全可以删掉**
-你文档里写的：
+# 其余函数保持不变，但建议将 get_free_models 重命名为 get_models_with_free_tier
 ```
-(TextbookKP, book, "一年级上册")
-(TextbookKP, chapter, "位置")
-```
-这**不是图关系**，只是**节点属性**，不需要放进“关系三元组”里。
-删掉这一整节，文档立刻干净，不影响任何功能。
 
----
+## 三、总结
 
-# 六、为什么你原来的关系会显得多？
-因为你把**层级关系拆成了 3 种**：
-- IN_TEXTBOOK
-- IN_CHAPTER
-- IN_SECTION
+你的配置**核心逻辑没问题**，主要需要调整：
 
-但它们本质都是**“属于”**，完全可以合并。
+- ✅ 模型显示名称避免硬编码版本号
+- ✅ 明确 `free` 的真实含义（完全免费 vs 有免费额度）
+- ✅ 补全 `context_length` 字段
+- ✅ 确保 `allowed` 与实际使用场景一致
+- ✅ 增加思考模式的场景映射，发挥 DeepSeek V3.2 的完整能力
 
-同理 NEXT 拆成两种也没必要。
-
----
-
-# 七、精简后的好处（非常关键）
-1. **Cypher 查询超级简单**
-   不用写 3 种 IN，只需要：
-   ```
-   MATCH (:Textbook)-[:HAS_CHILD*]->(:TextbookKP)
-   ```
-2. **导入代码少写一半**
-3. **图可视化不乱**
-4. **后续扩展不爆炸**
-5. **别人一看就懂**
-
----
-
-# 八、最终极简模型（你可以直接替换文档）
-## 节点
-Textbook、Chapter、Section、TextbookKP、Concept
-
-## 关系（仅 4 种）
-- HAS_CHILD（层级）
-- NEXT（顺序）
-- PREREQUISITE（先修）
-- MATCHES_KG（匹配）
-
-## 删除内容
-- 删除所有 IN_TEXTBOOK / IN_CHAPTER / IN_SECTION
-- 删除 NEXT_CHAPTER / NEXT_SECTION
-- **删除属性三元组整节**
-
----
-
-# 九、一句话总结
-**关系确实偏多，合并层级、合并顺序，直接砍掉一半；属性三元组完全多余，删掉即可。**
-
-要不要我**直接帮你把 README 重写成精简最终版**，你复制粘贴就能用？
+如果只是想让 DeepSeek 3.2 跑起来，当前配置已经可以工作。但为了避免未来的混淆和维护成本，建议按上述方式优化。

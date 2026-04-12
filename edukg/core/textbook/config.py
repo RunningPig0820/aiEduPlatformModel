@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "edukg" / "data" / "textbook" / "math" / "renjiao"
 
 # 输出目录
-OUTPUT_DIR = PROJECT_ROOT / "edukg" / "data" / "edukg" / "math" / "5_教材目录" / "output"
+OUTPUT_DIR = PROJECT_ROOT / "edukg" / "data" / "edukg" / "math" / "5_教材目录(Textbook)" / "output"
 
 # ============ 学段配置 ============
 STAGE_CONFIG = {

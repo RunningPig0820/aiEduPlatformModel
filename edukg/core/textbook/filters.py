@@ -4,6 +4,8 @@
 用于过滤教材中非知识点的标记（如"数学活动"、"小结"等）。
 """
 
+import re
+
 # ============ 非知识点标记集合 ============
 # 这些标记出现在教材目录中，但不是真正的知识点
 NON_KNOWLEDGE_POINT_MARKERS = {
@@ -23,6 +25,7 @@ NON_KNOWLEDGE_POINT_MARKERS = {
     "本节综合与测试",
     "构建知识体系",
     "构建知识体系和应用",
+    "构建知识体系及练习训练",
     "章前引言",
     "知识梳理",
 
@@ -32,12 +35,38 @@ NON_KNOWLEDGE_POINT_MARKERS = {
     "测试",
     "单元测试",
     "综合练习",
+    "试卷分析",
+
+    # 综合类
+    "本册综合",
 
     # 其他
     "部分中英文词汇索引",
     "附录",
     "课题学习",
 }
+
+# ============ 非知识点前缀 ============
+# 以这些前缀开头的也不是知识点
+# 注意：包含全角空格和普通空格两种情况
+NON_KNOWLEDGE_POINT_PREFIXES = [
+    "阅读与思考 ",    # 普通空格
+    "阅读与思考　",   # 全角空格
+    "实验与探究 ",
+    "实验与探究　",
+    "信息技术应用 ",   # 普通空格
+    "信息技术应用　",  # 全角空格
+    "章前引言及",
+    "构建知识体系及",
+    "复习题",
+]
+
+# ============ 非知识点正则模式 ============
+# 使用正则匹配特定模式
+NON_KNOWLEDGE_POINT_PATTERNS = [
+    r"^例\d",           # 例1, 例2, 例3 等
+    r"^例\d、例\d",     # 例3、例4 由三视图描述几何体
+]
 
 
 def is_valid_knowledge_point(name: str) -> bool:
@@ -59,9 +88,15 @@ def is_valid_knowledge_point(name: str) -> bool:
     if name in NON_KNOWLEDGE_POINT_MARKERS:
         return False
 
-    # 检查是否以"复习题"开头
-    if name.startswith("复习题"):
-        return False
+    # 检查是否以非知识点前缀开头
+    for prefix in NON_KNOWLEDGE_POINT_PREFIXES:
+        if name.startswith(prefix):
+            return False
+
+    # 检查是否匹配非知识点正则模式
+    for pattern in NON_KNOWLEDGE_POINT_PATTERNS:
+        if re.match(pattern, name):
+            return False
 
     # 检查是否为纯数字或章节编号格式（如 "1.1", "1.2.3"）
     # 这些通常是章节编号，不是知识点
@@ -81,8 +116,6 @@ def _is_chapter_number(name: str) -> bool:
     Returns:
         True 如果是章节编号格式
     """
-    import re
-
     # 匹配 "1.1", "1.2.3", "1.1.1" 等格式
     pattern = r'^\d+(\.\d+)+$'
     if re.match(pattern, name):

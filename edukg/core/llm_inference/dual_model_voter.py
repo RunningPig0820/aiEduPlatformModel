@@ -21,6 +21,19 @@ from edukg.core.llm_inference.config import (
 
 logger = logging.getLogger(__name__)
 
+# 模型名称到 Provider 的映射
+MODEL_TO_PROVIDER = {
+    "glm-4-flash": "zhipu",
+    "glm-4.5-air": "zhipu",
+    "glm-4.6v": "zhipu",
+    "glm-4.7": "zhipu",
+    "deepseek-chat": "deepseek",
+    "deepseek-coder": "deepseek",
+    "qwen-turbo": "bailian",
+    "qwen-plus": "bailian",
+    "qwen-math-turbo": "bailian",
+}
+
 
 class LLMCallError(Exception):
     """LLM 调用错误"""
@@ -68,8 +81,9 @@ class DualModelVoter:
         """
         if self._llm_gateway is None:
             # 动态导入 LLM Gateway
+            # 注意：sys.path 已包含 ai-edu-ai-service 目录，直接导入 core.gateway.factory
             try:
-                from ai_edu_ai_service.core.gateway.factory import LLMFactory
+                from core.gateway.factory import LLMFactory
                 self._llm_gateway = LLMFactory()
             except ImportError:
                 logger.warning("无法导入 LLM Gateway，使用模拟模式")
@@ -78,7 +92,7 @@ class DualModelVoter:
 
     async def _call_llm(self, model_name: str, prompt: str) -> Dict[str, Any]:
         """
-        调用单个 LLM 模型
+        谢用单个 LLM 模型
 
         Args:
             model_name: 模型名称
@@ -101,8 +115,11 @@ class DualModelVoter:
             # 使用 LangChain 调用
             from langchain_core.messages import HumanMessage
 
-            # 创建 ChatModel
-            chat_model = gateway.create_chat_model(model_name)
+            # 获取 provider
+            provider = MODEL_TO_PROVIDER.get(model_name, "zhipu")
+
+            # 创建 ChatModel (使用 create 方法)
+            chat_model = gateway.create(provider=provider, model=model_name)
 
             # 调用模型
             response = await chat_model.ainvoke([HumanMessage(content=prompt)])
@@ -154,7 +171,7 @@ class DualModelVoter:
         except json.JSONDecodeError:
             pass
 
-        # 尝试提取 JSON 块
+        # 尝试提取 JSON 块（标准 JSON）
         json_pattern = r'\{[^{}]*\}'
         matches = re.findall(json_pattern, content)
         for match in matches:
@@ -171,6 +188,18 @@ class DualModelVoter:
                 return json.loads(match.group(1))
             except json.JSONDecodeError:
                 pass
+
+        # 尝试解析 Python dict 格式（单引号）
+        # 使用 ast.literal_eval 安全解析 Python 表达式
+        try:
+            import ast
+            # 提取可能的 dict 部分
+            dict_pattern = r'\{.*\}'
+            match = re.search(dict_pattern, content, re.DOTALL)
+            if match:
+                return ast.literal_eval(match.group(0))
+        except (SyntaxError, ValueError):
+            pass
 
         logger.warning(f"无法解析 JSON 响应: {content[:100]}...")
         return None
@@ -245,7 +274,38 @@ class DualModelVoter:
         Returns:
             投票结果字典
         """
-        # 提取关键判断
+        # 检查是否是知识点推断任务（包含 knowledge_points 字段）
+        if 'knowledge_points' in primary_result and 'knowledge_points' in secondary_result:
+            # 知识点推断任务：两模型都有有效输出就采纳（取主模型结果）
+            primary_kps = primary_result.get('knowledge_points', [])
+            secondary_kps = secondary_result.get('knowledge_points', [])
+
+            if primary_kps and secondary_kps:
+                # 两模型都有知识点输出，采纳主模型结果
+                avg_confidence = (primary_result.get('confidence', 0.5) + secondary_result.get('confidence', 0.5)) / 2
+                return {
+                    'consensus': True,
+                    'result': {
+                        'knowledge_points': primary_kps,
+                        'confidence': avg_confidence,
+                        'notes': primary_result.get('notes', ''),
+                    },
+                    'confidence': avg_confidence,
+                    'primary_response': primary_response,
+                    'secondary_response': secondary_response,
+                }
+            else:
+                # 某个模型无输出，不采纳
+                return {
+                    'consensus': False,
+                    'result': None,
+                    'confidence': 0.0,
+                    'primary_response': primary_response,
+                    'secondary_response': secondary_response,
+                    'error': '某模型未输出知识点'
+                }
+
+        # 前置关系/匹配任务：检查布尔判断
         primary_decision = primary_result.get('is_prerequisite', primary_result.get('is_match', None))
         secondary_decision = secondary_result.get('is_prerequisite', secondary_result.get('is_match', None))
 

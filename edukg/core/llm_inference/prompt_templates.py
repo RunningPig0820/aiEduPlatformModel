@@ -2,90 +2,139 @@
 LLM Prompt 模板集合
 
 提供前置关系推断和知识点匹配的 Prompt 模板。
+支持从文件加载，后续可扩展从数据库加载。
 """
+import logging
+from pathlib import Path
+from typing import Optional
 
-# ============ 前置关系推断 Prompt ============
-PREREQUISITE_PROMPT = """
-你是一位教育专家，请判断以下知识点之间的学习依赖关系。
+logger = logging.getLogger(__name__)
 
-**学习依赖（PREREQUISITE）**: 不学A就学不懂B（核心前置）
-**教学顺序（TEACHES_BEFORE）**: 教材先教A后教B，但学B不一定需要先学A
+# ============ 提示词文件路径 ============
+PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-知识点A: {kp_a_name}
-知识点A描述: {kp_a_description}
 
-知识点B: {kp_b_name}
-知识点B描述: {kp_b_description}
+class PromptLoader:
+    """
+    提示词加载器
 
-请回答以下问题：
-1. 学习B是否需要先学习A？(是/否)
-2. 置信度：(高/中/低) - 高表示非常确定，中表示比较确定，低表示不确定
-3. 原因：(简短说明，不超过50字)
+    支持多种加载方式：
+    1. 从文件加载（默认）
+    2. 从数据库加载（后续扩展）
+    3. 从缓存加载
 
-请严格按照以下 JSON 格式回答：
-```json
-{
-    "is_prerequisite": true或false,
-    "confidence": 0.0到1.0之间的数值,
-    "reason": "原因说明"
-}
-```
+    Example:
+        >>> loader = PromptLoader()
+        >>> prompt = loader.load("prerequisite")
+        >>> formatted = loader.format(prompt, kp_a_name="加法", ...)
+    """
 
-注意：区分"教学顺序"和"学习依赖"。如果教材先教A后教B，但学B不需要先学A，请回答否。
-"""
+    def __init__(self, prompts_dir: Optional[Path] = None):
+        """
+        初始化提示词加载器
 
-# ============ 知识点匹配 Prompt ============
-# 用于 kg-math-complete-graph 的知识点匹配
-KP_MATCH_PROMPT = """
-你是一位教育专家，请判断以下两个知识点是否表示同一个概念。
+        Args:
+            prompts_dir: 提示词文件目录（默认使用内置目录）
+        """
+        self.prompts_dir = prompts_dir or PROMPTS_DIR
+        self._cache: dict = {}
 
-教材知识点名称: {textbook_kp_name}
-教材知识点描述: {textbook_kp_description}
+    def load(self, name: str, use_cache: bool = True) -> str:
+        """
+        加载提示词模板
 
-知识图谱知识点名称: {kg_kp_name}
-知识图谱知识点描述: {kg_kp_description}
+        Args:
+            name: 提示词名称（如 "prerequisite", "kp_match"）
+            use_cache: 是否使用缓存
 
-请回答以下问题：
-1. 这两个知识点是否表示同一概念？(是/否)
-2. 置信度：(0.0-1.0)
-3. 原因：(简短说明，不超过50字)
+        Returns:
+            提示词模板字符串
+        """
+        # 检查缓存
+        if use_cache and name in self._cache:
+            return self._cache[name]
 
-请严格按照以下 JSON 格式回答：
-```json
-{
-    "is_match": true或false,
-    "confidence": 0.0到1.0之间的数值,
-    "reason": "原因说明"
-}
-```
+        # 从文件加载
+        prompt = self._load_from_file(name)
 
-注意：如果只是相关但不是同一概念，请回答否。
-"""
+        # 缓存
+        if use_cache and prompt:
+            self._cache[name] = prompt
 
-# ============ 定义依赖抽取 Prompt ============
-DEFINITION_DEPS_PROMPT = """
-你是一位教育专家，请从以下知识点的定义中识别出它依赖的其他知识点名称。
+        return prompt
 
-知识点名称: {kp_name}
-知识点定义: {kp_definition}
+    def _load_from_file(self, name: str) -> str:
+        """
+        从文件加载提示词
 
-已知的知识点列表（仅从以下列表中选择）:
-{kp_list}
+        Args:
+            name: 提示词名称
 
-请回答：
-1. 该知识点定义中引用或依赖的其他知识点名称
-2. 置信度：(0.0-1.0)
+        Returns:
+            提示词模板字符串
+        """
+        filepath = self.prompts_dir / f"{name}.txt"
 
-请严格按照以下 JSON 格式回答：
-```json
-{
-    "dependencies": ["知识点名称1", "知识点名称2", ...],
-    "confidence": 0.0到1.0之间的数值
-}
-```
+        if not filepath.exists():
+            raise FileNotFoundError(f"提示词文件不存在: {filepath}")
 
-注意：只返回定义中明确提及的知识点，不要推断隐含依赖。
-"""
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def _load_from_db(self, name: str) -> str:
+        """
+        从数据库加载提示词（预留扩展）
+
+        Args:
+            name: 提示词名称
+
+        Returns:
+            提示词模板字符串
+        """
+        # TODO: 后续实现从 MySQL 加载
+        raise NotImplementedError("数据库加载尚未实现")
+
+    def format(self, template: str, **kwargs) -> str:
+        """
+        格式化提示词
+
+        Args:
+            template: 提示词模板
+            **kwargs: 模板变量
+
+        Returns:
+            格式化后的提示词
+        """
+        return template.format(**kwargs)
+
+    def clear_cache(self):
+        """清空缓存"""
+        self._cache.clear()
+
+
+# ============ 全局加载器实例 ============
+_loader = PromptLoader()
+
+
+# ============ 便捷函数 ============
+def get_prerequisite_prompt() -> str:
+    """获取前置关系推断提示词"""
+    return _loader.load("prerequisite")
+
+
+def get_kp_match_prompt() -> str:
+    """获取知识点匹配提示词"""
+    return _loader.load("kp_match")
+
+
+def get_definition_deps_prompt() -> str:
+    """获取定义依赖抽取提示词"""
+    return _loader.load("definition_deps")
+
+
+def get_textbook_kg_prompt() -> str:
+    """获取教学知识点推断提示词"""
+    return _loader.load("textbook_kg")
 
 
 def format_prerequisite_prompt(
@@ -106,7 +155,9 @@ def format_prerequisite_prompt(
     Returns:
         格式化后的 Prompt
     """
-    return PREREQUISITE_PROMPT.format(
+    template = get_prerequisite_prompt()
+    return _loader.format(
+        template,
         kp_a_name=kp_a_name,
         kp_a_description=kp_a_description or "无描述",
         kp_b_name=kp_b_name,
@@ -132,7 +183,9 @@ def format_kp_match_prompt(
     Returns:
         格式化后的 Prompt
     """
-    return KP_MATCH_PROMPT.format(
+    template = get_kp_match_prompt()
+    return _loader.format(
+        template,
         textbook_kp_name=textbook_kp_name,
         textbook_kp_description=textbook_kp_description or "无描述",
         kg_kp_name=kg_kp_name,
@@ -156,8 +209,52 @@ def format_definition_deps_prompt(
     Returns:
         格式化后的 Prompt
     """
-    return DEFINITION_DEPS_PROMPT.format(
+    template = get_definition_deps_prompt()
+    return _loader.format(
+        template,
         kp_name=kp_name,
         kp_definition=kp_definition or "无定义",
         kp_list=kp_list
     )
+
+
+def format_textbook_kg_prompt(
+    stage: str,
+    grade: str,
+    semester: str,
+    chapter_name: str,
+    section_name: str,
+    existing_kps: list
+) -> str:
+    """
+    格式化教学知识点推断 Prompt
+
+    Args:
+        stage: 学段（小学/初中/高中）
+        grade: 年级（一年级/七年级/必修第一册）
+        semester: 册次（上册/下册）
+        chapter_name: 章节名称
+        section_name: 小节名称
+        existing_kps: 已有知识点列表
+
+    Returns:
+        格式化后的 Prompt
+    """
+    template = get_textbook_kg_prompt()
+    existing_kps_str = str(existing_kps) if existing_kps else "[]"
+    return _loader.format(
+        template,
+        stage=stage,
+        grade=grade,
+        semester=semester,
+        chapter_name=chapter_name,
+        section_name=section_name,
+        existing_kps=existing_kps_str
+    )
+
+
+# ============ 向后兼容：保留原有的常量（从文件加载） ============
+PREREQUISITE_PROMPT = get_prerequisite_prompt()
+KP_MATCH_PROMPT = get_kp_match_prompt()
+DEFINITION_DEPS_PROMPT = get_definition_deps_prompt()
+TEXTBOOK_KG_PROMPT = get_textbook_kg_prompt()

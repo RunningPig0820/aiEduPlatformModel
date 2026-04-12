@@ -59,8 +59,27 @@
 - [x] 9.3 测试 `DualModelVoter.vote_prerequisite()`
 - [x] 9.4 测试 DAG 验证逻辑
 
-## 10. 集成测试
+## 10. 断点续传与缓存（集成 llmTaskLock 到 `prerequisite_inferer.py`）
 
-- [ ] 10.1 端到端测试：运行推理脚本
-- [ ] 10.2 验证输出文件格式
-- [ ] 10.3 验证 DAG 无环
+- [ ] 10.1 在 `edukg/core/llm_inference/prerequisite_inferer.py` 的 `PrerequisiteInferer` 类中集成 `TaskState` 任务状态管理
+- [ ] 10.2 在 `PrerequisiteInferer` 类中集成 `CachedLLM` LLM 调用缓存
+- [ ] 10.3 在 `edukg/scripts/kg_inference/infer_prerequisites.py` 实现 `--resume` 断点续传参数
+- [ ] 10.4 实现推理进度保存到 `progress/prerequisite_state.json`（每 N 个保存一次）
+- [ ] 10.5 实现启动时加载进度文件（断点续传）
+- [ ] 10.6 添加 `ProcessLock` 进程锁保护（`progress/prerequisite.lock`）
+
+## 11. 集成测试
+
+- [ ] 11.1 端到端测试：运行推理脚本
+- [ ] 11.2 验证输出文件格式
+- [ ] 11.3 验证 DAG 无环
+- [ ] 11.4 测试断点续传功能（中断后恢复）
+- [ ] 11.5 测试 LLM 缓存功能（相同输入复用结果）
+
+## 12. 复用教学知识点推断（依赖 kg-math-complete-graph）
+
+注意：`TextbookKPInferer` 类已在 `kg-math-complete-graph` 任务中实现，本模块复用。
+
+- [ ] 12.1 确认 `kg-math-complete-graph` 已完成教学知识点推断
+- [ ] 12.2 加载 `textbook_kps.json`（包含推断补全的知识点）
+- [ ] 12.3 使用补全后的 TextbookKP 进行前置关系推断

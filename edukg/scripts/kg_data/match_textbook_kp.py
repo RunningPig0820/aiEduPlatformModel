@@ -7,11 +7,13 @@
 2. 从 Neo4j 获取 EduKG Concept 列表
 3. 使用双模型投票匹配知识点
 4. 输出 MATCHES_KG 关系
+5. 支持断点续传
 
 使用方法:
     python match_textbook_kp.py
-    python match_textbook_kp.py --dry-run  # 仅估算成本
-    python match_textbook_kp.py --stats    # 显示已有统计
+    python match_textbook_kp.py --resume    # 断点续传
+    python match_textbook_kp.py --dry-run   # 仅估算成本
+    python match_textbook_kp.py --stats     # 显示已有统计
 """
 import os
 import sys
@@ -38,7 +40,7 @@ os.chdir(AI_SERVICE_DIR)
 
 from edukg.core.textbook import KPMatcher
 from edukg.core.textbook.config import OUTPUT_DIR, OUTPUT_FILES
-from edukg.core.textbook.kp_matcher import estimate_match_cost
+from edukg.core.textbook.kp_matcher import estimate_match_cost, PROGRESS_DIR
 from edukg.core.neo4j.client import Neo4jClient
 from edukg.config.settings import settings
 
@@ -94,12 +96,27 @@ class KPMatchRunner:
             logger.info(f"从 Neo4j 加载 {len(concepts)} 个图谱知识点")
             return concepts
 
-    async def run_match(self, dry_run: bool = False) -> Dict:
+    def show_progress(self):
+        """显示当前进度"""
+        state = self.matcher.task_state.get_state()
+        progress = state.get('progress', {})
+
+        logger.info("\n=== 当前进度 ===")
+        logger.info(f"任务状态: {state.get('status', 'unknown')}")
+        logger.info(f"总知识点数: {progress.get('total', 0)}")
+        logger.info(f"已完成: {progress.get('completed', 0)}")
+        logger.info(f"待处理: {progress.get('pending', 0)}")
+
+        if progress.get('completed', 0) > 0:
+            logger.info(f"完成率: {progress['completed'] / progress.get('total', 1) * 100:.1f}%")
+
+    async def run_match(self, dry_run: bool = False, resume: bool = True) -> Dict:
         """
         运行匹配流程
 
         Args:
             dry_run: 是否仅估算成本
+            resume: 是否断点续传
 
         Returns:
             运行结果
@@ -119,12 +136,19 @@ class KPMatchRunner:
             logger.info(f"说明: {cost['note']}")
             return cost
 
+        # 显示当前进度（如果启用断点续传）
+        if resume:
+            self.show_progress()
+
         # 加载图谱知识点
         kg_concepts = self.load_kg_concepts()
 
         # 执行匹配
         logger.info(f"\n=== 开始匹配 ===")
-        results = await self.matcher.match_all(textbook_kps, kg_concepts)
+        if resume:
+            logger.info("断点续传已启用")
+
+        results = await self.matcher.match_all(textbook_kps, kg_concepts, resume=resume)
 
         # 保存结果
         output_path = Path(OUTPUT_DIR) / OUTPUT_FILES["matches_kg_relations"]
@@ -133,11 +157,12 @@ class KPMatchRunner:
         # 统计
         exact_count = sum(1 for r in results if r['method'] == 'exact_match')
         llm_count = sum(1 for r in results if r['method'] == 'llm_vote')
+        from_cache = sum(1 for r in results if r.get('from_cache'))
         unmatched = len(textbook_kps) - len(results)
 
         logger.info("\n=== 匹配结果 ===")
         logger.info(f"精确匹配: {exact_count}")
-        logger.info(f"LLM 匹配: {llm_count}")
+        logger.info(f"LLM 匹配: {llm_count} (其中缓存命中: {from_cache})")
         logger.info(f"未匹配: {unmatched}")
         logger.info(f"匹配率: {len(results) / len(textbook_kps) * 100:.1f}%")
         logger.info(f"输出文件: {output_path}")
@@ -146,6 +171,7 @@ class KPMatchRunner:
             'total': len(textbook_kps),
             'exact_match': exact_count,
             'llm_match': llm_count,
+            'from_cache': from_cache,
             'unmatched': unmatched,
             'output_file': str(output_path)
         }
@@ -169,13 +195,21 @@ class KPMatchRunner:
         logger.info(f"  - 精确匹配: {exact}")
         logger.info(f"  - LLM 匹配: {llm}")
 
+        # 显示进度状态
+        self.show_progress()
+
 
 def main():
     parser = argparse.ArgumentParser(description='知识点匹配')
     parser.add_argument('--dry-run', action='store_true', help='仅估算成本，不实际调用 LLM')
     parser.add_argument('--stats', action='store_true', help='显示已有结果统计')
+    parser.add_argument('--resume', action='store_true', default=True, help='启用断点续传（默认启用）')
+    parser.add_argument('--no-resume', action='store_true', help='禁用断点续传，从头开始')
 
     args = parser.parse_args()
+
+    # 断点续传逻辑
+    resume = not args.no_resume
 
     runner = KPMatchRunner()
 
@@ -186,7 +220,7 @@ def main():
             return
 
         # 运行匹配
-        result = asyncio.run(runner.run_match(args.dry_run))
+        result = asyncio.run(runner.run_match(args.dry_run, resume=resume))
 
         if not args.dry_run:
             logger.info("\n✅ 匹配完成!")
