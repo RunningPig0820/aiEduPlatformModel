@@ -12,7 +12,64 @@
 - **数据清洗**：清理"通用"标签、规范 Section 标签格式、保留序号到 `order_in_book` 字段
 - **章节专题增强**：为 Chapter 增加 `topic` 字段，标注所属专题（数与代数、图形与几何、统计与概率、综合与实践）
 - **知识点属性扩展**：为 TextbookKP 增加教学属性（difficulty、importance、cognitive_level）
-- **知识点匹配**：使用向量检索 + 双模型投票匹配教材知识点到图谱知识点
+- **知识点标准化**：LLM 推断教材知识点名称为标准数学概念，提高匹配率
+- **知识点匹配**：向量检索 + 双模型投票匹配教材知识点到图谱知识点
+- **向量索引预构建**：支持预构建向量索引，避免每次匹配重复加载模型
+
+## 知识点匹配完整流程
+
+采用**三阶段匹配**策略，解决教材名称与 EduKG 概念的语义差距：
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          知识点匹配完整流程                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Phase 1: 标准化预处理                                                        │
+│  ├─ 输入: 教材知识点名称（1350条）                                             │
+│  ├─ 操作: LLM 推断标准数学概念名称                                             │
+│  ├─ 输出: normalized_kps_complete.json                                       │
+│  │         {"original": "1-5的认识", "best_match": "自然数", ...}            │
+│  ├─ 缓存: normalizer_cache/（断点续传）                                       │
+│  └─ 效果: "秒的认识" → "秒"，直接匹配 EduKG ✓                                  │
+│                                                                              │
+│  Phase 2: 向量检索                                                            │
+│  ├─ 输入: best_match 字段（标准化概念名）                                      │
+│  ├─ 操作: 用 "自然数" 向量检索 EduKG（bge-small-zh-v1.5）                      │
+│  ├─ 输出: top-20 候选概念（含相似度分数）                                      │
+│  └─ 缓存: vector_index/（预构建索引）                                         │
+│                                                                              │
+│  Phase 3: LLM双模型投票                                                        │
+│  ├─ 输入: 教材知识点 + top-20候选                                              │
+│  ├─ 操作: GLM-4-flash + DeepSeek 双模型投票                                   │
+│  ├─ 输出: 是否匹配 + 置信度                                                   │
+│  ├─ 缓存: llm_cache/（断点续传）                                              │
+│  └─ 优化: 早停 + 阈值过滤 + 调用限制（50x提速）                                 │
+│                                                                              │
+│  Phase 4: 输出结果                                                             │
+│  ├─ 输出: matches_kg_relations.json                                          │
+│  │         {"textbook_kp": "...", "kg_kp": "自然数", "matched": true}        │
+│  └─ 用于: Neo4j MATCHES_KG 关系导入                                          │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**流程对比**：
+
+| 方案 | 匹配方式 | 匹配率 |
+|------|---------|-------|
+| **旧流程** | 教材名称 → 向量检索 → LLM投票 | 17%（小学知识点无法匹配）|
+| **新流程** | 教材名称 → 标准化 → 向量检索 → LLM投票 | 预计 60%+ |
+
+**效果示例**：
+
+```
+旧流程：
+  "1-5的认识" → 向量检索 → 无匹配（语义差距大）
+
+新流程：
+  "1-5的认识" → 标准化 → "自然数" → 向量检索 → 自然数 (0.711) ✓
+```
 
 ## 目录结构
 
@@ -27,7 +84,9 @@ edukg/core/textbook/
 ├── chapter_enhancer.py       # 章节专题增强器
 ├── kp_attribute_inferer.py   # 知识点属性推断器
 ├── kp_matcher.py             # 知识点匹配器（含向量检索）
-└── README.md                 # 本文档
+├── kp_normalizer.py          # 知识点标准化器（LLM预处理）
+├── vector_index_manager.py   # 向量索引管理器
+├── README.md                 # 本文档
 ```
 
 ## 核心组件
@@ -117,30 +176,50 @@ distribution = enhancer.get_topic_distribution()
 
 **改进（采纳 DeepSeek 建议）**:
 
-采用 **向量检索 + 双模型投票** 两阶段匹配：
+采用 **标准化 + 向量检索 + 双模型投票** 三阶段匹配：
 
 ```
-教材知识点 → 向量检索(top-20候选) → LLM双模型投票 → 匹配结果
+教材知识点 → 标准化(best_match) → 向量检索(top-20候选) → LLM双模型投票 → 匹配结果
 ```
 
-**核心改进**:
+**核心改进（采纳 DeepSeek 建议）**:
 
-| 改进项 | 说明 |
-|--------|------|
-| **向量检索** | 使用 `BAAI/bge-small-zh-v1.5` 进行语义粗筛 |
-| **精确匹配标准化** | 名称标准化（大小写、空格、括号）+ 同义词映射 |
-| **同义词完整词匹配** | 防止过度匹配（"加法交换律"不扩展为"加法"） |
-| **异常处理** | LLM调用失败继续下一个候选 |
-| **未匹配记录** | 输出所有知识点，增加 `matched` 字段 |
-| **进度回调修复** | 使用实际已完成数量而非循环索引 |
+| 改进项 | 说明 | 优先级 |
+|--------|------|--------|
+| **标准化集成** | 自动使用 `best_match` 进行向量检索，提高命中率 | 高 |
+| **向量检索** | 使用 `BAAI/bge-small-zh-v1.5` 进行语义粗筛 | 高 |
+| **统计并发安全** | 返回 (result, match_type) 元组，主流程汇总（方案 C） | 🔴 高 |
+| **进度立即持久化** | 每个任务完成后立即保存，避免崩溃丢失 | 🟡 中 |
+| **等待逻辑简化** | 直接从检查点读取结果，避免死锁风险 | 🟡 中 |
+| **缓存文件锁保护** | `_get_cached_result` / `_save_cached_result` 加锁 | 🟡 中 |
+| **精确匹配标准化** | 名称标准化（大小写、空格、括号）+ 同义词映射 | 低 |
+| **同义词完整词匹配** | 防止过度匹配（"加法交换律"不扩展为"加法"） | 低 |
+| **异常处理** | LLM调用失败继续下一个候选 | 低 |
+| **未匹配记录** | 输出所有知识点，增加 `matched` 字段 | 低 |
+| **并发处理** | Semaphore + asyncio.Lock 保护（可选） | 低 |
+
+**标准化效果示例**:
+
+```
+旧流程（无标准化）:
+  "1-5的认识" → 向量检索 → 无匹配（语义差距大）
+
+新流程（自动标准化）:
+  "1-5的认识" → 标准化(best_match="自然数") → 向量检索 → "自然数"(0.711) ✓
+  "连加连减" → 标准化(best_match="加法") → 向量检索 → "加法"(0.65) ✓
+```
 
 ```python
 from edukg.core.textbook import KPMatcher
 
-# 默认使用向量检索
+# 默认使用向量检索 + 自动标准化
 matcher = KPMatcher(use_vector_retrieval=True, candidate_top_n=20)
 
-# 批量匹配
+# 获取标准化名称（手动查询）
+best_match = matcher.get_best_match("1-5的认识", "小学", "一年级")
+# 返回: "自然数"
+
+# 批量匹配（自动使用标准化名称）
 results = await matcher.match_all(textbook_kps, kg_concepts, resume=True)
 
 # 统计信息
@@ -203,7 +282,119 @@ report = inferer.get_stats_report()
 | `cognitive_level` | 认知层次 (识记/理解/应用/分析) | 知识点类型匹配 |
 | `topic` | 所属专题 | 继承章节 topic |
 
-### 7. 知识点过滤
+### 7. VectorIndexManager - 向量索引管理器
+
+**用途**：预构建 EduKG 知识点向量索引，避免每次匹配时重新加载模型和计算向量。
+
+```python
+from edukg.core.textbook import VectorIndexManager
+
+manager = VectorIndexManager()
+
+# 构建向量索引（从 Neo4j 加载知识点）
+manager.build_index(kg_concepts)
+
+# 保存索引到文件
+manager.save_index()
+# 输出:
+#   kg_vectors.npy: 向量矩阵 (N, 512)
+#   kg_texts.json: 知识点文本列表
+#   kg_concepts.json: 知识点元数据
+#   index_meta.json: 索引元数据（含 checksum）
+
+# 加载预构建索引
+vectors, texts, concepts = manager.load_index()
+
+# 检查索引是否过期（checksum 校验）
+is_valid = manager.is_index_valid(current_concepts)
+```
+
+**索引文件说明**：
+
+| 文件 | 说明 | 大小 |
+|------|------|------|
+| `kg_vectors.npy` | 向量矩阵 (10250, 512) | ~20 MB |
+| `kg_texts.json` | 知识点文本列表 | ~1.4 MB |
+| `kg_concepts.json` | 知识点元数据 (uri, label) | ~2.5 MB |
+| `index_meta.json` | 元数据（模型、checksum） | ~200 B |
+
+### 8. KPNormalizer - 知识点标准化器
+
+**用途**：将教材知识点名称推断为标准数学概念名称，提高与 EduKG 的匹配率。
+
+**问题背景**：
+- 教材知识点命名贴近教学场景：如 "1-5的认识"、"连加连减"、"秒的认识"
+- EduKG 知识点是抽象数学概念：如 "自然数"、"加减混合运算"、"秒"
+- 直接向量匹配效果差：教材名称与概念名称语义差距大
+
+**解决方案**：
+```
+教材知识点 → LLM推断(标准名称) → 向量检索 → LLM投票 → 匹配结果
+```
+
+```python
+from edukg.core.textbook import KPNormalizer
+
+normalizer = KPNormalizer()
+
+# 标准化单个知识点
+result = await normalizer.normalize("1-5的认识", "小学", "一年级")
+# 返回: {
+#     "original": "1-5的认识",
+#     "concepts": ["自然数", "数", "整数"],
+#     "best_match": "自然数",  # 用于向量检索
+#     "confidence": 0.9,
+#     "reason": "一年级数的认识课程",
+#     "from_cache": False
+# }
+
+# 批量标准化（并发处理）
+results = await normalizer.normalize_batch(kps, max_concurrent=5)
+```
+
+**效果验证**：
+
+| 教材知识点 | LLM推断(best_match) | EduKG匹配结果 |
+|-----------|--------------------|---------------|
+| "1-5的认识" | 自然数 | 自然数 (0.711) ✓ |
+| "连加连减" | 加法 | 减法 (0.655) ✓ |
+| "秒的认识" | 秒 | 秒 (0.830) ✓ |
+| "平行四边形的性质" | 平行四边形 | 平行四边形 (0.853) ✓ |
+
+**数据位置**：
+
+```
+output/
+├── normalizer_cache/           # 标准化缓存（断点续传）
+│   ├── abc123.json             # 单条标准化结果
+│   └── ...                     # 1255 个文件
+│
+└── normalized_kps_complete.json # 汇总结果（完整）
+                                # 用于后续向量检索
+```
+
+**提示词管理**：
+- 提示词文件：`edukg/core/llm_inference/prompts/kp_normalizer.txt`
+- 缓存目录：`output/normalizer_cache/`
+- 支持断点续传：缓存标准化结果，避免重复 API 调用
+
+**并发安全**（采纳 DeepSeek 建议）：
+- `asyncio.Lock` 保护并发访问
+- 原子写入缓存文件（临时文件 + rename）
+- 批量并发处理（`gather` + `Semaphore`）
+- 超时机制（等待其他协程最多30秒）
+
+**标准化统计**：
+
+| 项目 | 值 |
+|------|-----|
+| 唯一知识点 | 1237 个 |
+| 标准化结果 | 1255 条 |
+| 高置信度 (≥0.9) | 744 (59.3%) |
+| 中等置信度 (0.7-0.9) | 511 (40.7%) |
+| 低置信度 (<0.7) | 0 (0%) |
+
+### 9. 知识点过滤
 
 ```python
 from edukg.core.textbook import is_valid_knowledge_point, filter_knowledge_points
@@ -281,9 +472,61 @@ python edukg/scripts/kg_data/match_textbook_kp.py --dry-run
 # 执行匹配（支持断点续传）
 python edukg/scripts/kg_data/match_textbook_kp.py --resume
 
+# 使用预构建索引（推荐，加速启动）
+python edukg/scripts/kg_data/match_textbook_kp.py --use-prebuilt-index --resume
+
+# 强制重建索引后匹配
+python edukg/scripts/kg_data/match_textbook_kp.py --force-build-index --resume
+
+# 禁用向量检索（回退到 difflib）
+python edukg/scripts/kg_data/match_textbook_kp.py --no-vector-retrieval --resume
+
+# 调整粗筛候选数量
+python edukg/scripts/kg_data/match_textbook_kp.py --candidate-top-n 30 --resume
+
 # 显示已有统计
 python edukg/scripts/kg_data/match_textbook_kp.py --stats
 ```
+
+**CLI 参数说明**：
+
+| 参数 | 说明 |
+|------|------|
+| `--use-prebuilt-index` | 使用预构建向量索引（启动更快） |
+| `--force-build-index` | 强制重建索引后再匹配 |
+| `--no-vector-retrieval` | 禁用向量检索，使用 difflib |
+| `--candidate-top-n N` | 粗筛候选数量（默认 20） |
+| `--index-path PATH` | 预构建索引目录路径 |
+
+### normalize_textbook_kp.py
+
+**用途**：批量标准化教材知识点名称，生成标准化结果供后续匹配使用。
+
+```bash
+# 显示统计
+python edukg/scripts/kg_data/normalize_textbook_kp.py --stats
+
+# 执行标准化（断点续传）
+python edukg/scripts/kg_data/normalize_textbook_kp.py --resume
+
+# 指定并发数（默认5）
+python edukg/scripts/kg_data/normalize_textbook_kp.py --resume --concurrency 10
+```
+
+**CLI 参数说明**：
+
+| 参数 | 说明 |
+|------|------|
+| `--resume` | 断点续传，复用 normalizer_cache |
+| `--stats` | 显示标准化统计 |
+| `--concurrency N` | 并发数（默认 5） |
+
+**输出文件**：
+
+| 文件 | 说明 |
+|------|------|
+| `normalizer_cache/*.json` | 单条标准化缓存（断点续传） |
+| `normalized_kps_complete.json` | 汇总结果（用于向量检索） |
 
 ### enhance_kp_attributes.py
 
@@ -337,6 +580,26 @@ python edukg/scripts/kg_data/enhance_inferred_kps.py
 python edukg/scripts/kg_data/enhance_inferred_kps.py --stats
 ```
 
+### build_vector_index.py
+
+**用途**：构建 EduKG 知识点向量索引，加速后续匹配流程。
+
+```bash
+# 构建索引（首次会下载 300MB 模型）
+python edukg/scripts/kg_data/build_vector_index.py
+
+# 查看索引状态
+python edukg/scripts/kg_data/build_vector_index.py --status
+
+# 强制重建索引
+python edukg/scripts/kg_data/build_vector_index.py --force
+```
+
+**注意事项**：
+- 首次运行需下载 `BAAI/bge-small-zh-v1.5` 模型（~300MB）
+- 若网络不通 Hugging Face，使用镜像：`export HF_ENDPOINT=https://hf-mirror.com`
+- 索引输出目录：`edukg/data/edukg/math/5_教材目录(Textbook)/output/vector_index/`
+
 ## 输出文件
 
 所有输出文件位于 `edukg/data/edukg/math/5_教材目录(Textbook)/output/`：
@@ -349,11 +612,40 @@ python edukg/scripts/kg_data/enhance_inferred_kps.py --stats
 | `textbook_kps.json` | 教材知识点节点（含属性字段） | 1350 |
 | `contains_relations.json` | CONTAINS 关系 | 684 |
 | `in_unit_relations.json` | IN_UNIT 关系 | 1350 |
-| `matches_kg_relations.json` | MATCHES_KG 关系 | 待生成 |
+| `matches_kg_relations.json` | MATCHES_KG 关系 | 1350（匹配1042 + 未匹配308） |
+| `unmatched_kps.json` | 未匹配知识点详情（供人工审核） | 308 |
+| `unmatched_analysis.json` | 未匹配原因分析报告 | - |
+| `topic_correction_report.json` | Topic修正报告 | 144修正 |
 | `textbook_kps_inferred.json` | LLM 推断的知识点 | 1052 |
 | `merge_report.json` | 合并报告 | - |
+| **标准化相关** | | |
+| `normalizer_cache/` | 知识点标准化缓存（断点续传） | 1255 |
+| `normalized_kps_complete.json` | 标准化汇总结果（用于向量检索） | 1255 |
+| **匹配相关** | | |
+| `vector_index/` | 向量索引（预构建） | 4文件 |
+| `llm_cache/` | LLM投票缓存（断点续传） | 动态 |
 | `progress/` | 断点续传进度文件 | - |
-| `llm_cache/` | LLM 调用缓存 | - |
+
+**标准化数据结构**：
+
+```json
+{
+  "original": "1-5的认识",
+  "best_match": "自然数",
+  "concepts": ["自然数", "数", "整数"],
+  "confidence": 0.9,
+  "reason": "一年级数的认识课程",
+  "stage": "小学",
+  "grade": "一年级",
+  "from_cache": false
+}
+```
+
+**后续流程使用**：
+
+```
+normalized_kps_complete.json → best_match 字段 → 向量检索 → LLM投票 → 匹配结果
+```
 
 ## 数据清洗说明
 
@@ -481,7 +773,7 @@ pytest tests/core/textbook/ -v
 
 - **kg-math-complete-graph**：教材数据导入（本模块）
 - **kg-math-prerequisite-inference**：前置关系推断（提供 LLM 推理能力）
-- **vector-index-script**：向量索引构建脚本（待实现）
+- **vector-index-script**：向量索引构建脚本（✅ 已实现）
 
 ## 执行顺序
 
@@ -495,9 +787,21 @@ Phase 3: 属性扩展 → enhance_kp_attributes.py --enhance → --merge ✓
 Phase 4: LLM 推断 → infer_textbook_kp.py --resume ✓
 Phase 4: 合并知识点 → merge_inferred_kps.py ✓
 Phase 4: 补充属性 → enhance_inferred_kps.py ✓
-Phase 4: 知识图谱匹配 → match_textbook_kp.py --resume（待执行）
+Phase 4: 知识点标准化 → normalize_textbook_kp.py --resume ✓
+Phase 4: 构建向量索引 → build_vector_index.py ✓
+Phase 4: 知识图谱匹配 → match_textbook_kp.py --use-prebuilt-index --resume ✓ (77.2%匹配率)
+Phase 4: 未匹配导出 → unmatched_kps.json (308条) ✓
+Phase 4: Topic修正 → 基于Class类型修正144个 ✓
 Phase 5: 验证导入 → 人工验证后导入 Neo4j（待执行）
 ```
+
+**关键步骤说明**：
+
+| 步骤 | 说明 | 耗时 |
+|------|------|------|
+| 知识点标准化 | LLM推断标准名称，5并发 | ~8分钟（1255条） |
+| 构建向量索引 | 首次需下载模型，后续复用 | ~30秒（首次） |
+| 知识图谱匹配 | 使用标准化结果 + 预构建索引 | ~1-2小时 |
 
 ## 知识点属性分布统计
 
@@ -534,10 +838,167 @@ Phase 5: 验证导入 → 人工验证后导入 Neo4j（待执行）
 
 | 专题 | 数量 | 占比 |
 |------|------|------|
-| 数与代数 | 855 | 63.3% |
-| 图形与几何 | 359 | 26.6% |
-| 统计与概率 | 78 | 5.8% |
-| 综合与实践 | 58 | 4.3% |
+| 数与代数 | 891 | 66.0% |
+| 图形与几何 | 315 | 23.3% |
+| 统计与概率 | 94 | 7.0% |
+| 综合与实践 | 50 | 3.7% |
+
+**注**: Topic 分布已基于 EduKG Concept Class 类型修正（2026-04-13）
+
+## 知识点匹配优化策略
+
+### 问题背景
+
+原始匹配逻辑效率低下：
+- 遍历全部 20 个候选，每个候选调用 2 次 LLM（GLM + DeepSeek）
+- 最坏情况：40 次 API 调用/知识点
+- 实测：3.5 小时仅完成 290 个知识点（21.5%）
+
+### 优化策略
+
+采用 **早停 + 阈值过滤 + 调用限制** 三重优化：
+
+```python
+# kp_matcher.py 核心优化参数
+LLM_CANDIDATE_LIMIT = 3      # 只对前 N 个候选做 LLM 投票
+SIMILARITY_THRESHOLD = 0.5   # 相似度阈值，低于此值跳过
+```
+
+**优化后匹配流程**：
+
+```
+向量检索 → top-20 候选（含相似度分数）
+
+for candidate in top-20:
+    ① 相似度阈值检查
+       if candidate.similarity < 0.5:
+           continue  # 直接跳过，不调用 LLM
+
+    ② LLM 调用上限检查
+       if llm_calls >= 3:
+           break  # 停止遍历，记录最佳候选待审核
+
+    ③ LLM 双模型投票
+       result = llm_vote(candidate)
+       if result.matched:
+           break  # 早停：匹配成功立即退出
+
+    ④ 记录最佳未匹配候选
+       best_unmatched = candidate  # 供人工审核
+```
+
+### 效果对比
+
+| 场景 | 原始逻辑 | 优化后 | 提升 |
+|------|----------|--------|------|
+| 第1个候选匹配成功 | 40 次 API | 2 次 API | **20x** |
+| 前3个候选都不匹配 | 40 次 API | 6 次 API | **6.7x** |
+| 所有候选相似度都低 | 40 次 API | 0 次 API | **∞** |
+
+**实测效果**：
+- 原始：3.5 小时 → 290 知识点（0.14 知识点/分钟）
+- 优化：4 秒 → 170 知识点（命中缓存）+ ~7 知识点/分钟（新知识点）
+- **整体提速约 50x**
+
+### LLM 缓存机制
+
+每次 LLM 双模型投票结果自动缓存到本地文件：
+
+```
+llm_cache/
+├── textbook_kp1__kg_kp1.json   # 缓存文件
+├── textbook_kp1__kg_kp2.json
+└── ...
+```
+
+**缓存内容**：
+```json
+{
+    "decision": true/false,
+    "reason": "匹配理由",
+    "voters": {
+        "glm": {"vote": true, "reason": "..."},
+        "deepseek": {"vote": true, "reason": "..."}
+    }
+}
+```
+
+**缓存复用逻辑**：
+- cache_key = `textbook_kp_label + kg_kp_label`
+- 检查 `llm_cache/{cache_key}.json` 是否存在
+- 存在 → 直接读取结果，跳过 API 调用
+- 不存在 → 调用 GLM + DeepSeek，保存结果
+
+### 未匹配知识点处理
+
+优化后不再穷尽遍历所有候选，而是：
+
+1. **记录最佳候选**：保存相似度最高但未匹配成功的候选
+2. **标记待审核**：`method: "candidate_review"`，`matched: false`
+3. **后续人工处理**：可批量审核这些待定知识点
+
+```json
+{
+    "textbook_kp": "多项式乘多项式",
+    "matched": false,
+    "method": "candidate_review",
+    "reason": "最佳候选待审核: 多项式乘法 (相似度 0.82)",
+    "best_candidate": {
+        "uri": "...",
+        "label": "多项式乘法",
+        "similarity": 0.82
+    }
+}
+```
+
+---
+
+## 知识点匹配结果（2026-04-13）
+
+### 匹配统计
+
+| 类型 | 数量 | 占比 |
+|------|------|------|
+| 总知识点 | 1350 | 100% |
+| 精确匹配 | 1025 | 75.9% |
+| LLM 匹配 | 17 | 1.3% |
+| 未匹配 | 308 | 22.8% |
+| **匹配率** | **77.2%** | - |
+
+### 未匹配原因分析
+
+| 分类 | 数量 | 说明 |
+|------|------|------|
+| 颗粒度差异 | 297 | 教材知识点更细粒度，有候选但LLM投票不通过 |
+| 图谱缺失 | 11 | EduKG 中无对应知识点候选 |
+
+**未匹配样例**：
+- 颗粒度差异："分数除法意义"、"三角形全等判定方法"
+- 图谱缺失："田忌赛马故事背景"、"莫比乌斯带定义"、"24时计时法概念"
+
+### Topic修正结果
+
+基于匹配的 EduKG Concept 的 Class 类型修正知识点 topic：
+
+| Class 类型 | Topic |
+|-----------|-------|
+| 代数概念、数、数学运算、函数 | 数与代数 |
+| 几何概念、几何图形、面、线、角 | 图形与几何 |
+| 统计概念、概率概念 | 统计与概率 |
+| 逻辑概念、命题、数学问题 | 综合与实践 |
+
+**修正效果**：144 个知识点 topic 被修正
+
+### 后续处理：人工审核系统
+
+未匹配的 308 个知识点已导出到 `unmatched_kps.json`，后续将导入 MySQL 进行人工审核。
+
+**审核系统设计**（见 `kp-match-review-system` change）：
+- MySQL 表：`textbook_kp_match_review`
+- 审核流程：确认匹配 / 选择其他候选 / 拒绝匹配 / 创建新知识点
+- 最终导入：审核通过后导入 Neo4j MATCHES_KG 关系
+
+---
 
 ## 改进历史
 
@@ -551,4 +1012,51 @@ Phase 5: 验证导入 → 人工验证后导入 Neo4j（待执行）
 | 异常处理 | ✅ 已实现 | LLM调用失败继续 |
 | 未匹配记录 | ✅ 已实现 | 输出所有知识点 |
 | 进度回调修复 | ✅ 已实现 | 使用实际已完成数量 |
-| 向量索引独立脚本 | 📋 待实现 | 预构建索引，复用缓存 |
+| 向量索引独立脚本 | ✅ 已实现 | `build_vector_index.py` |
+| 索引过期检测 | ✅ 已实现 | checksum 校验 |
+| 早停优化 | ✅ 已实现 | 匹配成功立即退出 |
+| LLM 调用限制 | ✅ 已实现 | 只对 top-3 候选投票 |
+| 相似度阈值过滤 | ✅ 已实现 | 低相似度候选跳过 |
+| 最佳候选记录 | ✅ 已实现 | 未匹配知识点记录最佳候选 |
+| 知识点标准化预处理 | ✅ 已实现 | `kp_normalizer.py` 提升匹配率 |
+
+---
+
+## 快速开始指南
+
+### 1. 环境准备
+
+```bash
+# 安装依赖
+pip install sentence-transformers numpy
+
+# 设置 Hugging Face 镜像（若网络不通）
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+### 2. 构建向量索引
+
+```bash
+# 构建索引（首次需下载 300MB 模型）
+python edukg/scripts/kg_data/build_vector_index.py
+
+# 查看索引状态
+python edukg/scripts/kg_data/build_vector_index.py --status
+```
+
+### 3. 执行知识图谱匹配
+
+```bash
+# 使用预构建索引（推荐）
+python edukg/scripts/kg_data/match_textbook_kp.py --use-prebuilt-index --resume
+```
+
+### 4. 查看匹配结果
+
+```bash
+# 显示匹配统计
+python edukg/scripts/kg_data/match_textbook_kp.py --stats
+
+# 结果文件位置
+# edukg/data/edukg/math/5_教材目录(Textbook)/output/matches_kg_relations.json
+```

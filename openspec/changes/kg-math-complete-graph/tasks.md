@@ -220,20 +220,36 @@ Phase 5 (验证导入): 验证和手动导入
 - [x] 异常处理：LLM调用失败继续下一个候选
 - [x] 未匹配记录：输出所有知识点，增加 `matched` 字段
 - [x] 进度回调修复：使用实际已完成数量而非循环索引
+- [x] **预构建索引脚本**：`build_vector_index.py` 已创建
 
-- [ ] 16.1 安装依赖：`pip install sentence-transformers numpy`
-- [ ] 16.2 验证向量检索器初始化（首次需下载 300MB 模型）
-- [ ] 16.3 加载 EduKG Concept 列表（从 Neo4j）
-- [ ] 16.4 执行 `match_textbook_kp.py --resume`
-- [ ] 16.5 调用向量检索 + LLM双模型投票执行匹配
-- [ ] 16.6 输出 `matches_kg_relations.json`（含未匹配知识点）
-- [ ] 16.7 统计匹配率和未匹配知识点
-- [ ] 16.8 基于匹配结果修正知识点 topic（解决专题继承偏差问题）
+- [x] 16.1 安装依赖：`pip install sentence-transformers numpy` ✓ (sentence-transformers 5.4.0, numpy 2.4.3)
+- [x] 16.2 **构建向量索引**：`python build_vector_index.py`（首次构建，约 60 秒）✓ (10,250 知识点, 512 维度)
+- [x] 16.3 验证索引构建成功：`python build_vector_index.py --status` ✓ (checksum 匹配)
+- [x] 16.4 加载 EduKG Concept 列表（从 Neo4j）✓ (1,295 Concept 节点)
+- [x] 16.5 执行 `match_textbook_kp.py --use-prebuilt-index --resume`（使用预构建索引）✓ 5并发处理
+- [x] 16.6 调用向量检索 + LLM双模型投票执行匹配 ✓
+- [x] 16.7 输出 `matches_kg_relations.json`（含未匹配知识点）✓ 1350条
+- [x] 16.8 统计匹配率和未匹配知识点 ✓ 匹配率77.2% (精确1025 + LLM17)
+- [x] 16.9 基于匹配结果修正知识点 topic ✓ 修正144个（基于164个有Class信息的Concept）
+- [x] 16.10 导出未匹配知识点到文件 `unmatched_kps.json` ✓ 308条
+- [x] 16.11 分析未匹配原因并分类 ✓ 颗粒度差异297条 + 图谱缺失11条
 
 **Task 16.8 说明**：
 - 根据匹配的 EduKG Concept 的 Class 类型修正 TextbookKP 的 topic
 - 规则映射：数学概念/数学运算 → 数与代数，几何图形/几何性质 → 图形与几何
 - 解决 Task 14 遗留的"加法"等知识点 topic 继承偏差问题
+
+**Task 16.10 说明**（未匹配知识点导出）：
+- 从 `matches_kg_relations.json` 提取 `matched=false` 的记录
+- 输出格式：包含 textbook_kp_uri, textbook_kp_name, normalized_name, best_candidate, confidence, reason
+- 文件位置：`output/unmatched_kps.json`
+- 数量：308 条记录
+- 用途：后续导入 MySQL 人工审核系统（见 `kp-match-review-system` change）
+
+**Task 16.11 说明**（未匹配原因分类）：
+- 统计未匹配原因分布：297 条"投票不通过" + 11 条"无候选"
+- 输出分类报告：`unmatched_analysis.json`
+- 为人工审核系统提供决策参考（哪些需要创建新知识点）
 
 **资源评估（8GB 内存）**:
 - 模型内存: 2.5 GB

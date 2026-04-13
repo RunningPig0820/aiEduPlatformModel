@@ -8,12 +8,17 @@
 3. 使用双模型投票匹配知识点
 4. 输出 MATCHES_KG 关系
 5. 支持断点续传
+6. 支持预构建向量索引（加速启动）
 
 使用方法:
     python match_textbook_kp.py
-    python match_textbook_kp.py --resume    # 断点续传
-    python match_textbook_kp.py --dry-run   # 仅估算成本
-    python match_textbook_kp.py --stats     # 显示已有统计
+    python match_textbook_kp.py --resume                    # 断点续传
+    python match_textbook_kp.py --dry-run                   # 仅估算成本
+    python match_textbook_kp.py --stats                     # 显示已有统计
+    python match_textbook_kp.py --use-prebuilt-index        # 使用预构建索引
+    python match_textbook_kp.py --force-build-index         # 强制重建索引
+    python match_textbook_kp.py --no-vector-retrieval       # 禁用向量检索
+    python match_textbook_kp.py --candidate-top-n 30        # 调整候选数量
 """
 import os
 import sys
@@ -39,7 +44,7 @@ if AI_SERVICE_DIR not in sys.path:
 os.chdir(AI_SERVICE_DIR)
 
 from edukg.core.textbook import KPMatcher
-from edukg.core.textbook.config import OUTPUT_DIR, OUTPUT_FILES
+from edukg.core.textbook.config import OUTPUT_DIR, OUTPUT_FILES, VECTOR_INDEX_DIR
 from edukg.core.textbook.kp_matcher import estimate_match_cost, PROGRESS_DIR
 from edukg.core.neo4j.client import Neo4jClient
 from edukg.config.settings import settings
@@ -55,9 +60,33 @@ logger = logging.getLogger(__name__)
 class KPMatchRunner:
     """知识点匹配运行器"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        use_vector_retrieval: bool = True,
+        use_prebuilt_index: bool = False,
+        candidate_top_n: int = 20,
+        prebuilt_index_path: Path = None,
+        max_concurrent: int = 1
+    ):
+        """
+        初始化匹配运行器
+
+        Args:
+            use_vector_retrieval: 是否使用向量检索
+            use_prebuilt_index: 是否使用预构建索引
+            candidate_top_n: 粗筛候选数量
+            prebuilt_index_path: 预构建索引路径
+            max_concurrent: 并发处理数量（默认 1）
+        """
         self.neo4j_client = Neo4jClient()
-        self.matcher = KPMatcher()
+        self.matcher = KPMatcher(
+            use_vector_retrieval=use_vector_retrieval,
+            use_prebuilt_index=use_prebuilt_index,
+            candidate_top_n=candidate_top_n,
+            prebuilt_index_path=prebuilt_index_path
+        )
+        self.use_prebuilt_index = use_prebuilt_index
+        self.max_concurrent = max_concurrent
 
     def close(self):
         self.neo4j_client.close()
@@ -147,8 +176,15 @@ class KPMatchRunner:
         logger.info(f"\n=== 开始匹配 ===")
         if resume:
             logger.info("断点续传已启用")
+        if self.use_prebuilt_index:
+            logger.info("使用预构建向量索引")
+        logger.info(f"粗筛候选数: {self.matcher.candidate_top_n}")
+        if self.max_concurrent > 1:
+            logger.info(f"并发模式: {self.max_concurrent} 个并发任务")
 
-        results = await self.matcher.match_all(textbook_kps, kg_concepts, resume=resume)
+        results = await self.matcher.match_all(
+            textbook_kps, kg_concepts, resume=resume, max_concurrent=self.max_concurrent
+        )
 
         # 保存结果
         output_path = Path(OUTPUT_DIR) / OUTPUT_FILES["matches_kg_relations"]
@@ -212,17 +248,58 @@ class KPMatchRunner:
 
 def main():
     parser = argparse.ArgumentParser(description='知识点匹配')
+
+    # 基本参数
     parser.add_argument('--dry-run', action='store_true', help='仅估算成本，不实际调用 LLM')
     parser.add_argument('--stats', action='store_true', help='显示已有结果统计')
     parser.add_argument('--resume', action='store_true', default=True, help='启用断点续传（默认启用）')
     parser.add_argument('--no-resume', action='store_true', help='禁用断点续传，从头开始')
+
+    # 向量检索参数（新增）
+    parser.add_argument('--use-prebuilt-index', action='store_true',
+                        help='使用预构建向量索引（加速启动，约 10MB）')
+    parser.add_argument('--force-build-index', action='store_true',
+                        help='强制重建向量索引后再匹配')
+    parser.add_argument('--no-vector-retrieval', action='store_true',
+                        help='禁用向量检索，使用 difflib 字符匹配')
+    parser.add_argument('--candidate-top-n', type=int, default=20,
+                        help='粗筛候选数量（默认 20）')
+    parser.add_argument('--index-path', type=str, default=str(VECTOR_INDEX_DIR),
+                        help='预构建索引目录路径')
+    parser.add_argument('--max-concurrent', type=int, default=1,
+                        help='并发处理数量（默认 1，串行处理）')
 
     args = parser.parse_args()
 
     # 断点续传逻辑
     resume = not args.no_resume
 
-    runner = KPMatchRunner()
+    # 向量检索逻辑
+    use_vector_retrieval = not args.no_vector_retrieval
+    use_prebuilt_index = args.use_prebuilt_index or args.force_build_index
+
+    # 强制重建索引
+    if args.force_build_index:
+        logger.info("强制重建向量索引...")
+        import subprocess
+        result = subprocess.run([
+            sys.executable,
+            str(Path(__file__).parent / "build_vector_index.py"),
+            "--force"
+        ], capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"索引构建失败: {result.stderr}")
+            sys.exit(1)
+        logger.info("索引构建完成")
+        use_prebuilt_index = True
+
+    runner = KPMatchRunner(
+        use_vector_retrieval=use_vector_retrieval,
+        use_prebuilt_index=use_prebuilt_index,
+        candidate_top_n=args.candidate_top_n,
+        prebuilt_index_path=Path(args.index_path),
+        max_concurrent=args.max_concurrent
+    )
 
     try:
         # 显示统计

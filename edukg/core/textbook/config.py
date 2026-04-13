@@ -76,3 +76,13 @@ OUTPUT_FILES = {
     "matches_kg_relations": "matches_kg_relations.json",
     "import_summary": "import_summary.json",
 }
+
+# ============ 向量索引配置 ============
+# 向量索引目录（与其他教材数据统一存放）
+VECTOR_INDEX_DIR = OUTPUT_DIR / "vector_index"
+VECTOR_INDEX_FILES = {
+    "vectors": "kg_vectors.npy",
+    "texts": "kg_texts.json",
+    "concepts": "kg_concepts.json",
+    "meta": "index_meta.json",
+}

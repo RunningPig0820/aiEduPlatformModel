@@ -7,18 +7,22 @@
 - TextbookDataGenerator: 教材数据生成器
 - URIGenerator: URI 生成器
 - KPMatcher: 知识点匹配器
+- KPNormalizer: 知识点标准化器
 - DataCleaner: 数据清洗器
 - ChapterEnhancer: 章节专题增强器
 - KPAttributeInferer: 知识点属性推断器
+- VectorIndexManager: 向量索引管理器
 - is_valid_knowledge_point: 知识点过滤函数
 """
 
 from edukg.core.textbook.data_generator import TextbookDataGenerator
 from edukg.core.textbook.uri_generator import URIGenerator
 from edukg.core.textbook.kp_matcher import KPMatcher
+from edukg.core.textbook.kp_normalizer import KPNormalizer
 from edukg.core.textbook.data_cleaner import DataCleaner
 from edukg.core.textbook.chapter_enhancer import ChapterEnhancer
 from edukg.core.textbook.kp_attribute_inferer import KPAttributeInferer
+from edukg.core.textbook.vector_index_manager import VectorIndexManager
 from edukg.core.textbook.filters import (
     is_valid_knowledge_point,
     filter_knowledge_points,
@@ -29,9 +33,11 @@ __all__ = [
     "TextbookDataGenerator",
     "URIGenerator",
     "KPMatcher",
+    "KPNormalizer",
     "DataCleaner",
     "ChapterEnhancer",
     "KPAttributeInferer",
+    "VectorIndexManager",
     "is_valid_knowledge_point",
     "filter_knowledge_points",
     "NON_KNOWLEDGE_POINT_MARKERS",
