@@ -23,7 +23,8 @@ from collections import Counter
 
 # 添加项目根目录到 sys.path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+KG_DATA_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(KG_DATA_DIR, "..", "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
@@ -165,6 +166,7 @@ class InferredKPMerger:
                     'stage': result.get('stage', ''),
                     'grade': result.get('grade', ''),
                     'section_id': section_id,
+                    'textbook_id': section.get('textbook_id', ''),
                     'confidence': confidence,
                     'source': 'llm_inferred'
                 }

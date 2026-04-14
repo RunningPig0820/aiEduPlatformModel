@@ -3,7 +3,7 @@
 教学知识点推断命令行入口
 
 功能:
-1. 分析缺失知识点的章节（小学3-6年级、高中）
+1. 分析缺失知识点的章节（小学1-6年级、高中）
 2. 使用 LLM 推断教学知识点
 3. 输出推断结果
 4. 支持断点续传
@@ -26,7 +26,8 @@ from typing import List, Dict
 
 # 添加项目根目录到 sys.path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+KG_DATA_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(KG_DATA_DIR, "..", "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
@@ -153,9 +154,9 @@ class TextbookKPInferRunner:
             # 判断是否需要推断
             need_infer = False
 
-            # 小学3-6年级数据缺失（原始 JSON 文件 knowledge_points 为空）
-            # 说明：小学1-2年级有部分知识点，初中7-9年级知识点完整（约252个），无需推断
-            if stage == '小学' and grade in ['三年级', '四年级', '五年级', '六年级']:
+            # 小学1-6年级数据缺失（原始 JSON 文件 knowledge_points 为空）
+            # 说明：初中7-9年级知识点完整（约252个），无需推断
+            if stage == '小学' and grade in ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级']:
                 need_infer = len(existing_kps) == 0
 
             # 高中数据缺失（原始 JSON 文件仅有综合测试标记）

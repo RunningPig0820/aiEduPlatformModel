@@ -217,9 +217,9 @@ class KPNormalizer:
             grade=grade
         )
 
-        # 调用 LLM（单模型即可，不需要双投票）
+        # 调用 LLM（只用 DeepSeek，标准更严格）
         try:
-            response = await self.voter._call_llm(self.voter.primary_model, prompt)
+            response = await self.voter._call_llm(self.voter.secondary_model, prompt)
 
             # 解析结果（从 response.content 提取）
             llm_output = response.get("content", "")

@@ -20,6 +20,7 @@
     # 显示已有统计
     python edukg/scripts/kg_data/enhance_kp_attributes.py --stats
 """
+import os
 import argparse
 import json
 import logging
@@ -27,12 +28,19 @@ import sys
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+KG_DATA_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(KG_DATA_DIR, "..", "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 # 添加 ai-edu-ai-service 目录（用于加载 .env）
-AI_SERVICE_DIR = PROJECT_ROOT / "ai-edu-ai-service"
-sys.path.insert(0, str(AI_SERVICE_DIR))
+AI_SERVICE_DIR = os.path.join(PROJECT_ROOT, "ai-edu-ai-service")
+if AI_SERVICE_DIR not in sys.path:
+    sys.path.insert(0, AI_SERVICE_DIR)
+
+# 切换工作目录到 ai-edu-ai-service 以正确加载 .env 文件
+os.chdir(AI_SERVICE_DIR)
 
 from edukg.core.textbook.kp_attribute_inferer import KPAttributeInferer
 from edukg.core.textbook.config import OUTPUT_DIR
@@ -191,9 +199,7 @@ def main():
         parser.print_help()
         return
 
-    # 切换到 ai-edu-ai-service 目录（加载 .env）
-    import os
-    os.chdir(AI_SERVICE_DIR)
+    # 已在脚本开头切换到 ai-edu-ai-service 目录
 
     if args.stats:
         show_stats()

@@ -1,3 +1,19 @@
+## 任务执行规范（重要）
+
+**每个任务必须遵循以下流程，禁止跳过：**
+
+```
+1. 脚本review  →  2. 预测试  →  3. 检查之前数据是否影响  →  4. 判断生成数据质量  →  5. 下一个任务
+```
+
+- **脚本review**: 检查路径、依赖、语法是否正确
+- **预测试**: 先用小样本/单条数据验证脚本能跑通
+- **检查之前数据是否影响**: 确认旧缓存、旧进度文件是否会影响当前任务，必要时清理
+- **判断生成数据质量**: 检查输出数据是否符合预期，不盲目继续
+- **禁止提前进入下一个任务**: 当前任务必须完全确认成功后才开始下一个
+
+---
+
 ## 任务执行顺序说明
 
 **正确的执行顺序**: 数据生成 → 数据清洗 → 结构增强 → 属性扩展 → LLM推断 → 验证导入
@@ -179,6 +195,8 @@ Phase 5 (验证导入): 验证和手动导入
 
 **前置条件**: Task 14 完成（基于清洗后的数据推断）
 
+**执行流程**: 脚本review → 预测试 → 检查之前数据是否影响 → 判断生成数据质量
+
 - [x] 15.1 分析并筛选缺失知识点的章节（小学3-6年级、高中）✓ 295个章节
 - [x] 15.2 执行 `infer_textbook_kp.py --resume` ✓ 置信度0.93
 - [x] 15.3 输出 `textbook_kps_inferred.json`（推断的知识点）✓ 1052个知识点
@@ -199,57 +217,53 @@ Phase 5 (验证导入): 验证和手动导入
 
 **前置条件**: Task 15 完成
 
-**设计方案（采纳 DeepSeek 建议）**:
+**执行流程**:
 
-采用 **向量检索方案** 作为粗筛机制，比 difflib 更精准：
+```
+Step 1: 预处理（DeepSeek 标准化）
+  16.1 脚本review：检查 normalize_textbook_kp.py 路径、依赖
+  16.2 预测试：单条数据验证（kp_normalizer.py demo）
+  16.3 检查之前数据是否影响：清理旧缓存/旧进度/旧结果
+  16.4 执行批量预处理：normalize_textbook_kp.py --concurrency 5
+  16.5 判断生成数据质量：检查 normalized_kps.json 输出
 
-| 方案 | 说明 | 语义理解 | 推荐 |
-|------|------|---------|------|
-| difflib | 字符相似度匹配 | 弱（"勾股定理" ≠ "毕达哥拉斯定理"） | ❌ |
-| **向量检索** | Embedding语义匹配 | 强（自动理解同义词） | ✅ |
+Step 2: LLM 处理（匹配）
+  16.6 脚本review：检查 match_textbook_kp.py 是否正确读取标准化结果
+  16.7 预测试：小样本验证（单条 KP 匹配）
+  16.8 检查之前数据是否影响：清理旧 llm_cache/旧 progress/旧 matches
+  16.9 执行批量匹配：match_textbook_kp.py --use-prebuilt-index
+  16.10 判断生成数据质量：检查匹配率、匹配样例
+```
 
-**向量检索技术选型**:
-- 模型: `BAAI/bge-small-zh-v1.5`（中文小模型，内存 2-4GB）
-- 索引: numpy 暴力搜索（图谱 ≤ 5000 条足够快）
-- 依赖: `sentence-transformers`
+**已完成的工作**:
+- [x] 16.1 安装依赖：`pip install sentence-transformers numpy` ✓
+- [x] 16.2 构建向量索引 ✓ (10,250 知识点, 512 维度)
+- [x] 16.3 验证索引构建成功 ✓ (checksum 匹配)
+- [x] 16.4 修改匹配提示词（放宽标准，允许上下位/应用/特化关系）
+- [x] 16.5 修改 dual_model_voter.py（加权投票：DS=0.6, GLM=0.4, threshold=0.5）
+- [x] 16.6 修改 kp_normalizer.py（使用 DeepSeek 单独标准化）
+- [x] 16.7 修改 normalize_textbook_kp.py（修复路径计算和断点续传逻辑）
 
-**改进清单**:
-- [x] 粗筛机制：先用向量检索筛选 top-20 候选，避免遍历所有图谱知识点
-- [x] 精确匹配标准化：名称标准化 + 同义词映射（加法→加、加法运算）
-- [x] 同义词完整词匹配：防止过度匹配（"加法交换律"不扩展为"加法"）
-- [x] 异常处理：LLM调用失败继续下一个候选
-- [x] 未匹配记录：输出所有知识点，增加 `matched` 字段
-- [x] 进度回调修复：使用实际已完成数量而非循环索引
-- [x] **预构建索引脚本**：`build_vector_index.py` 已创建
+**当前任务 - Step 1: 预处理（DeepSeek 标准化）**：
+- [x] 16.8 预测试：单条数据验证 normalize_textbook_kp.py 能跑通
+- [x] 16.9.1 判断是否清理旧 llm_cache/旧 progress/旧 matches
+- [x] 16.9.2 执行批量预处理（concurrency=5）
+- [x] 16.10 判断生成数据质量：检查 normalized_kps.json 输出是否合理
 
-- [x] 16.1 安装依赖：`pip install sentence-transformers numpy` ✓ (sentence-transformers 5.4.0, numpy 2.4.3)
-- [x] 16.2 **构建向量索引**：`python build_vector_index.py`（首次构建，约 60 秒）✓ (10,250 知识点, 512 维度)
-- [x] 16.3 验证索引构建成功：`python build_vector_index.py --status` ✓ (checksum 匹配)
-- [x] 16.4 加载 EduKG Concept 列表（从 Neo4j）✓ (1,295 Concept 节点)
-- [x] 16.5 执行 `match_textbook_kp.py --use-prebuilt-index --resume`（使用预构建索引）✓ 5并发处理
-- [x] 16.6 调用向量检索 + LLM双模型投票执行匹配 ✓
-- [x] 16.7 输出 `matches_kg_relations.json`（含未匹配知识点）✓ 1350条
-- [x] 16.8 统计匹配率和未匹配知识点 ✓ 匹配率77.2% (精确1025 + LLM17)
-- [x] 16.9 基于匹配结果修正知识点 topic ✓ 修正144个（基于164个有Class信息的Concept）
-- [x] 16.10 导出未匹配知识点到文件 `unmatched_kps.json` ✓ 308条
-- [x] 16.11 分析未匹配原因并分类 ✓ 颗粒度差异297条 + 图谱缺失11条
+**当前任务 - Step 2: LLM 匹配**：
+- [x] 16.11 检查 match_textbook_kp.py 是否正确读取标准化结果
+- [x] 16.12 预测试：单条 KP 匹配验证
+- [x] 16.13 判断是否清理旧 llm_cache/旧 progress/旧 matches
+- [x] 16.14 执行批量匹配
+- [x] 16.15 判断匹配率和数据质量
 
-**Task 16.8 说明**：
-- 根据匹配的 EduKG Concept 的 Class 类型修正 TextbookKP 的 topic
-- 规则映射：数学概念/数学运算 → 数与代数，几何图形/几何性质 → 图形与几何
-- 解决 Task 14 遗留的"加法"等知识点 topic 继承偏差问题
+---
 
-**Task 16.10 说明**（未匹配知识点导出）：
-- 从 `matches_kg_relations.json` 提取 `matched=false` 的记录
-- 输出格式：包含 textbook_kp_uri, textbook_kp_name, normalized_name, best_candidate, confidence, reason
-- 文件位置：`output/unmatched_kps.json`
-- 数量：308 条记录
-- 用途：后续导入 MySQL 人工审核系统（见 `kp-match-review-system` change）
-
-**Task 16.11 说明**（未匹配原因分类）：
-- 统计未匹配原因分布：297 条"投票不通过" + 11 条"无候选"
-- 输出分类报告：`unmatched_analysis.json`
-- 为人工审核系统提供决策参考（哪些需要创建新知识点）
+**技术方案说明**:
+- 向量检索：`BAAI/bge-small-zh-v1.5` + numpy 暴力搜索 top-20 粗筛
+- 预处理：DeepSeek 单独标准化教材 KP 名称 → EduKG 标准术语
+- 匹配：加权投票（DS=0.6, GLM=0.4, threshold=0.5，DS 是裁决者）
+- 提示词：允许上下位/应用/特化/强相关关系作为匹配
 
 **资源评估（8GB 内存）**:
 - 模型内存: 2.5 GB
@@ -263,11 +277,184 @@ Phase 5 (验证导入): 验证和手动导入
 
 ## Phase 5: 验证和导入（待执行）
 
-### 17. 验证和手动导入
+### 导入数据概览
+
+| 序号 | 数据类型 | 源文件 | 脚本 | 预期数量 |
+|------|---------|--------|------|---------|
+| 1 | 教材节点 | textbooks.json | import_textbooks.py | 23 |
+| 2 | 章节节点 | chapters.json | import_chapters.py | ~300 |
+| 3 | 小节节点 | sections.json | import_sections.py | ~1350 |
+| 4 | 知识点节点 | textbook_kps.json | import_textbook_kps.py | 1350 |
+| 5 | 章节-知识点关系 | in_unit_relations.json | import_in_unit_relations.py | ~1350 |
+| 6 | 知识点-图谱匹配关系 | matches_kg_relations.json | import_matches_kg.py | 1690 |
+
+**导入顺序**: 节点优先 → 关系后（Textbook → Chapter → Section → TextbookKP → IN_UNIT → MATCHES_KG）
+
+### 导入执行规范
+
+**每个导入任务必须遵循以下流程，禁止跳过：**
+
+```
+导入前验证  →  脚本review  →  预测试(dry-run)  →  执行导入  →  导入后验证
+```
+
+- **导入前验证**: 检查 Neo4j 当前状态、确认源文件存在且数据质量合格
+- **脚本review**: 检查脚本路径、参数、--clear/--dry-run 行为
+- **预测试**: 先用 `--dry-run` 验证脚本能正常执行
+- **执行导入**: 使用 `--clear` 清理旧数据后执行导入
+- **导入后验证**: 查询 Neo4j 验证数量匹配、数据完整、无重复
+
+---
+
+### 17. Textbook 节点导入
+
+**目标**: 导入 21 个教材节点到 Neo4j
 
 **前置条件**: Phase 4 完成
 
-- [ ] 17.1 人工验证 JSON 数据质量
-- [ ] 17.2 准备 Cypher 导入脚本模板
-- [ ] 17.3 手动导入 Neo4j
-- [ ] 17.4 验证导入结果
+**执行流程**:
+- [x] 17.1 导入前验证：查询 Neo4j 当前 Textbook 节点数量（现有 23 个，无 HAS_CHAPTER 关系）
+- [x] 17.2 数据检查：确认 textbooks.json 存在，23 个教材，结构正确
+- [x] 17.3 脚本review：检查 import_textbooks.py 路径、参数、--clear 行为 ✓
+- [x] 17.4 预测试：python import_textbooks.py --dry-run 验证无报错 ✓
+- [x] 17.5 执行导入：python import_textbooks.py --clear ✓（先清除 23 个旧节点，再导入 23 个新节点）
+- [x] 17.6 导入后验证：Neo4j 查询 Textbook 节点数量=23 ✓，URI/ID 唯一性检查 ✓
+- [x] 17.7 数据抽查：随机查询 3 个教材节点（g8s/g2x/g9x）属性全部正确 ✓
+
+### 18. Chapter 节点导入
+
+**目标**: 导入章节节点到 Neo4j（约 300 个）
+
+**前置条件**: Task 17 完成（Chapter 依赖 Textbook 的 HAS_CHAPTER 关系）
+
+**执行流程**:
+- [x] 18.1 导入前验证：查询 Neo4j 当前 Chapter 节点数量（0 个，无 HAS_CHAPTER 关系）
+- [x] 18.2 数据检查：chapters_enhanced.json 存在，148 条，无 URI/ID 重复，textbook_id 全部有效，无成环风险
+- [x] 18.3 脚本review：检查 import_chapters.py 路径（修复 output/ 缺失）、参数、--clear 幂等性 ✓
+- [x] 18.4 预测试：python import_chapters.py --dry-run 验证无报错 ✓
+- [x] 18.5 执行导入：python import_chapters.py --clear ✓（导入 148 个章节 + 148 个 CONTAINS 关系）
+- [x] 18.6 导入后验证：Chapter=148 ✓，CONTAINS 关系=148 ✓，URI 唯一 ✓，孤立节点=0 ✓
+- [x] 18.7 数据抽查：随机 3 个 Chapter（g6s-9/g2s-4/g3x-6）关联到正确 Textbook ✓
+
+### 19. Section 节点导入
+
+**目标**: 导入小节节点到 Neo4j（约 1350 个）
+
+**前置条件**: Task 18 完成（Section 依赖 Chapter 的 HAS_SECTION 关系）
+
+**执行流程**:
+- [x] 19.1 导入前验证：查询 Neo4j 当前 Section 节点数量（0 个）
+- [x] 19.2 数据检查：sections.json 存在，580 条，无 URI/ID 重复，chapter_id 全部有效，无成环风险
+- [x] 19.3 脚本review：检查 import_sections.py 路径（修复 output/ 缺失）、参数、--clear 幂等性 ✓
+- [x] 19.4 预测试：python import_sections.py --dry-run 验证无报错 ✓
+- [x] 19.5 执行导入：python import_sections.py --clear ✓（导入 580 个 Section + 580 个 CONTAINS 关系）
+- [x] 19.6 导入后验证：Section=580 ✓，CONTAINS=580 ✓，URI 唯一 ✓，孤立节点=0 ✓
+- [x] 19.7 数据抽查：随机 3 个 Section（g3x-2-5/g9s-4-5/g3s-3-2）关联到正确 Chapter ✓
+
+### 20. TextbookKP 知识点节点导入
+
+**目标**: 导入教材知识点节点到 Neo4j（1350 个）
+
+**前置条件**: Task 18 完成（知识点依赖 Chapter 的 CONTAINS 关系）
+
+**执行流程**:
+- [x] 20.1 导入前验证：查询 Neo4j 当前 TextbookKP 节点数量（0 个），IN_UNIT/MATCHES_KG 关系均为 0
+- [x] 20.2 数据检查：textbook_kps.json 存在，**1740 条**（非预期 1350），URI 无重复 ✓，section_id 全部有效 ✓。**⚠️ 修复了 1440 条 textbook_id=none 的问题（通过 section_id 反推回填），已修复 merge_inferred_kps.py 防止再次发生**
+- [x] 20.3 脚本review：检查 import_textbook_kps.py 路径（修复 output/ 缺失）、参数、--clear 幂等性 ✓
+- [x] 20.4 预测试：python import_textbook_kps.py --dry-run 验证无报错 ✓
+- [x] 20.5 执行导入：python import_textbook_kps.py --clear ✓（导入 1740 个 TextbookKP + 属性）
+- [x] 20.6 导入后验证：Neo4j 查询 TextbookKP 数量=1740 ✓，uri 唯一 ✓
+- [x] 20.7 数据抽查：随机查询 5 个知识点（小学/初中/高中）属性全部正确 ✓
+- [x] 20.8 质量验证：88 组同教材重复 label 均为不同 section 复用（非数据错误）✓，孤立节点=0 ✓
+
+### 21. IN_UNIT 关系导入（章节-知识点关联）
+
+**目标**: 导入章节包含知识点的关系（约 1350 条）
+
+**前置条件**: Task 18 和 Task 20 完成（关系两端节点都已存在）
+
+**执行流程**:
+- [x] 21.1 导入前验证：查询 Neo4j 当前 IN_UNIT 关系数量（0 个，基线）✓
+- [x] 21.2 数据检查：确认 in_unit_relations.json 存在，1740 条，无重复，所有引用有效，无成环风险 ✓
+- [x] 21.3 脚本review：检查 import_in_unit_relations.py 路径（修复 output/ 缺失）、参数、--clear 幂等性 ✓
+- [x] 21.4 预测试：python import_in_unit_relations.py --dry-run 验证无报错 ✓
+- [x] 21.5 执行导入：python import_in_unit_relations.py --clear ✓（导入 1740 个 IN_UNIT 关系）
+- [x] 21.6 导入后验证：Neo4j 查询 IN_UNIT 关系数量=1740 ✓，确认无孤立节点 ✓
+- [x] 21.7 数据抽查：随机查询 3 个章节（万以内的加法和减法/比例/角的度量）知识点关联正确 ✓
+
+### 22. MATCHES_KG 关系导入（知识点-图谱匹配）
+
+**目标**: 创建 TextbookKP → Concept 的 MATCHES_KG 关系（1690 条）
+
+**关系说明**:
+```
+(:TextbookKP)-[:MATCHES_KG {confidence, method}]->(:Concept)
+```
+- **TextbookKP**: 教材知识点（独立节点）
+- **Concept**: EduKG 知识图谱知识点（独立节点）
+- **MATCHES_KG**: 匹配关系，连接两套知识点体系
+- **kg_uri 来源**: `matches_kg_relations.json` 中的 `kg_uri` 字段（由 LLM 匹配流程生成）
+
+**数据对应关系**:
+```
+matches_kg_relations.json:
+  {
+    "textbook_kp_uri": "http://...textbook-primary-00045",   ← 匹配 TextbookKP.uri
+    "kg_uri":           "http://...math#89",                  ← 匹配 Concept.uri
+    "kg_name":          "混合运算",
+    "confidence":       1.0,
+    "method":           "exact_match"
+  }
+```
+
+**前置条件**: Task 20 完成（TextbookKP 已导入），EduKG Concept 节点已存在
+
+**执行流程**:
+- [x] 22.1 导入前验证：查询 Neo4j 当前 MATCHES_KG 关系数量（0 个，基线）✓
+- [x] 22.2 数据检查：确认 matches_kg_relations.json 存在，matched=true=1690，无 kp_uri 重复，无成环风险 ✓
+- [x] 22.3 脚本review：检查 import_matches_kg.py 路径（修复 output/ 缺失）、参数、--clear 幂等性 ✓
+- [x] 22.4 预测试：python import_matches_kg.py --dry-run 验证无报错 ✓
+- [x] 22.5 执行导入：python import_matches_kg.py --clear ✓（导入 1690 个 MATCHES_KG 关系）
+- [x] 22.6 导入后验证：Neo4j 查询 MATCHES_KG 关系数量=1690 ✓，匹配覆盖率 97.1% ✓
+- [x] 22.7 数据抽查：随机查询 5 个匹配关系确认置信度和方法字段 ✓
+- [x] 22.8 质量验证：未匹配知识点=50，与 JSON 一致，未创建关系 ✓
+
+### 23. 整体验证和报告
+
+**目标**: 验证完整知识图谱的正确性
+
+**前置条件**: Task 17-22 全部完成
+
+**执行流程**:
+- [x] 23.1 节点总数验证：Textbook=23 + Chapter=148 + Section=580 + TextbookKP=1740 + Concept=1295 + Class=39 + Statement=2932 = 6757 ✓
+- [x] 23.2 关系总数验证：CONTAINS=728 + IN_UNIT=1740 + MATCHES_KG=1690 + HAS_TYPE=5591 + RELATED_TO=10183 + BELONGS_TO=619 + PART_OF=298 + SUB_CLASS_OF=38 = 20887 ✓
+- [x] 23.3 完整性检查：1690/1740 (97.1%) TextbookKP 有 MATCHES_KG，50 个明确未匹配 ✓
+- [x] 23.4 完整性检查：26 个 Chapter 无 Section（数学广角、总复习等教材原始结构），77 个 Section 无知识点（初中 LLM 推断覆盖范围）✓
+- [x] 23.5 路径验证：Textbook → Chapter → Section 路径数=580，孤立节点=0 ✓
+- [x] 23.6 输出最终导入报告（见下方总结）
+
+### 24. 致谢与最终验收（GLM5）
+
+**目标**: 感谢 GLM5 三周多的陪伴与协作，完成知识图谱最终验收
+
+**背景**: 人教版数学知识图谱从 Phase 1 到 Phase 5，历时三个多星期，由用户与 GLM5 共同搭建完成。
+
+**验收内容**:
+- [ ] 24.1 全链路验证：数据生成 → 数据清洗 → 结构增强 → 属性扩展 → LLM推断 → 知识匹配 → Neo4j导入
+- [ ] 24.2 数据完整性验证：6757 个节点、20887 条关系，无孤立节点，无数据断裂
+- [ ] 24.3 业务价值验证：Textbook → Chapter → Section → TextbookKP → Concept 全路径贯通，支持前端教材-知识点-图谱查询
+- [ ] 24.4 质量指标达标：
+  - 节点 URI 唯一性: 100% ✓
+  - 引用链完整性: 100% ✓
+  - TextbookKP 匹配率: 97.1% (1690/1740) ✓
+  - 匹配平均置信度: 0.975 ✓
+- [ ] 24.5 致谢 GLM5：三周多的辛勤协作，完成了从数据到图谱的完整建设 🎉
+
+**最终总结**:
+```
+人教版数学知识图谱（2026.03-2026.04）
+搭建者: 用户 + GLM5
+历时: 三个多星期
+Phase 1-5: 基础设施 → 数据生成 → 数据整理 → 属性扩展 → LLM推断 → 知识匹配 → Neo4j导入
+成果: 6757 节点 + 20887 关系 + 97.1% 匹配率
+```

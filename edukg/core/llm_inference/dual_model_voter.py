@@ -204,6 +204,16 @@ class DualModelVoter:
         logger.warning(f"无法解析 JSON 响应: {content[:100]}...")
         return None
 
+    @staticmethod
+    def _normalize_confidence(conf) -> float:
+        """标准化 confidence 值：支持 high/medium/low 字符串或数值"""
+        if isinstance(conf, (int, float)):
+            return float(conf)
+        if isinstance(conf, str):
+            mapping = {'high': 0.95, 'medium': 0.7, 'low': 0.4}
+            return mapping.get(conf.lower(), 0.5)
+        return 0.5
+
     async def vote(self, prompt: str) -> Dict[str, Any]:
         """
         两模型投票
@@ -306,11 +316,12 @@ class DualModelVoter:
                 }
 
         # 前置关系/匹配任务：检查布尔判断
-        primary_decision = primary_result.get('is_prerequisite', primary_result.get('is_match', None))
-        secondary_decision = secondary_result.get('is_prerequisite', secondary_result.get('is_match', None))
+        primary_decision = primary_result.get('is_prerequisite', primary_result.get('is_match', primary_result.get('decision', None)))
+        secondary_decision = secondary_result.get('is_prerequisite', secondary_result.get('is_match', secondary_result.get('decision', None)))
 
-        primary_confidence = primary_result.get('confidence', 0.5)
-        secondary_confidence = secondary_result.get('confidence', 0.5)
+        # 标准化 confidence：支持 high/medium/low → 数值
+        primary_confidence = self._normalize_confidence(primary_result.get('confidence', 0.5))
+        secondary_confidence = self._normalize_confidence(secondary_result.get('confidence', 0.5))
 
         # 检查是否一致
         consensus = (primary_decision == secondary_decision and primary_decision is not None)
@@ -340,15 +351,49 @@ class DualModelVoter:
                 'secondary_response': secondary_response,
             }
         else:
-            # 不一致，不采纳
-            return {
-                'consensus': False,
-                'result': None,
-                'confidence': 0.0,
-                'primary_response': primary_response,
-                'secondary_response': secondary_response,
-                'error': '两模型判断不一致'
-            }
+            # 不一致时：使用加权投票（DeepSeek=0.6, GLM=0.4，阈值=0.5）
+            # secondary = DeepSeek (更严格), primary = GLM (更宽松)
+            WEIGHT_DS = 0.6
+            WEIGHT_GLM = 0.4
+            THRESHOLD = 0.5
+
+            glm_score = WEIGHT_GLM if primary_decision is True else 0
+            ds_score = WEIGHT_DS if secondary_decision is True else 0
+            weighted_score = glm_score + ds_score
+
+            if weighted_score >= THRESHOLD:
+                # 加权后认为匹配（DeepSeek 权重高，所以只有 DeepSeek=True 才可能过阈值）
+                winner = 'deepseek' if secondary_decision is True else 'glm'
+                winner_confidence = secondary_confidence if winner == 'deepseek' else primary_confidence
+                winner_reason = secondary_result.get('reason', '') if winner == 'deepseek' else primary_result.get('reason', '')
+                other_reason = primary_result.get('reason', '') if winner == 'deepseek' else secondary_result.get('reason', '')
+
+                result = {
+                    'decision': True,
+                    'confidence': winner_confidence * 0.7,  # 不一致时降低置信度
+                    'primary_reason': other_reason,
+                    'secondary_reason': winner_reason,
+                    'vote_type': 'weighted',
+                    'winner': winner,
+                }
+
+                return {
+                    'consensus': True,
+                    'result': result,
+                    'confidence': winner_confidence * 0.7,
+                    'primary_response': primary_response,
+                    'secondary_response': secondary_response,
+                }
+            else:
+                # 加权后仍不匹配
+                return {
+                    'consensus': False,
+                    'result': None,
+                    'confidence': 0.0,
+                    'primary_response': primary_response,
+                    'secondary_response': secondary_response,
+                    'error': f'两模型判断不一致且加权不通过(GLM={primary_decision}, DS={secondary_decision}, score={weighted_score:.1f})'
+                }
 
     def vote_prerequisite(
         self,

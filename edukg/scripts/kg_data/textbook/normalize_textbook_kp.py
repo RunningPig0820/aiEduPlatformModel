@@ -10,6 +10,7 @@
 
 import asyncio
 import json
+import os
 import sys
 import time
 import argparse
@@ -17,14 +18,17 @@ from pathlib import Path
 from datetime import datetime
 
 # 设置路径
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+KG_DATA_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(KG_DATA_DIR, "..", "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 # 加载环境变量
-AI_SERVICE_DIR = PROJECT_ROOT.parent / "ai-edu-ai-service"
-sys.path.insert(0, str(AI_SERVICE_DIR))
+AI_SERVICE_DIR = os.path.join(PROJECT_ROOT, "ai-edu-ai-service")
+if AI_SERVICE_DIR not in sys.path:
+    sys.path.insert(0, str(AI_SERVICE_DIR))
 
-import os
 os.chdir(AI_SERVICE_DIR)
 from dotenv import load_dotenv
 load_dotenv()
@@ -32,9 +36,10 @@ load_dotenv()
 from edukg.core.textbook.kp_normalizer import KPNormalizer
 
 # 数据目录
-DATA_DIR = PROJECT_ROOT / "data" / "edukg" / "math" / "5_教材目录(Textbook)" / "output"
-CACHE_DIR = PROJECT_ROOT / "data" / "edukg" / "math" / "5_教材目录(Textbook)" / "output" / "normalizer_cache"
-PROGRESS_DIR = PROJECT_ROOT / "data" / "edukg" / "math" / "5_教材目录(Textbook)" / "output" / "progress"
+OUTPUT_BASE = os.path.join(PROJECT_ROOT, "edukg", "data", "edukg", "math", "5_教材目录(Textbook)", "output")
+DATA_DIR = Path(OUTPUT_BASE)
+CACHE_DIR = Path(os.path.join(OUTPUT_BASE, "normalizer_cache"))
+PROGRESS_DIR = Path(os.path.join(OUTPUT_BASE, "progress"))
 
 class NormalizationRunner:
     """标准化批量处理器（带进度显示）"""
@@ -117,41 +122,57 @@ class NormalizationRunner:
         print(f"并发数: {self.concurrency}")
         print()
 
-        # 检查已有缓存
-        cached_count = self.get_cached_count()
-        print(f"已有缓存: {cached_count} 个")
+        # 检查已有缓存（基于实际文件，不依赖进度 JSON）
+        if CACHE_DIR.exists():
+            cached_keys = set(f.stem for f in CACHE_DIR.glob("*.json"))
+        else:
+            cached_keys = set()
 
-        if resume and cached_count > 0:
+        # 找出已缓存的 KP 对应的 URI
+        import hashlib
+        cached_uris = set()
+        for kp in kps:
+            key_content = f"{kp.get('label', '')}_{kp.get('stage', '')}_{kp.get('grade', '')}"
+            cache_key = hashlib.md5(key_content.encode()).hexdigest()
+            if cache_key in cached_keys:
+                cached_uris.add(kp.get("uri"))
+
+        print(f"已有缓存: {len(cached_uris)} 个")
+
+        if resume and len(cached_uris) > 0:
             print(f"断点续传模式: 将复用已有缓存")
 
         print()
         print("开始处理...")
         print("=" * 50)
 
-        # 加载进度
-        progress = self.load_progress()
-        processed_uris = set(progress.get("processed", []))
-
-        # 统计
-        stats = {
-            "completed": cached_count,
-            "total_time": 0,
-            "start_time": time.time()
-        }
-
-        # 过滤已处理的
-        pending_kps = [kp for kp in kps if kp.get("uri") not in processed_uris]
+        # 过滤已处理的（基于实际缓存文件）
+        pending_kps = [kp for kp in kps if kp.get("uri") not in cached_uris]
         print(f"待处理: {len(pending_kps)} 个")
         print()
 
         if not pending_kps:
-            print("所有知识点已处理完成！")
+            print("所有知识点已处理完成！正在加载缓存结果...")
+            # 全部已缓存，加载缓存结果并保存
+            all_results = []
+            for kp in kps:
+                name = kp.get("label", "")
+                stage = kp.get("stage", "")
+                grade = kp.get("grade", "")
+                cached_result = await self.normalizer.normalize(name, stage, grade)
+                all_results.append(cached_result)
+            output_file = DATA_DIR / "normalized_kps_complete.json"
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(all_results, f, ensure_ascii=False, indent=2)
+            print(f"结果保存: {output_file}")
             return
 
-        # 更新进度文件
-        progress["total"] = total
-        progress["start_time"] = datetime.now().isoformat()
-        self.save_progress(progress)
+        # 统计
+        stats = {
+            "completed": 0,
+            "total_time": 0,
+            "start_time": time.time()
+        }
 
         # 执行标准化（并发）
         results = []
@@ -163,9 +184,6 @@ class NormalizationRunner:
                     kp, index, len(pending_kps),
                     stats["start_time"], stats
                 )
-                # 记录进度
-                progress["processed"].append(kp.get("uri"))
-                self.save_progress(progress)
                 return result
 
         # 批量处理
@@ -175,6 +193,20 @@ class NormalizationRunner:
         ]
 
         results = await asyncio.gather(*tasks)
+
+        # 加载已跳过（已缓存）的知识点结果，确保输出完整
+        cached_results = []
+        skipped_kps = [kp for kp in kps if kp.get("uri") in cached_uris]
+        for kp in skipped_kps:
+            name = kp.get("label", "")
+            stage = kp.get("stage", "")
+            grade = kp.get("grade", "")
+            # 通过 normalizer 的 normalize 方法加载缓存结果（不会调用 LLM）
+            cached_result = await self.normalizer.normalize(name, stage, grade)
+            cached_results.append(cached_result)
+
+        # 合并所有结果
+        all_results = list(results) + cached_results
 
         # 完成
         total_time = time.time() - stats["start_time"]
@@ -191,16 +223,9 @@ class NormalizationRunner:
         print(f"缓存文件: {self.get_cached_count()} 个")
 
         # 保存结果
-        output_file = DATA_DIR / "normalized_kps.json"
-        all_results = []
-
-        # 加载已有结果（如果有）
-        if output_file.exists():
-            with open(output_file, 'r', encoding='utf-8') as f:
-                all_results = json.load(f)
-
-        # 合并新结果
-        all_results.extend(results)
+        output_file = DATA_DIR / "normalized_kps_complete.json"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(all_results, f, ensure_ascii=False, indent=2)
 
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(all_results, f, ensure_ascii=False, indent=2)

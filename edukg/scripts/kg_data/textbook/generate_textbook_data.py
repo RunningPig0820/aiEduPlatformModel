@@ -20,12 +20,16 @@ from pathlib import Path
 
 # 添加项目根目录到 sys.path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+KG_DATA_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(KG_DATA_DIR, "..", "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from edukg.core.textbook import TextbookDataGenerator
 from edukg.core.textbook.config import OUTPUT_DIR
+
+# 导入文件输出到教材目录根路径（中间文件仍在 output/）
+IMPORT_OUTPUT_DIR = OUTPUT_DIR.parent
 
 # 配置日志
 logging.basicConfig(
@@ -43,7 +47,7 @@ def main():
 
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir) if args.output_dir else OUTPUT_DIR
+    output_dir = Path(args.output_dir) if args.output_dir else IMPORT_OUTPUT_DIR
 
     generator = TextbookDataGenerator(output_dir=output_dir)
 

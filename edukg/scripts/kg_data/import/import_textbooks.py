@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 DATA_FILE = os.path.join(
     PROJECT_ROOT,
     "edukg", "data", "edukg", "math",
-    "5_教材目录(Textbook)", "output", "textbooks.json"
+    "5_教材目录(Textbook)", "textbooks.json"
 )
 
 
@@ -115,11 +115,16 @@ class TextbookImporter:
         """清除已有的 Textbook 节点"""
         logger.warning("清除已有的 Textbook 节点及相关关系...")
         with self.client.session() as session:
-            # 先删除 Textbook 的 CONTAINS 关系
-            session.run("MATCH ()-[r:CONTAINS]->() WHERE r IS NOT NULL DELETE r")
+            # 仅删除 Textbook → Chapter/Section 的 CONTAINS 关系
+            result = session.run("MATCH (t:Textbook)-[r:CONTAINS]->() DELETE r RETURN count(r) AS deleted")
+            deleted = result.single()["deleted"]
+            logger.info(f"已删除 {deleted} 个 CONTAINS 关系")
+            # 删除 Textbook 节点
             result = session.run("MATCH (t:Textbook) DELETE t RETURN count(t) AS deleted")
             deleted = result.single()["deleted"]
             logger.info(f"已删除 {deleted} 个 Textbook 节点")
+            if deleted == 0:
+                logger.warning("没有 Textbook 节点需要删除")
 
     def import_textbooks(self, textbooks: List[Dict], dry_run: bool = False) -> int:
         """
@@ -197,6 +202,7 @@ def main():
     parser.add_argument('--file', type=str, help='指定数据文件路径')
     parser.add_argument('--dry-run', action='store_true', help='仅打印 Cypher 语句，不执行')
     parser.add_argument('--clear', action='store_true', help='导入前清除已有的 Textbook 节点')
+    parser.add_argument('--clear-only', action='store_true', help='仅清除已有的 Textbook 节点，不导入')
     parser.add_argument('--stats', action='store_true', help='仅显示统计信息')
 
     args = parser.parse_args()
@@ -210,7 +216,8 @@ def main():
             logger.error("Neo4j 连接失败")
             sys.exit(1)
 
-        if args.stats:
+        if args.clear_only:
+            importer.clear_textbooks()
             importer.show_statistics()
             return
 

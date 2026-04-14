@@ -63,8 +63,13 @@ class VectorIndexManager:
         """
         from sentence_transformers import SentenceTransformer
 
+        # 强制离线模式，避免联网检查更新
+        import os
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
         # 加载模型
-        logger.info(f"加载 Embedding 模型: {self.model_name}")
+        logger.info(f"加载 Embedding 模型: {self.model_name} (离线模式)")
         model = SentenceTransformer(self.model_name)
 
         # 提取知识点文本

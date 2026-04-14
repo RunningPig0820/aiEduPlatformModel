@@ -89,7 +89,12 @@ class LocalVectorRetriever:
                 "请安装 sentence-transformers: pip install sentence-transformers"
             )
 
-        logger.info(f"加载向量检索模型: {model_name}")
+        # 设置离线模式，避免每次启动都联网检查更新
+        import os
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+        logger.info(f"加载向量检索模型: {model_name} (离线模式)")
         self.model = SentenceTransformer(model_name)
 
         # 构建知识点文本（label + description）
@@ -176,10 +181,16 @@ class PrebuiltIndexRetriever:
         self.concepts = concepts
         self.model_name = model_name
 
+        # 设置离线模式，避免每次启动都联网检查更新
+        import os
+        # 强制离线模式，避免联网检查更新（首次已下载好模型）
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
         # 加载模型用于查询编码
         try:
             from sentence_transformers import SentenceTransformer
-            logger.info(f"加载查询编码模型: {model_name}")
+            logger.info(f"加载查询编码模型: {model_name} (离线模式)")
             self.model = SentenceTransformer(model_name)
         except ImportError:
             raise ImportError(

@@ -187,7 +187,101 @@ def cleanup_test_data(neo4j_driver):
 
 ---
 
-## 8. 运行测试
+## 9. 导入验证测试 (Import Verification)
+
+### 9.1 验证规范
+
+每个导入任务必须执行以下验证：
+
+```
+导入前查询基线  →  脚本 dry-run  →  执行导入  →  导入后查询验证  →  数据抽查
+```
+
+### 9.2 Textbook 节点导入验证 (Task 17)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 | 实际结果 |
+|---------|-------|---------|---------|---------|
+| IMP-001 | 导入前基线 | `MATCH (t:Textbook) RETURN count(t)` | 记录当前数量 | 23（已有旧数据） |
+| IMP-002 | 数据文件检查 | 检查 textbooks.json 存在且可解析 | 23 条记录 | ✓ 23 条，结构正确 |
+| IMP-003 | dry-run | `python import_textbooks.py --dry-run` | 无报错，打印 Cypher | ✓ 无报错 |
+| IMP-004 | 导入后数量 | `MATCH (t:Textbook) RETURN count(t)` | 23 | ✓ 23 |
+| IMP-005 | URI 唯一性 | `MATCH (t:Textbook) WITH t.uri AS uri, count(*) AS c WHERE c>1 RETURN uri, c` | 无重复 | ✓ 无重复 |
+| IMP-006 | 数据抽查 | 随机查询 3 个教材节点 | stage, grade, name 属性正确 | ✓ g8s/g2x/g9x 抽查通过 |
+
+### 9.3 Chapter 节点导入验证 (Task 18)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 | 实际结果 |
+|---------|-------|---------|---------|---------|
+| IMP-007 | 导入前基线 | `MATCH (c:Chapter) RETURN count(c)` | 记录当前数量 | 0（无旧数据） |
+| IMP-008 | 数据文件检查 | 检查 chapters_enhanced.json 存在 | ~148 条 | ✓ 148 条，无重复，textbook_id 全部有效 |
+| IMP-009 | dry-run | `python import_chapters.py --dry-run` | 无报错 | ✓ 无报错（修复 output/ 路径后） |
+| IMP-010 | 导入后数量 | `MATCH (c:Chapter) RETURN count(c)` | 148 | ✓ 148 |
+| IMP-011 | CONTAINS 关系 | `MATCH ()-[:CONTAINS]->(c:Chapter) RETURN count(*)` | 148 | ✓ 148 |
+| IMP-012 | 关联正确性 | 随机查询 3 个 Chapter 确认关联到 Textbook | 关联存在且正确 | ✓ g6s-9/g2s-4/g3x-6 抽查通过 |
+
+### 9.4 Section 节点导入验证 (Task 19)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 | 实际结果 |
+|---------|-------|---------|---------|---------|
+| IMP-013 | 导入前基线 | `MATCH (s:Section) RETURN count(s)` | 记录当前数量 | 0（无旧数据） |
+| IMP-014 | 数据文件检查 | 检查 sections.json 存在 | 580 条 | ✓ 580 条，无重复，chapter_id 全部有效 |
+| IMP-015 | dry-run | `python import_sections.py --dry-run` | 无报错 | ✓ 无报错（修复 output/ 路径后） |
+| IMP-016 | 导入后数量 | `MATCH (s:Section) RETURN count(s)` | 580 | ✓ 580 |
+| IMP-017 | CONTAINS 关系 | `MATCH (c:Chapter)-[:CONTAINS]->(s:Section) RETURN count(*)` | 580 | ✓ 580 |
+| IMP-018 | 关联正确性 | 随机查询 3 个 Section 确认关联到 Chapter | 关联存在且正确 | ✓ g3x-2-5/g9s-4-5/g3s-3-2 抽查通过 |
+| IMP-018 | 关联正确性 | 随机查询 3 个 Section 确认关联到 Chapter | 关联存在且正确 |
+
+### 9.5 TextbookKP 节点导入验证 (Task 20)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 |
+|---------|-------|---------|---------|
+| IMP-019 | 导入前基线 | `MATCH (tkp:TextbookKP) RETURN count(tkp)` | 记录当前数量 |
+| IMP-020 | 数据文件检查 | 检查 textbook_kps.json 存在 | 1350 条 |
+| IMP-021 | 字段完整性 | 随机检查 10 个节点 | stage, grade, topic, difficulty, importance 非空 |
+| IMP-022 | dry-run | `python import_textbook_kps.py --dry-run` | 无报错 |
+| IMP-023 | 导入后数量 | `MATCH (tkp:TextbookKP) RETURN count(tkp)` | 1350 |
+| IMP-024 | URI 唯一性 | `MATCH (tkp:TextbookKP) RETURN tkp.uri, count(*) HAVING count(*)>1` | 无重复 |
+| IMP-025 | 属性分布 | 按 stage 分组统计 | primary/middle/high 分布合理 |
+| IMP-026 | 重复检查 | 同一教材内无重复 label | 无重复 |
+
+### 9.6 IN_UNIT 关系导入验证 (Task 21)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 |
+|---------|-------|---------|---------|
+| IMP-027 | 导入前基线 | `MATCH ()-[r:IN_UNIT]->() RETURN count(r)` | 记录当前数量 |
+| IMP-028 | 数据文件检查 | 检查 in_unit_relations.json 存在 | ~1350 条 |
+| IMP-029 | 引用有效性 | 检查所有 from/to URI 在 Neo4j 中存在 | 无孤立引用 |
+| IMP-030 | dry-run | `python import_in_unit_relations.py --dry-run` | 无报错 |
+| IMP-031 | 导入后数量 | `MATCH ()-[r:IN_UNIT]->() RETURN count(r)` | ~1350 |
+| IMP-032 | 孤立节点检查 | `MATCH (n) WHERE NOT (n)-[:IN_UNIT]-() AND n:TextbookKP RETURN count(n)` | 应为 0 或少量 |
+| IMP-033 | 数据抽查 | 随机查询 3 个 Chapter 的知识点 | IN_UNIT 关系存在 |
+
+### 9.7 MATCHES_KG 关系导入验证 (Task 22)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 |
+|---------|-------|---------|---------|
+| IMP-034 | 导入前基线 | `MATCH ()-[r:MATCHES_KG]->() RETURN count(r)` | 记录当前数量 |
+| IMP-035 | 数据文件检查 | 检查 matches_kg_relations.json，matched=true 的数量 | 1690 |
+| IMP-036 | dry-run | `python import_matches_kg.py --dry-run` | 无报错 |
+| IMP-037 | 导入后数量 | `MATCH ()-[r:MATCHES_KG]->() RETURN count(r)` | 1690 |
+| IMP-038 | 匹配覆盖率 | `MATCH (tkp:TextbookKP) WHERE NOT (tkp)-[:MATCHES_KG]->() RETURN count(tkp)` | ~50 (未匹配) |
+| IMP-039 | 置信度检查 | `MATCH ()-[r:MATCHES_KG]->() RETURN r.confidence` 分布 | 大部分 >= 0.8 |
+| IMP-040 | 方法检查 | 按 r.method 分组统计 | exact_match 和 llm_vote 都有 |
+
+### 9.8 整体验证 (Task 23)
+
+| 用例编号 | 验证项 | 验证方法 | 预期结果 |
+|---------|-------|---------|---------|
+| IMP-041 | 节点总数 | `MATCH (n) RETURN labels(n) AS labels, count(*) ORDER BY labels` | 符合预期 |
+| IMP-042 | 关系总数 | `MATCH ()-[r]->() RETURN type(r) AS type, count(*) ORDER BY type` | 符合预期 |
+| IMP-043 | TextbookKP 覆盖 | `MATCH (tkp:TextbookKP) WHERE (tkp)-[:MATCHES_KG]->() RETURN count(tkp)` | 1690 (97.1%) |
+| IMP-044 | Chapter 知识点覆盖 | `MATCH (c:Chapter) WHERE NOT (c)-[:IN_UNIT]->() RETURN count(c)` | 0 |
+| IMP-045 | 路径完整性 | `MATCH (t)-[:HAS_CHAPTER]->(c)-[:CONTAINS]->(s) RETURN count(*)` | 路径通畅 |
+| IMP-046 | 最终报告 | 汇总所有统计数据 | 输出完整报告 |
+
+---
+
+## 10. 运行测试
 
 ```bash
 # 运行单个测试文件

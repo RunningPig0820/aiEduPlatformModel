@@ -17,7 +17,9 @@ import sys
 from pathlib import Path
 
 # 设置路径
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+KG_DATA_DIR = SCRIPT_DIR.parent
+PROJECT_ROOT = KG_DATA_DIR.parent.parent.parent
 AI_SERVICE_DIR = PROJECT_ROOT / "ai-edu-ai-service"
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(AI_SERVICE_DIR))

@@ -211,6 +211,7 @@ def main():
     parser.add_argument('--file', type=str, help='指定数据文件路径')
     parser.add_argument('--dry-run', action='store_true', help='仅打印 Cypher 语句，不执行')
     parser.add_argument('--clear', action='store_true', help='导入前清除已有的 Chapter 节点')
+    parser.add_argument('--clear-only', action='store_true', help='仅清除已有的 Chapter 节点，不导入')
     parser.add_argument('--stats', action='store_true', help='仅显示统计信息')
 
     args = parser.parse_args()
@@ -222,6 +223,11 @@ def main():
         if not importer.test_connection():
             logger.error("Neo4j 连接失败")
             sys.exit(1)
+
+        if args.clear_only:
+            importer.clear_chapters()
+            importer.show_statistics()
+            return
 
         if args.stats:
             importer.show_statistics()
