@@ -17,6 +17,25 @@ EduKG is proposed and maintained by the Knowledge Engineering Group of Tsinghua 
 
 本项目基于 EduKG 本体，构建了**人教版 K12 数学知识图谱**，已完成教材到知识点的完整映射。
 
+### 知识图谱搭建流程
+
+**完整搭建流程文档**: `edukg/data/edukg/math/5_教材目录(Textbook)/README.md`
+
+流程概览：
+
+```
+[网页爬取] ── Phase 0 ──▶ [原始教材 JSON] ── Phase 1 ──▶ [中间 JSON] ── Phase 2 ──▶ [匹配结果] ── Phase 3 ──▶ Neo4j
+renjiaoshe.com               textbook/renjiao/           output/                     output/                  import/
+                              (23册JSON)                 (中间文件)                  (匹配文件)               (导入脚本)
+```
+
+| Phase | 功能 | 脚本目录 |
+|-------|------|---------|
+| Phase 0 | 教材数据爬取 | `edukg/scripts/textbook_data/` |
+| Phase 1 | 数据生成与处理 | `edukg/scripts/kg_data/textbook/` |
+| Phase 2 | 知识点匹配 | `edukg/scripts/kg_data/textbook/` |
+| Phase 3 | Neo4j 导入 | `edukg/scripts/kg_data/import/` |
+
 ### 图谱概览
 
 ```

@@ -95,11 +95,17 @@ class TextbookDataGenerator:
                     if filepath.exists():
                         files.append(filepath)
 
-        # 高中: high/bixiu1-3/textbook.json
+        # 高中: high/bixiu1-2/textbook.json, high/xuanxiu_bixiu1-3/textbook.json
         high_dir = self.data_dir / "high"
         if high_dir.exists():
+            # 必修教材
             for bixiu_dir in sorted(high_dir.glob("bixiu*")):
                 filepath = bixiu_dir / "textbook.json"
+                if filepath.exists():
+                    files.append(filepath)
+            # 选择性必修教材
+            for xuanxiu_dir in sorted(high_dir.glob("xuanxiu_bixiu*")):
+                filepath = xuanxiu_dir / "textbook.json"
                 if filepath.exists():
                     files.append(filepath)
 

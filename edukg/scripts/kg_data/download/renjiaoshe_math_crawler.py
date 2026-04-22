@@ -212,12 +212,17 @@ def identify_stage(title: str) -> Optional[str]:
 
 
 def fallback_parse_entry(soup: BeautifulSoup) -> Dict[str, List[Dict]]:
-    """备用解析方法 - 直接查找所有教材链接"""
+    """备用解析方法 - 直接查找所有教材链接，筛选人教A版2019"""
     result = {
         "primary": [],
         "middle": [],
         "high": []
     }
+
+    # 人教A版2019教材ID列表（只保留这5册）
+    # 必修第一册: 2069, 必修第二册: 2070
+    # 选择性必修第一册: 2072, 第二册: 2073, 第三册: 2074
+    HIGH_A2019_IDS = [2069, 2070, 2072, 2073, 2074]
 
     # 查找所有包含 jiaocai 的链接（教材链接）
     all_links = soup.find_all('a')
@@ -239,6 +244,16 @@ def fallback_parse_entry(soup: BeautifulSoup) -> Dict[str, List[Dict]]:
             # 根据链接文本识别学段
             stage = identify_stage(name)
             if stage and name:
+                # 高中教材：只保留人教A版2019版本
+                if stage == 'high':
+                    # 从URL提取ID
+                    try:
+                        id_num = int(href.split('/')[-1].replace('.html', ''))
+                        if id_num not in HIGH_A2019_IDS:
+                            continue  # 跳过非人教A版2019教材
+                    except (ValueError, IndexError):
+                        continue
+
                 result[stage].append({
                     "name": name,
                     "url": full_url
@@ -434,17 +449,21 @@ def extract_chapters(soup: BeautifulSoup) -> List[Chapter]:
 def parse_kewen_ul(kewen_ul) -> List[Chapter]:
     """解析教师之家的 kewen-ul 目录结构
 
-    目录结构有两种：
+    使用 class 属性判断层级：
+    - 有 'cut' 和 'nourl' class → 章节节点
+    - 没有 'cut' 和 'nourl' → 知识点/内容项
+    - 特殊处理：小学教材中 "N.xxx" 格式即使没有 cut/nourl 也当作章节
+    - 特殊处理：相同编号的章节（如 "5 三角形" 和 "5 三角形（通用）"）合并
 
-    1. 小学教材 (两级结构):
-       - 1.准备课 (章节)
-       - 数一数 (小节)
-       - 比多少 (小节)
+    目录结构：
+    1. 小学教材 (二级结构):
+       - 1.准备课 [章]
+       - 数一数 [小节]
 
-    2. 初中/高中教材 (三级结构):
-       - 第一章 有理数 (一级章节)
-       - 1.1 正数和负数 (二级小节)
-       - 正数和负数的概念 (三级知识点)
+    2. 初中/高中教材 (四级结构):
+       - 第一章 有理数 [章]
+       - 1.1 正数和负数 [节]
+       - 正数和负数的概念 [知识点]
     """
     chapters = []
     current_chapter = None
@@ -458,29 +477,65 @@ def parse_kewen_ul(kewen_ul) -> List[Chapter]:
         if not text:
             continue
 
+        # 获取 class 属性
+        li_class = li.get('class', [])
+        has_cut_nourl = 'cut' in li_class and 'nourl' in li_class
+
         # 判断层级
-        is_chapter = check_is_chapter(text)
-        is_subsection = check_is_subsection(text)
+        level = get_text_level(text)
 
-        if is_chapter:
-            # 保存上一个章节
-            if current_chapter:
-                chapters.append(current_chapter)
+        # 提取章节编号（用于检测重复章节）
+        chapter_num = extract_chapter_number(text)
 
-            # 开始新章节
-            chapter_order += 1
-            section_order = 0
-            current_section = None
-            chapter_name = extract_chapter_name(text)
+        # 决定是否为章节节点：
+        # 1. 有 cut/nourl → 章节节点
+        # 2. 小学教材（level=1 的格式）即使没有 cut/nourl 也当作章节
+        #    因为网站有时把 "7.认识钟表" 标记为普通内容项
+        # 3. 初中/高中三级小节（level=3，如 1.5.2科学记数法）
+        #    网站有时把 X.X.X 格式标记为普通内容项，但它应该是小节
+        is_chapter_node = has_cut_nourl or (level == 1) or (level == 2) or (level == 3)
 
-            current_chapter = Chapter(
-                chapter_order=chapter_order,
-                chapter_name=chapter_name,
-                sections=[]
-            )
-        elif is_subsection:
-            # 二级小节
-            if current_chapter:
+        if is_chapter_node:
+            if level == 1:  # 一级章
+                # 检测是否为重复章节编号（如 "5 三角形" 和 "5 三角形（通用）"）
+                # 如果章节编号相同，合并到当前章节而不是创建新章节
+                if chapter_num and current_chapter and chapter_num == chapter_order:
+                    # 这是重复编号的章节，跳过不创建新章节
+                    # 但可以更新章节名称（去掉"（通用）"等后缀）
+                    logger.debug(f"Skipping duplicate chapter: {text} (same as chapter {chapter_order})")
+                    continue
+
+                # 保存上一个章节
+                if current_chapter:
+                    chapters.append(current_chapter)
+
+                chapter_order += 1
+                section_order = 0
+                current_section = None
+                chapter_name = extract_chapter_name(text)
+
+                current_chapter = Chapter(
+                    chapter_order=chapter_order,
+                    chapter_name=chapter_name,
+                    sections=[]
+                )
+            elif level == 2 or level == 3 or (has_cut_nourl and level == 0):
+                # 二级节、三级节、或网站标记为章节但无编号（如"小结"）
+                # 都当作小节处理
+                if current_chapter:
+                    section_order += 1
+                    current_section = Section(
+                        section_order=section_order,
+                        section_name=text,
+                        knowledge_points=[]
+                    )
+                    current_chapter.sections.append(current_section)
+        else:
+            # 知识点/内容项
+            if current_section:
+                current_section.knowledge_points.append(text)
+            elif current_chapter:
+                # 小学教材：没有二级节，直接作为小节
                 section_order += 1
                 current_section = Section(
                     section_order=section_order,
@@ -488,19 +543,8 @@ def parse_kewen_ul(kewen_ul) -> List[Chapter]:
                     knowledge_points=[]
                 )
                 current_chapter.sections.append(current_section)
-        else:
-            # 三级知识点或普通小节
-            if current_section:
-                # 添加到当前二级小节的知识点
-                current_section.knowledge_points.append(text)
-            elif current_chapter:
-                # 没有二级小节，直接作为一级小节
-                section_order += 1
-                current_chapter.sections.append(Section(
-                    section_order=section_order,
-                    section_name=text,
-                    knowledge_points=[]
-                ))
+                # 重置 current_section，让下一个内容项作为新小节
+                current_section = None
 
     # 保存最后一个章节
     if current_chapter:
@@ -509,26 +553,106 @@ def parse_kewen_ul(kewen_ul) -> List[Chapter]:
     return chapters
 
 
+def get_text_level(text: str) -> int:
+    """判断文本的层级
+
+    Returns:
+        1: 一级章 "第X章 xxx" 或小学格式 "N.xxx" 或 "N xxx" (数字+空格+文本)
+        2: 二级节 "X.X xxx" (如 1.1, 2.3) - 初中/高中专用
+        3: 三级小节 "X.X.X xxx" (如 1.2.1, 2.3.4) - 初中/高中专用
+        0: 其他（知识点/内容）
+    """
+    # 一级章：第X章（初中/高中专用格式）
+    if re.match(r'^第[一二三四五六七八九十\d]+章', text):
+        return 1
+
+    # 三级小节：X.X.X (如 1.2.1) - 初中/高中专用
+    if re.match(r'^\d+\.\d+\.\d+', text):
+        return 3
+
+    # 二级节：X.X 空格（如 "1.1 正数和负数", "2.3 有理数"）
+    # 初中/高中的二级节格式：数字.数字 + 空格 + 名称
+    if re.match(r'^\d+\.\d+\s+', text):
+        return 2
+
+    # 小学一级章：N + 空格 + 文本（如 "1　数据收集整理", "2 表内除法"）
+    # 注意：这是小学教材常见的格式，数字后面直接是空格（全角或半角），不是小数点
+    match = re.match(r'^(\d+)\s+(.+)$', text)
+    if match:
+        first_num = int(match.group(1))
+        rest = match.group(2)
+        # 如果空格后面是中文内容（不是数字），则是小学章节
+        if not re.match(r'^\d', rest):
+            return 1
+
+    # 处理 N.xxx 格式（需要区分小学章节和初中二级节）
+    match = re.match(r'^(\d+)\.(.+)$', text)
+    if match:
+        first_num = int(match.group(1))
+        rest = match.group(2)
+
+        # 如果点后面是非数字开头 → 小学一级章（如 "准备课", "认识钟表"）
+        if not re.match(r'^\d', rest):
+            return 1
+
+        # 如果点后面是数字开头，需要区分：
+        # 小学：N.范围（如 "3.1-5"，"1-5" 是范围）
+        # 小学：N.大数字（如 "8.20以内的"，"20" 是名称的一部分，因为20 > 章编号8）
+        # 初中：N.N（如 "1.2有理数"，"2" 是编号，因为2 < 章编号范围）
+
+        # 范围描述：数字-数字（如 "1-5", "6-10"）
+        if re.match(r'^\d+\-', rest):
+            return 1  # 小学一级章（范围描述）
+
+        # 提取第二个数字
+        num_match = re.match(r'^(\d+)(.*)$', rest)
+        if num_match:
+            second_num = int(num_match.group(1))
+            after_num = num_match.group(2)
+
+            # 初中二级节判断：
+            # - 第二个数字 <= 9（初中节编号通常不超过9）
+            # - 后面是空格或直接中文（无"以内"等范围词）
+            if second_num <= 9 and not re.match(r'^以内|^以上|^以下|^的', after_num):
+                # 进一步检查：第一个数字是否合理（初中章编号1-5）
+                if first_num <= 5:
+                    return 2  # 初中二级节（如 "1.2有理数"）
+
+            # 其他情况：小学一级章
+            # - 第二个数字 > 9（如 "8.20"，20是名称不是编号）
+            # - 后面有"以内"等词（如 "8.20以内的"）
+            # - 第一个数字 > 5（小学章编号可达9）
+            return 1
+
+    return 0
+
+
 def check_is_chapter(text: str) -> bool:
     """检查是否为一级章节标题
 
     一级章节特征:
     1. "第N章" 格式 (中文数字或阿拉伯数字)
     2. "N." 或 "N、" 或 "N　" (数字开头+分隔符)
-       - 但要排除 "N.N" 格式 (如 1.1, 2.3) 这是二级小节
+       - 但要排除 "N.N 空格" 格式 (如 1.1 xxx, 2.3 xxx) 这是二级小节
+       - "N.范围" 格式 (如 3.1-5, 5.6-10) 是章节，因为后面是范围描述不是编号
     """
     # 1. "第N章" 格式
     if re.match(r'^第[一二三四五六七八九十\d]+章', text):
         return True
 
-    # 2. "N." 或 "N、" 或 "N　" (数字+分隔符)
-    # 但要排除 "N.N" 这种二级小节格式 (数字+点+数字)
+    # 2. "N." 或 "N、" 或 "N　" 格式
+    # 只有 "数字.数字空格" 才是二级小节（如 1.1 xxx, 2.3 xxx）
+    # "数字.范围" 是章节（如 3.1-5xxx, 5.6-10xxx），因为范围描述如 "1-5" 包含连接符
     match = re.match(r'^(\d+)([.、\s　])(.+)$', text)
     if match:
-        # 检查分隔符后面是否以数字开头 (如 "1.1", "2.3")
         rest = match.group(3)
-        if not re.match(r'^\d+', rest):
-            return True
+        # 二级小节格式：单个数字后紧跟空格或中文（如 "1 xxx"）
+        # 章节格式：范围描述包含连接符（如 "1-5xxx", "6-10xxx")
+        if re.match(r'^\d+\s', rest):
+            # 单个数字+空格 → 二级小节
+            return False
+        # 其他情况（范围描述如 1-5, 6-10）→ 章节
+        return True
 
     return False
 
@@ -537,8 +661,51 @@ def check_is_subsection(text: str) -> bool:
     """检查是否为二级小节标题 (N.N 格式)
 
     例如: "1.1 正数和负数", "2.3 有理数的加减法"
+
+    注意：要区分 "N.范围" 格式（如 3.1-5的认识），这是章节不是二级小节
     """
-    return bool(re.match(r'^\d+\.\d+\s*', text))
+    # 二级小节格式：数字.数字空格/中文（如 1.1 xxx）
+    # 排除章节格式：数字.范围（如 3.1-5xxx），范围描述包含连接符
+    match = re.match(r'^(\d+)\.(\d+)(\s+.+|.+)$', text)
+    if match:
+        second_num = match.group(2)
+        rest = match.group(3)
+        # 如果第二个数字后紧跟空格或中文，是二级小节
+        # 如果第二个数字后面是连接符（如 -），是章节范围描述
+        if re.match(r'^\s', rest) or re.match(r'^[^\d\-]', rest[0] if rest else ''):
+            return True
+    return False
+
+
+def extract_chapter_number(text: str) -> Optional[int]:
+    """从章节标题中提取章节编号
+
+    输入: "1 四则运算" 或 "第一章 有理数" 或 "5 三角形（通用）"
+    输出: 1 或 1 或 5
+
+    Returns:
+        章节编号数字，如果不是章节格式返回 None
+    """
+    # 1. "第N章" 格式（初中/高中）
+    match = re.match(r'^第([一二三四五六七八九十\d]+)章', text)
+    if match:
+        num_str = match.group(1)
+        # 中文数字转换
+        cn_num_map = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+                      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+        if num_str in cn_num_map:
+            return cn_num_map[num_str]
+        try:
+            return int(num_str)
+        except ValueError:
+            return None
+
+    # 2. "N 空格" 或 "N." 格式（小学）
+    match = re.match(r'^(\d+)[.\s　]', text)
+    if match:
+        return int(match.group(1))
+
+    return None
 
 
 def extract_chapter_name(text: str) -> str:
@@ -686,8 +853,19 @@ def extract_grade_number(grade: str) -> int:
 
 
 def normalize_high_grade(grade: str) -> str:
-    """规范化高中年级目录名"""
-    if '必修' in grade:
+    """规范化高中年级目录名（人教A版2019版本）"""
+    # 选择性必修
+    if '选择性必修' in grade:
+        if '第一' in grade or '一' in grade:
+            return 'xuanxiu_bixiu1'
+        elif '第二' in grade or '二' in grade:
+            return 'xuanxiu_bixiu2'
+        elif '第三' in grade or '三' in grade:
+            return 'xuanxiu_bixiu3'
+        else:
+            return 'xuanxiu_bixiu'
+    # 必修
+    elif '必修' in grade:
         if '第一' in grade or '一' in grade:
             return 'bixiu1'
         elif '第二' in grade or '二' in grade:
@@ -931,8 +1109,7 @@ textbook/math/renjiao/
 ### JSON 格式
 
 ```json
-{
-  "subject": "math",
+{{{{"subject": "math",
   "stage": "primary",
   "grade": "一年级",
   "semester": "上册",
@@ -941,19 +1118,17 @@ textbook/math/renjiao/
   "source_url": "...",
   "crawled_at": "...",
   "chapters": [
-    {
-      "chapter_order": 1,
+    {{{{"chapter_order": 1,
       "chapter_name": "准备课",
       "sections": [
-        {
-          "section_order": 1,
+        {{{{"section_order": 1,
           "section_name": "数一数",
           "knowledge_points": ["数数", "一一对应"]
-        }
+        }}}}
       ]
-    }
+    }}}}
   ]
-}
+}}}}
 ```
 
 ### TTL 格式

@@ -4,7 +4,7 @@
 
 ## 功能概述
 
-- **教材数据生成**：解析人教版 K12 数学教材 JSON，生成 Textbook、Chapter、Section、TextbookKP 节点
+- **教材数据生成**：解析人教版 K12 数学教材 JSON，生成 Textbook、Chapter、Section、TextbookKP 节点,  数学教材需要人工校验，爬虫下载数据不准
 - **URI 生成**：v3.1 版本 URI，避免与 EduKG v0.1/v0.2 冲突
 - **知识点过滤**：过滤非知识点标记（"数学活动"、"小结"、"整理和复习"等）
 - **数据清洗**：规范 Section 标签格式
@@ -154,45 +154,162 @@ vectors, texts, concepts = manager.load_index()
 
 索引文件：`kg_vectors.npy`, `kg_texts.json`, `kg_concepts.json`, `index_meta.json`
 
-## 命令行工具
+## 命令行工具 - 详细步骤
+
+---
 
 ### Phase 1: 数据生成与处理
 
+#### 步骤 1.1：生成基础数据
+- **脚本**: `generate_textbook_data.py`
+- **输入**: 原始教材 JSON（23 册）
+- **输出**: `textbooks.json`, `chapters.json`, `sections.json`, `textbook_kps.json`, `contains_relations.json`, `in_unit_relations.json`
+- **耗时**: ~1 分钟
 ```bash
 python edukg/scripts/kg_data/textbook/generate_textbook_data.py
-python edukg/scripts/kg_data/textbook/clean_textbook_data.py --analyze --clean
-python edukg/scripts/kg_data/textbook/enhance_chapters.py --analyze --enhance
-python edukg/scripts/kg_data/textbook/infer_textbook_kp.py --resume
+python edukg/scripts/kg_data/textbook/generate_textbook_data.py --dry-run  # 仅统计
+```
+
+#### 步骤 1.2：数据清洗（可选）
+- **脚本**: `clean_textbook_data.py`
+- **输入/输出**: `sections.json`（原地更新）
+- **耗时**: ~10 秒
+```bash
+python edukg/scripts/kg_data/textbook/clean_textbook_data.py --analyze  # 仅分析
+python edukg/scripts/kg_data/textbook/clean_textbook_data.py --clean    # 执行清洗
+```
+
+#### 步骤 1.3：章节专题增强
+- **脚本**: `enhance_chapters.py`
+- **输入**: `chapters.json`
+- **输出**: `chapters.json`（含 topic）, `topic_distribution.json`
+- **耗时**: ~10 秒
+```bash
+python edukg/scripts/kg_data/textbook/enhance_chapters.py --analyze  # 仅分析
+python edukg/scripts/kg_data/textbook/enhance_chapters.py --enhance  # 执行增强
+```
+
+#### 步骤 1.4：推断缺失知识点（LLM，耗时）
+- **脚本**: `infer_textbook_kp.py`
+- **输入**: `sections.json`（无知识点的小节）
+- **输出**: `textbook_kps_inferred.json`, `progress/`, `llm_cache/`
+- **缓存**: `ProcessLock`(文件锁), `llm_cache/`(LLM响应缓存), `progress/`(断点续传)
+- **耗时**: 30-60 分钟
+```bash
+python edukg/scripts/kg_data/textbook/infer_textbook_kp.py            # 正常运行
+python edukg/scripts/kg_data/textbook/infer_textbook_kp.py --resume   # 断点续传
+python edukg/scripts/kg_data/textbook/infer_textbook_kp.py --dry-run  # 仅估算成本
+```
+
+#### 步骤 1.5：合并推断知识点
+- **脚本**: `merge_inferred_kps.py`
+- **输入**: `textbook_kps.json`, `textbook_kps_inferred.json`
+- **输出**: `textbook_kps.json`（合并）, `in_unit_relations.json`, `merge_report.json`
+- **耗时**: ~5 秒
+```bash
 python edukg/scripts/kg_data/textbook/merge_inferred_kps.py
+```
+
+#### 步骤 1.6：知识点属性补全
+- **脚本**: `enhance_kp_attributes.py`
+- **输入**: `textbook_kps.json`
+- **输出**: `textbook_kps.json`（属性补全）, `kp_attributes_distribution.json`
+- **耗时**: ~10 秒
+```bash
 python edukg/scripts/kg_data/textbook/enhance_kp_attributes.py --enhance --merge
 ```
 
+---
+
 ### Phase 2: 知识点匹配
 
+#### 步骤 2.1：构建向量索引
+- **脚本**: `build_vector_index.py`
+- **输入**: Neo4j Concept 节点（~1295 个）
+- **输出**: `vector_index/kg_vectors.npy`, `kg_texts.json`, `kg_concepts.json`, `index_meta.json`
+- **缓存**: 索引可复用，checksum 校验
+- **耗时**: ~2 分钟
 ```bash
-# 1. 为 EduKG Concept 构建向量索引
-python edukg/scripts/kg_data/textbook/build_vector_index.py
-
-# 2. 执行匹配（DeepSeek 标准化 + 向量粗筛 + 加权投票）
-python edukg/scripts/kg_data/textbook/match_textbook_kp.py --use-prebuilt-index --resume
-
-# 3. 查看统计
-python edukg/scripts/kg_data/textbook/match_textbook_kp.py --stats
+python edukg/scripts/kg_data/textbook/build_vector_index.py          # 构建
+python edukg/scripts/kg_data/textbook/build_vector_index.py --force  # 强制重建
 ```
 
-匹配流程：
-1. DeepSeek 标准化：教材KP名称 → EduKG 标准术语（如 "有理数的加法" → "加法"）
+#### 步骤 2.2：知识点标准化预处理（可选）
+- **脚本**: `normalize_textbook_kp.py`
+- **输入**: `textbook_kps.json`
+- **输出**: `normalized_kps_complete.json`, `normalizer_cache/`
+- **耗时**: 10-20 分钟
+```bash
+python edukg/scripts/kg_data/textbook/normalize_textbook_kp.py --resume
+```
+
+#### 步骤 2.3：知识点匹配
+- **脚本**: `match_textbook_kp.py`
+- **输入**: `textbook_kps.json`, `vector_index/`
+- **输出**: `matches_kg_relations.json`, `progress/`, `llm_cache/`
+- **缓存**: `ProcessLock`, `llm_cache/`, `progress/`
+- **耗时**: 10-30 分钟
+
+**匹配流程**：
+1. DeepSeek 标准化：教材KP名称 → EduKG 标准术语
 2. 向量粗筛：用标准化名称检索 top-20 候选
-3. 加权投票：DeepSeek(0.6) + GLM(0.4)，阈值 0.5（即 DeepSeek 是裁决者）
+3. 加权投票：DeepSeek(0.6) + GLM(0.4)，阈值 0.5
+
+```bash
+python edukg/scripts/kg_data/textbook/match_textbook_kp.py --use-prebuilt-index --resume
+python edukg/scripts/kg_data/textbook/match_textbook_kp.py --stats  # 查看统计
+python edukg/scripts/kg_data/textbook/match_textbook_kp.py --dry-run  # 仅估算成本
+```
+
+---
 
 ### Phase 3: Neo4j 导入
 
+#### 步骤 3.1：导入教材节点
+- **脚本**: `import_textbooks.py`
+- **输入**: `textbooks.json`
+- **输出**: Neo4j Textbook 节点（23 个）
 ```bash
 python edukg/scripts/kg_data/import/import_textbooks.py
+```
+
+#### 步骤 3.2：导入章节节点
+- **脚本**: `import_chapters.py`
+- **输入**: `chapters.json`
+- **输出**: Chapter 节点 + CONTAINS(Textbook→Chapter)
+```bash
 python edukg/scripts/kg_data/import/import_chapters.py
+```
+
+#### 步骤 3.3：导入小节节点
+- **脚本**: `import_sections.py`
+- **输入**: `sections.json`
+- **输出**: Section 节点 + CONTAINS(Chapter→Section)
+```bash
 python edukg/scripts/kg_data/import/import_sections.py
+```
+
+#### 步骤 3.4：导入知识点节点
+- **脚本**: `import_textbook_kps.py`
+- **输入**: `textbook_kps.json`
+- **输出**: TextbookKP 节点（1740 个）
+```bash
 python edukg/scripts/kg_data/import/import_textbook_kps.py
+```
+
+#### 步骤 3.5：导入 IN_UNIT 关系
+- **脚本**: `import_in_unit_relations.py`
+- **输入**: `in_unit_relations.json`
+- **输出**: IN_UNIT 关系（1740 条）
+```bash
 python edukg/scripts/kg_data/import/import_in_unit_relations.py
+```
+
+#### 步骤 3.6：导入 MATCHES_KG 关系
+- **脚本**: `import_matches_kg.py`
+- **输入**: `matches_kg_relations.json`
+- **输出**: MATCHES_KG 关系（含 confidence）
+```bash
 python edukg/scripts/kg_data/import/import_matches_kg.py
 ```
 
