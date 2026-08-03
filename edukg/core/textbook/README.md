@@ -161,6 +161,7 @@ vectors, texts, concepts = manager.load_index()
 ### Phase 1: 数据生成与处理
 
 #### 步骤 1.1：生成基础数据
+-- 需要人工审核原始数据，确认无误 脚本数据不一定准确
 - **脚本**: `generate_textbook_data.py`
 - **输入**: 原始教材 JSON（23 册）
 - **输出**: `textbooks.json`, `chapters.json`, `sections.json`, `textbook_kps.json`, `contains_relations.json`, `in_unit_relations.json`
@@ -419,3 +420,52 @@ python edukg/scripts/kg_data/textbook/match_textbook_kp.py --stats
 
 - `edukg/data/edukg/math/5_教材目录(Textbook)/README.md` - 完整数据流和 Neo4j 导入指南
 - `edukg/scripts/kg_data/import/` - Neo4j 导入脚本
+
+## 改进建议：无小节章节处理
+
+### 问题
+
+部分章节（如"认识钟表"、"数学广角——鸡兔同笼"等）在原始 JSON 中没有小节（sections 为空），导致：
+1. 知识点无法通过 IN_UNIT 关联到 Section
+2. 需要手动提取知识点并创建 IN_UNIT → Chapter 关系
+3. 数据结构不一致（有的知识点 → Section，有的 → Chapter）
+
+### 推荐方案：源头修复
+
+在 `generate_textbook_data.py` 中自动处理无小节章节：
+
+```python
+def handle_empty_chapters(chapters, sections):
+    """为无小节章节创建虚拟小节"""
+    for ch in chapters:
+        if ch['id'] not in section_map:
+            # 创建虚拟小节（章节名称作为小节名称）
+            virtual_section = {
+                'uri': ch['uri'].replace('/chapter/', '/section/') + '-1',
+                'id': ch['id'] + '-1',
+                'label': ch['label'],
+                'order': 1,
+                'chapter_id': ch['id'],
+                'textbook_id': ch['textbook_id'],
+                'is_virtual': True  # 标记为虚拟小节
+            }
+            sections.append(virtual_section)
+```
+
+### 效果
+
+```
+原数据:
+  章节: "认识钟表" (无小节)
+
+处理后:
+  章节: "认识钟表"
+    └─ 小节: "认识钟表" (虚拟小节)
+         └─ 知识点: [钟表, 时间认识] (步骤1.4 LLM推断)
+```
+
+### 优点
+
+- 数据结构一致：所有 IN_UNIT → Section
+- 流程自动化：无需手动处理
+- 知识点推断统一：步骤 1.4 自动处理虚拟小节

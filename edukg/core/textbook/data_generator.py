@@ -143,6 +143,7 @@ class TextbookDataGenerator:
             "uri": tb_uri,
             "id": tb_id,
             "label": f"{stage_name}{grade}" + (f"{semester}" if semester and semester != "未知学期" else ""),
+            "subject": "数学",  # 学科（中文）
             "stage": stage_name,
             "grade": grade,
             "semester": semester if semester and semester != "未知学期" else "",

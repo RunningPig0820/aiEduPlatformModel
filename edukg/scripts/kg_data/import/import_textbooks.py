@@ -151,6 +151,7 @@ class TextbookImporter:
         MERGE (t:Textbook {uri: tb.uri})
         SET t.id = tb.id,
             t.label = tb.label,
+            t.subject = tb.subject,
             t.stage = tb.stage,
             t.grade = tb.grade,
             t.semester = tb.semester,
