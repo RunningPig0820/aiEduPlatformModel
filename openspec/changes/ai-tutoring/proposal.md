@@ -12,9 +12,9 @@
 - **动作类型闭集**:hint / approach / reveal / concept / switch / end;Java 在动作出口做硬护栏(本仓库不实现护栏,只按契约输出)
 - **结构化输出保障**:function-calling → JSON mode → 正则提取 → 兜底 `type=hint` 四段降级管线(保证绝不吐畸形 ActionMeta)
 - **类型先行流式**:`meta`(护栏放行的 type)→ `token`(正文流)→ `done`(状态 + eval)
-- **拍题 OCR 前置**:照片 → OCR 识别题目文本 → 学生确认/修改 → 进答疑(`current_question` 即文本题目;复用 `ai-edu-ai-service` 现有 OCR 依赖,补实现)
+- **拍题 OCR 前置**:照片 → OCR 识别题目文本 → 学生确认/修改 → 作为对话历史上首条 user 消息进答疑(当前题目由 Python 从 history 推断,Java 零题目状态;复用 `ai-edu-ai-service` 现有 OCR 依赖,补实现)
 - **掌握度信号**:每轮 decide 输出 `mastery_signals`(kp_label + mastered/practicing/struggling),label 接地到 `mastery_snapshot` 候选,Java 侧解析为 TextbookKP URI 落库点亮
-- **测试用模型**:deepseek-v4-flash(免费)注册进 `model_config` 走流程;生产 decide=flash/turbo、generate=qwen-math-turbo,配置驱动
+- **测试用模型**:deepseek-v4-flash 注册进 `model_config` 走流程(非免费);生产 decide=flash/turbo、generate=qwen-math-turbo,配置驱动
 
 ## Capabilities
 

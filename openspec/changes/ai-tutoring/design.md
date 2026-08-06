@@ -15,7 +15,7 @@
 - 结构化输出四段降级管线,保证绝不吐畸形 ActionMeta
 - 每轮输出掌握度信号(mastery_signals),label 接地到 mastery_snapshot
 - 拍题 OCR 前置:照片 → OCR → 学生确认 → 进答疑
-- 测试用 deepseek-v4-flash(免费)走流程,生产模型配置驱动
+- 测试用 deepseek-v4-flash 走流程(非免费),生产模型配置驱动
 
 **Non-Goals:**
 - **不做护栏判断**(答案出口/轮次/换题/收尾都归 Java 侧 ai-tutoring change)
@@ -68,13 +68,14 @@
 
 ### 5. 结构化输出保障(安全关键)
 
-`with_structured_output(function_calling)` → 失败 JSON mode → 失败正则提取 + Pydantic 校验 → 失败兜底 `ActionMeta(type=hint)`。四段降级管线是**硬需求**,保证 API 绝不返回畸形 ActionMeta。
+`bind_tools([ActionMeta]) + 手动解析 tool_call` → 失败 JSON mode → 失败正则提取 + Pydantic 校验 → 失败兜底 `ActionMeta(type=hint, degraded=true)`。四段降级管线是**硬需求**,保证 API 绝不返回畸形 ActionMeta。兜底时 `degraded=true` 置位,Java 靠该信号监控 Python 降级频次(Java 侧核实后补的字段)。
 - 重试域划分:Python 内部不重试 LLM 调用(快速失败交 Java 重试);Python 内部重试 schema 解析(带纠错 prompt)
-- 实现第一步先做**模型契约冒烟测试**:deepseek-v4-flash 的 function calling 支持未实测,决定走 function_calling 还是 json_mode
+- **冒烟测试结论(2026-08-04, task 1.3)**:deepseek-v4-flash 实测 function calling ✅ 可用(返回标准 tool_call)、json_mode ✅ 可用(返回干净 JSON)。→ structured.py 默认路径走 **function_calling**,json_mode 作为第一级兜底(不跳级,四段管线顺序不变)
+- **实现发现(task 3.1)**:stage ① 用 **`bind_tools([ActionMeta])` 而非 `with_structured_output`** —— langchain-openai 1.x 的 `with_structured_output` 默认走 `response_format=json_schema`(Structured Outputs),deepseek 实测返回 400"response_format type unavailable";`bind_tools` 走原生 tool-calling 实测可用。tool_call args 交给 Pydantic 校验,不合法则降级 ②。真实模型已验证 stage ① 直接走通
 
 ### 6. 模型配对(配置驱动)
 
-测试阶段 decide/generate 都用 deepseek-v4-flash(免费)走流程;生产建议 decide=(zhipu, glm-4-flash)或(bailian, qwen-turbo)、generate=(bailian, qwen-math-turbo)。新增 env: `TUTORING_DECIDE_PROVIDER/MODEL`、`TUTORING_GENERATE_PROVIDER/MODEL`、温度。decide 是判断密集任务(判对错是硬判断),"快"= 同能力等级里选便宜的,不是选最便宜的。
+测试阶段 decide/generate 都用 deepseek-v4-flash 走流程(非免费,单次成本低);生产建议 decide=(zhipu, glm-4-flash)或(bailian, qwen-turbo)、generate=(bailian, qwen-math-turbo)。新增 env: `TUTORING_DECIDE_PROVIDER/MODEL`、`TUTORING_GENERATE_PROVIDER/MODEL`、温度。decide 是判断密集任务(判对错是硬判断),"快"= 同能力等级里选便宜的,不是选最便宜的。
 
 ### 7. decide 单次调用,schema 可拆
 
@@ -94,11 +95,19 @@ Python 无状态,Java 每次传全量上下文。`context.py` 做历史截断(�
 
 ### 11. 拍题 OCR 前置
 
-照片 → OCR 识别题目文本 → **学生确认/修改** → 进答疑(`current_question` 即文本)。复用 baidu-aip 依赖补 `core/ocr_service.py` 实现。OCR 是答疑之前的独立预处理,不进 decide/generate 契约。数学公式 OCR 质量是公认痛点,识别结果必须让学生确认。
+照片 → OCR 识别题目文本 → **学生确认/修改** → 作为对话历史**首条 user 消息**进答疑(当前题目由 Python 从 history 推断,见决策 13)。OCR 是答疑之前的独立预处理,不进 decide/generate 契约。数学公式 OCR 质量是公认痛点,识别结果必须让学生确认。
+- **实现发现(task 7.1)**:用**百度 OAuth access_token + general_basic REST 接口**(httpx),而非 baidu-aip 的 `AipOcr` —— 后者强制要求 APP_ID 而当前 env 只有 API_KEY+SECRET_KEY(且 baidu-aip 未安装)。access_token 按 expires_in 缓存,避免每请求拉取。`settings.py` 补充 `BAIDU_OCR_API_KEY/SECRET_KEY` 字段
 
 ### 12. 演进:L0 单次调用 → 阶段 2 LangGraph
 
 MVP = L0 单次调用(decide/generate 各一次 LLM)。阶段 2 升级 L1/L2 LangGraph 多步 agent(工具:查薄弱点/出变式题/错题集,工具 = Java 内部接口),契约(ActionMeta)不变,Java 编排不变。**迁移成本低的前提**: ①ActionMeta 契约可扩展(字段可加);②工具 API 早定形状;③Python 模块拆干净(decider/generator/structured 分离)。
+
+### 13. Java 零题目状态:current_question 从契约移除(Java 侧定稿,2026-08)
+
+**选择**: decide/generate 请求**去掉 `current_question` 字段**。Java 不传、不记录、不维护题目内容(零题目状态);当前题目由 **Python 从 history 推断**,换题判定也在 Python。Java 只认 `type=switch` 重置计数,`new_question` 仅作展示可选、不落库。
+**原因**: 题目内容属于对话上下文,不该由平台层双份维护;Java 拿它没有业务用途(审批只看 type+count),反而增加状态成本。
+**实现**: 题目文本作为对话历史**首条 user 消息**进历史(OCR 结果 → 前端确认 → 首条 user 消息);decide prompt 增加"当前题目判定(关键)"规则(最新完整新题→switch、答题/追问→保持当前题、旧题只作参考、不被旧题带偏)。
+**风险**: 换题判定从"后端权威"变为"LLM 推断",更依赖 prompt 质量。真实模型已验:求帮助→引导不 end、闲聊→end、贴新题→switch、hint 不泄答案(real 测试 4/4)。若实测换题误判率高,可给 decide 额外传轻量信号(如最新消息角色),但不回到后端维护题目。
 
 ## Risks / Trade-offs
 

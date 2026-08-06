@@ -159,12 +159,11 @@ def mock_action_meta(meta: dict):
 ### 7.3 构造合法请求体
 ```python
 def decide_payload(**overrides) -> dict:
-    """构造 decide 请求(默认合法值,按覆盖字段调整)"""
+    """构造 decide 请求(默认合法值,按覆盖字段调整;无 current_question,题目在 history 首条)"""
     base = {
-        "history": [{"role": "user", "content": "设鸡有x只，则兔有35-x只"}],
+        "history": [{"role": "user", "content": "鸡兔同笼，共35头94脚，各几只？"}, {"role": "user", "content": "设鸡有x只，则兔有35-x只"}],
         "round_count": 2,
         "answer_request_count": 0,
-        "current_question": "鸡兔同笼，共35头94脚，各几只？",
         "mastery_snapshot": [{"kp_key": "http://edukg.org/knowledge/3.1/x", "label": "二元一次方程组", "mastery_level": 50}],
         "subject_hint": "math",
     }

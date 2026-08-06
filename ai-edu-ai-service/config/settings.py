@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # 阿里云 DashScope API Key (百炼使用)
     DASHSCOPE_API_KEY: str = ""
 
+    # ============ 百度 OCR ============
+    # 百度 OCR API Key (拍照识别题目)
+    BAIDU_OCR_API_KEY: str = ""
+    BAIDU_OCR_SECRET_KEY: str = ""
+
     # ============ 服务配置 ============
     # Java 后端调用 AI 服务的内部 Token
     INTERNAL_TOKEN: str = ""
@@ -37,6 +42,19 @@ class Settings(BaseSettings):
 
     # 默认模型
     DEFAULT_MODEL: str = "glm-4-flash"
+
+    # ============ AI 答疑 (Tutoring) 模型配置 ============
+    # decide 决策模型(判断密集,选便宜快;测试阶段用 deepseek-v4-flash 走流程)
+    TUTORING_DECIDE_PROVIDER: str = "deepseek"
+    TUTORING_DECIDE_MODEL: str = "deepseek-v4-flash"
+
+    # generate 生成模型(内容生成)
+    TUTORING_GENERATE_PROVIDER: str = "deepseek"
+    TUTORING_GENERATE_MODEL: str = "deepseek-v4-flash"
+
+    # 温度: decide 偏低(判断要稳), generate 偏高(内容要有层次)
+    TUTORING_DECIDE_TEMPERATURE: float = 0.3
+    TUTORING_GENERATE_TEMPERATURE: float = 0.7
 
     # ============ 日志配置 ============
     LOG_LEVEL: str = "INFO"

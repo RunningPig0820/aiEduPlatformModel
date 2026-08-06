@@ -47,6 +47,14 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
     "deepseek": {
         "display_name": "DeepSeek",
         "models": {
+            "deepseek-v4-flash": {
+                "display_name": "DeepSeek V4 Flash",
+                "free": False,  # 收费模型
+                "allowed": True,  # 允许外部调用
+                "supports_tools": True,
+                "supports_vision": False,
+                "description": "答疑测试走流程用（冒烟测试已确认 function calling 可用）"
+            },
             "deepseek-chat": {
                 "display_name": "DeepSeek Chat",
                 "free": False,

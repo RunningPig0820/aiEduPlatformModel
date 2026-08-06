@@ -50,7 +50,6 @@
   ],
   "round_count": 3,
   "answer_request_count": 0,
-  "current_question": "鸡兔同笼，共35头94脚，各几只？",
   "mastery_snapshot": [
     {"kp_key": "http://edukg.org/knowledge/3.1/...", "label": "二元一次方程组", "mastery_level": 50}
   ],
@@ -60,10 +59,9 @@
 
 | 字段 | 类型 | 必填 | 校验规则 | 说明 |
 |------|------|------|----------|------|
-| history | Array[{role, content}] | 是 | role ∈ user/ai | 对话历史(Java 从 Redis 组装) |
+| history | Array[{role, content}] | 是 | role ∈ user/ai | 对话历史(Java 从 Redis 组装;题目文本作为首条 user 消息,Python 从 history 推断当前题目) |
 | round_count | Integer | 是 | ≥0 | 轮次计数 |
 | answer_request_count | Integer | 是 | ≥0 | 已请求答案次数 |
-| current_question | String | 否 | ≤4000 | 当前题目文本(OCR 识别或粘贴) |
 | mastery_snapshot | Array[{kp_key, label, mastery_level}] | 否 | — | 学生已有掌握度(label 候选,接地用) |
 | subject_hint | String | 是 | 默认 "math" | 学科(本期恒为 math) |
 
@@ -97,6 +95,7 @@
 | end_reason | String|null | COMPLETED/ANSWER_REVEALED/ABANDONED/ROUND_LIMIT |
 | summary | String|null | 收尾总结 |
 | safety_flag | Boolean | 高危内容标记(拦截由 Java 执行) |
+| degraded | Boolean | 结构化输出兜底标记(四段管线全失败时 true,Java 监控降级频次) |
 
 ### 请求示例
 
@@ -109,7 +108,6 @@ curl -X POST http://localhost:8000/api/tutoring/decide \
     "history": [{"role":"user","content":"设鸡有x只，则兔有35-x只"}],
     "round_count": 2,
     "answer_request_count": 0,
-    "current_question": "鸡兔同笼，共35头94脚，各几只？",
     "mastery_snapshot": [],
     "subject_hint": "math"
   }'
@@ -127,7 +125,6 @@ const res = await fetch('http://localhost:8000/api/tutoring/decide', {
     history: [{ role: 'user', content: '设鸡有x只，则兔有35-x只' }],
     round_count: 2,
     answer_request_count: 0,
-    current_question: '鸡兔同笼，共35头94脚，各几只？',
     mastery_snapshot: [],
     subject_hint: 'math'
   })
@@ -161,7 +158,6 @@ const actionMeta = await res.json();
 ```json
 {
   "history": [...],
-  "current_question": "鸡兔同笼，共35头94脚，各几只？",
   "subject_hint": "math",
   "action_type": "approach",
   "action_meta": {"eval": {"correct": true, "emotion": "NEUTRAL"}}
@@ -170,8 +166,7 @@ const actionMeta = await res.json();
 
 | 字段 | 类型 | 必填 | 校验规则 | 说明 |
 |------|------|------|----------|------|
-| history | Array[{role, content}] | 是 | — | 对话历史 |
-| current_question | String | 否 | ≤4000 | 当前题目文本 |
+| history | Array[{role, content}] | 是 | — | 对话历史(题目文本在历史中) |
 | subject_hint | String | 是 | 默认 "math" | 学科 |
 | action_type | String | 是 | 闭集(Java 已放行) | 生成正文的类型约束 |
 | action_meta | Object | 否 | — | Java 放行时附带的决策元数据 |
@@ -200,7 +195,7 @@ curl -X POST http://localhost:8000/api/tutoring/generate \
   -H "Content-Type: application/json" \
   -H "x-internal-token: YOUR_INTERNAL_TOKEN" \
   -N \
-  -d '{"history":[{"role":"user","content":"设鸡有x只"}],"current_question":"鸡兔同笼，共35头94脚","subject_hint":"math","action_type":"approach","action_meta":{}}'
+  -d '{"history":[{"role":"user","content":"鸡兔同笼，共35头94脚，各几只？"},{"role":"user","content":"我不会"}],"subject_hint":"math","action_type":"approach","action_meta":{}}'
 ```
 
 **JavaScript (fetch + ReadableStream):**
@@ -208,7 +203,7 @@ curl -X POST http://localhost:8000/api/tutoring/generate \
 const res = await fetch('http://localhost:8000/api/tutoring/generate', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-internal-token': process.env.INTERNAL_TOKEN },
-  body: JSON.stringify({ history: [], current_question: '...', subject_hint: 'math', action_type: 'approach', action_meta: {} })
+  body: JSON.stringify({ history: [{ role: 'user', content: '鸡兔同笼，共35头94脚，各几只？' }], subject_hint: 'math', action_type: 'approach', action_meta: {} })
 });
 const reader = res.body.getReader();
 // 解析 SSE: 按 "event: token" / "event: done" / "event: error" 分派
@@ -295,7 +290,7 @@ curl -X POST http://localhost:8000/api/ocr/recognize \
 2. **类型先行**:Java 收到 decide 的 `type` 后必须先过护栏,再调 generate;护栏拒绝时改 type 或 Java 降级话术,不调 generate。
 3. **内部 token**:复用 llm-gateway `internalToken` 模式,Java 调用携带 `x-internal-token`。
 4. **decide 可重试 1 次**(纯函数);仍失败 → 对外 40004"网络波动",会话保持。
-5. **OCR 结果先确认**:识别出的题目文本先给前端确认/修改,再作为 `current_question` 进答疑。
+5. **OCR 结果先确认**:识别出的题目文本先给前端确认/修改,再作为对话历史**首条 user 消息**进答疑(Java 零题目状态,不传不维护;当前题目由 Python 从 history 推断,换题判定也在 Python,Java 只认 `type=switch` 重置计数)。
 6. **掌握度接地**:`mastery_snapshot` 的 label 请随请求传入,Python 优先复用,减少 Java 侧 label→URI 解析噪声。
 
 ---

@@ -1,0 +1,259 @@
+"""
+任务 3: 结构化输出保障 core/tutoring/structured.py 测试
+
+四段降级管线逐段覆盖(mock LLM 各段失败):
+① function_calling → ② json_mode → ③ 正则提取+Pydantic → ④ 兜底 hint
+外加: schema 纠错重试(不重试 LLM 调用,只修 schema)、兜底必过 Pydantic
+"""
+import json
+import sys
+import os
+
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+)
+
+import pytest
+
+
+# ============ 可控假 LLM ============
+
+class _Msg:
+    def __init__(self, content):
+        self.content = content
+
+
+class _ToolMsg:
+    """带 tool_calls 的消息"""
+
+    def __init__(self, tool_calls, content=""):
+        self.tool_calls = tool_calls
+        self.content = content
+
+
+class _FakeToolBound:
+    """bind_tools 返回的 runnable (function calling)"""
+
+    def __init__(self, llm):
+        self.llm = llm
+
+    def invoke(self, prompt):
+        self.llm.fc_calls += 1
+        if self.llm.fc_raises:
+            raise self.llm.fc_raises
+        if self.llm.fc_args is not None:
+            return _ToolMsg([{"name": "ActionMeta", "args": self.llm.fc_args, "id": "call_1", "type": "tool_call"}])
+        return _ToolMsg([])
+
+
+class _FakeBound:
+    """bind(response_format=...) 返回的 runnable (json mode)"""
+
+    def __init__(self, llm):
+        self.llm = llm
+
+    def invoke(self, prompt):
+        self.llm.json_calls += 1
+        if self.llm.json_raises:
+            raise self.llm.json_raises
+        if self.llm.json_contents:
+            return _Msg(self.llm.json_contents.pop(0))
+        return _Msg("{}")
+
+
+class FakeLLM:
+    """可控假 LLM: 按设置模拟各段成功/失败"""
+
+    def __init__(self, *, fc_args=None, fc_raises=None,
+                 json_contents=None, json_raises=None,
+                 text_contents=None, text_raises=None):
+        self.fc_args = fc_args  # 传给 ActionMeta tool 的 args(合法或非法 dict)
+        self.fc_raises = fc_raises
+        self.json_contents = list(json_contents or [])
+        self.json_raises = json_raises
+        self.text_contents = list(text_contents or [])
+        self.text_raises = text_raises
+        self.fc_calls = 0
+        self.json_calls = 0
+        self.text_calls = 0
+
+    def bind_tools(self, tools):
+        return _FakeToolBound(self)
+
+    def bind(self, **kwargs):
+        return _FakeBound(self)
+
+    def invoke(self, prompt):
+        self.text_calls += 1
+        if self.text_raises:
+            raise self.text_raises
+        if self.text_contents:
+            return _Msg(self.text_contents.pop(0))
+        return _Msg("{}")
+
+
+# ============ 测试数据 ============
+
+VALID_META_DICT = {
+    "type": "hint",
+    "reason": "学生已列方程",
+    "eval": {"correct": True, "error_type": None, "emotion": "NEUTRAL", "exercise_complete": False},
+    "mastery_signals": [],
+    "new_question": None,
+    "end_reason": None,
+    "summary": None,
+    "safety_flag": False,
+}
+
+
+def make_valid_json():
+    return json.dumps(VALID_META_DICT)
+
+
+def make_bad_json():
+    """type 非闭集 + eval 缺字段 → 校验必失败"""
+    return json.dumps({
+        "type": "直接给答案",
+        "reason": "x",
+        "eval": {"correct": True, "emotion": "NEUTRAL"},
+        "mastery_signals": [],
+        "new_question": None,
+        "end_reason": None,
+        "summary": None,
+        "safety_flag": False,
+    })
+
+
+# ============ 用例 ============
+
+
+class TestStructuredDegradation:
+    """四段降级管线"""
+
+    def test_stage1_function_calling_success(self):
+        """① bind_tools 直接成功,不进后续段"""
+        from core.tutoring.structured import generate_action_meta
+        from models.tutoring import ActionMeta
+
+        llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert isinstance(result, ActionMeta)
+        assert result.type.value == "hint"
+        assert llm.fc_calls == 1
+        assert llm.json_calls == 0
+        assert llm.text_calls == 0
+
+    def test_stage1_no_tool_call_degrades(self):
+        """① 模型没调工具 → 降级到 ②"""
+        from core.tutoring.structured import generate_action_meta
+
+        llm = FakeLLM(fc_args=None,  # 无 tool_call
+                      json_contents=[make_valid_json()])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        assert llm.fc_calls == 1
+        assert llm.json_calls == 1
+
+    def test_stage1_invalid_args_degrades(self):
+        """① tool_call args 校验失败 → 降级到 ②"""
+        from core.tutoring.structured import generate_action_meta
+
+        llm = FakeLLM(fc_args={"type": "not_a_real_type"},  # 非法 args
+                      json_contents=[make_valid_json()])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        assert llm.json_calls == 1
+
+    def test_stage1_fail_stage2_json_success(self):
+        """① 失败 → ② json_mode 成功"""
+        from core.tutoring.structured import generate_action_meta
+
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_contents=[make_valid_json()])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        assert llm.fc_calls == 1
+        assert llm.json_calls == 1
+
+    def test_stage2_fail_stage3_regex_success(self):
+        """①② 失败 → ③ 正则从混杂文本抠 JSON"""
+        from core.tutoring.structured import generate_action_meta
+
+        messy = f"好的,这是提示:\n{make_valid_json()}\n—— 以上就是答案"
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_raises=RuntimeError("json down"),
+                      text_contents=[messy])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        assert llm.text_calls == 1
+
+    def test_all_fail_fallback_hint(self):
+        """四段全失败 → 兜底 ActionMeta(type=hint)"""
+        from core.tutoring.structured import generate_action_meta
+        from models.tutoring import ActionMeta, ActionType
+
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_raises=RuntimeError("json down"),
+                      text_raises=RuntimeError("text down"))
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert isinstance(result, ActionMeta)
+        assert result.type == ActionType.HINT
+        assert result.degraded is True  # 兜底必须带 degraded 信号(Java 监控用)
+
+    def test_fallback_is_pydantic_valid(self):
+        """兜底结果可通过 Pydantic 校验(绝不吐畸形)"""
+        from core.tutoring.structured import generate_action_meta
+        from models.tutoring import ActionMeta
+
+        llm = FakeLLM(fc_raises=RuntimeError("a"),
+                      json_raises=RuntimeError("b"),
+                      text_raises=RuntimeError("c"))
+
+        result = generate_action_meta(llm, "prompt")
+
+        ActionMeta.model_validate(result.model_dump())  # 不抛异常即通过
+
+
+class TestCorrectiveRetry:
+    """3.2 schema 解析纠错重试(不重试 LLM 调用,只修 schema)"""
+
+    def test_corrective_fixes_bad_json(self):
+        """json 解析失败 → 纠错 prompt → 模型修正后成功"""
+        from core.tutoring.structured import generate_action_meta
+
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_contents=[make_bad_json(), make_valid_json()])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        # 第一次调用 + 一次纠错 = 2 次 json 调用
+        assert llm.json_calls == 2
+
+    def test_corrective_retries_bounded(self):
+        """纠错有上限,仍失败则继续降级到正则段"""
+        from core.tutoring.structured import generate_action_meta
+
+        # 默认 corrective_retries=1,两次都不对 → 降级到正则段
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_contents=[make_bad_json(), make_bad_json()],
+                      text_contents=[make_valid_json()])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        assert llm.json_calls == 2  # 首次 + 1 次纠错
+        assert llm.text_calls == 1  # 正则段兜住

@@ -2,7 +2,7 @@
 
 ### Requirement: 学生可以拍照识别数学题目
 
-系统 SHALL 支持学生上传题目照片,通过 OCR 识别为题目文本,供进入答疑流程。OCR 是答疑前的独立预处理步骤,输出为文本题目(即答疑上下文中的 `current_question`)。
+系统 SHALL 支持学生上传题目照片,通过 OCR 识别为题目文本,供进入答疑流程。OCR 是答疑前的独立预处理步骤,输出为文本题目(作为对话历史上首条 user 消息进答疑;当前题目由 Python 从 history 推断,Java 零题目状态)。
 
 #### Scenario: 拍照识别题目成功
 - **WHEN** 学生上传一张数学题目照片
@@ -51,7 +51,7 @@
 #### Scenario: 中途换题
 - **WHEN** 学生贴出新题
 - **THEN** decide 输出 `type=switch` 且 `new_question` 为新题文本
-- **THEN** 旧题历史视为已换题,`current_question` 是权威(历史中其他题目仅作参考)
+- **THEN** 旧题历史视为已换题;当前题目由 Python 从 history 推断(最新学生消息为独立完整新题 → switch;答题/追问 → 保持当前题目)
 
 #### Scenario: 学生主动结束
 - **WHEN** 学生表达结束/放弃
