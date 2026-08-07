@@ -55,6 +55,7 @@ class _FakeBound:
 
     def invoke(self, prompt):
         self.llm.json_calls += 1
+        self.llm.json_inputs.append(prompt)  # 记录收到的输入(消息列表)
         if self.llm.json_raises:
             raise self.llm.json_raises
         if self.llm.json_contents:
@@ -76,6 +77,7 @@ class FakeLLM:
         self.text_raises = text_raises
         self.fc_calls = 0
         self.json_calls = 0
+        self.json_inputs = []  # 记录 json mode 收到的输入(消息列表)
         self.text_calls = 0
 
     def bind_tools(self, tools):
@@ -257,3 +259,75 @@ class TestCorrectiveRetry:
         assert result.type.value == "hint"
         assert llm.json_calls == 2  # 首次 + 1 次纠错
         assert llm.text_calls == 1  # 正则段兜住
+
+
+class TestMultimodalMessages:
+    """10.3 structured 消息化: 支持图+文消息列表(看图答疑)"""
+
+    @staticmethod
+    def _image_messages():
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        return [
+            SystemMessage(content="sys"),
+            HumanMessage(content=[
+                {"type": "text", "text": "对话内容"},
+                {"type": "image_url", "image_url": {"url": "https://cos-xxx/1.jpg"}},
+            ]),
+        ]
+
+    def test_messages_function_calling_path(self):
+        """多模态消息(图+文)走 ①function_calling"""
+        from core.tutoring.structured import generate_action_meta
+        from models.tutoring import ActionMeta
+
+        llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        result = generate_action_meta(llm, self._image_messages())
+
+        assert isinstance(result, ActionMeta)
+        assert result.type.value == "hint"
+        assert llm.fc_calls == 1
+
+    def test_messages_json_mode_appends_hint(self):
+        """②json_mode 下 _JSON_HINT 以 SystemMessage 追加(不能字符串拼接)"""
+        from core.tutoring.structured import generate_action_meta
+
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_contents=[make_valid_json()])
+        result = generate_action_meta(llm, self._image_messages())
+
+        assert result.type.value == "hint"
+        assert llm.json_calls == 1
+        # 收到的是 messages + [SystemMessage(JSON hint)],最后一个是 hint
+        last = llm.json_inputs[-1]
+        from langchain_core.messages import SystemMessage
+        assert isinstance(last[-1], SystemMessage)
+        assert "JSON" in last[-1].content
+
+    def test_messages_regex_extract_path(self):
+        """多模态消息走 ③正则提取"""
+        from core.tutoring.structured import generate_action_meta
+
+        messy = f"前缀说明\n{make_valid_json()}\n结束"
+        llm = FakeLLM(fc_raises=RuntimeError("a"),
+                      json_raises=RuntimeError("b"),
+                      text_contents=[messy])
+        result = generate_action_meta(llm, self._image_messages())
+
+        assert result.type.value == "hint"
+        assert llm.text_calls == 1
+
+    def test_messages_corrective_keeps_image_context(self):
+        """纠错重试把纠错 SystemMessage 追加到原消息(图片保持上下文)"""
+        from core.tutoring.structured import generate_action_meta
+
+        llm = FakeLLM(fc_raises=RuntimeError("fc down"),
+                      json_contents=[make_bad_json(), make_valid_json()])
+        result = generate_action_meta(llm, self._image_messages())
+
+        assert result.type.value == "hint"
+        assert llm.json_calls == 2  # 首次 + 1 次纠错
+        # 纠错消息 = 原消息(含图) + [SystemMessage(纠错)]
+        corrective_input = llm.json_inputs[-1]
+        assert len(corrective_input) == len(self._image_messages()) + 1
+        assert "不合法" in corrective_input[-1].content

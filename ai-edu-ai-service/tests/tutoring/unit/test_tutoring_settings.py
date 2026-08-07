@@ -23,14 +23,14 @@ class TestTutoringSettings:
     """TUTORING_* 配置默认值"""
 
     def test_decide_default_config(self, fresh_settings):
-        """decide 默认走 deepseek-v4-flash"""
-        assert fresh_settings.TUTORING_DECIDE_PROVIDER == "deepseek"
-        assert fresh_settings.TUTORING_DECIDE_MODEL == "deepseek-v4-flash"
+        """decide 默认走豆包(看图答疑需视觉能力)"""
+        assert fresh_settings.TUTORING_DECIDE_PROVIDER == "doubao"
+        assert fresh_settings.TUTORING_DECIDE_MODEL == "doubao-seed-2-0-lite-260428"
 
     def test_generate_default_config(self, fresh_settings):
-        """generate 默认走 deepseek-v4-flash"""
-        assert fresh_settings.TUTORING_GENERATE_PROVIDER == "deepseek"
-        assert fresh_settings.TUTORING_GENERATE_MODEL == "deepseek-v4-flash"
+        """generate 默认走豆包(看图答疑需视觉能力)"""
+        assert fresh_settings.TUTORING_GENERATE_PROVIDER == "doubao"
+        assert fresh_settings.TUTORING_GENERATE_MODEL == "doubao-seed-2-0-lite-260428"
 
     def test_temperature_defaults(self, fresh_settings):
         """温度默认值: decide 偏低(判断密集), generate 偏高(内容生成)"""

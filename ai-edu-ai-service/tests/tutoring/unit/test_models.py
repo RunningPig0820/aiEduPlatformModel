@@ -154,6 +154,26 @@ class TestIndependentSubStructures:
         assert decision_fields <= meta_fields
 
 
+class TestChatTurn:
+    """10.2 ChatTurn 图片双通道"""
+
+    def test_text_only_turn(self):
+        """纯文本消息: content 正常,image_url 为 None(向后兼容)"""
+        from models.tutoring import ChatTurn
+
+        t = ChatTurn(role="user", content="鸡兔同笼，共35头94脚，各几只？")
+        assert t.image_url is None
+        assert t.content == "鸡兔同笼，共35头94脚，各几只？"
+
+    def test_image_turn(self):
+        """图片消息: content 可为空,image_url 填 COS 签名 URL"""
+        from models.tutoring import ChatTurn
+
+        t = ChatTurn(role="user", content="", image_url="https://cos-xxx/1.jpg")
+        assert t.content == ""
+        assert t.image_url == "https://cos-xxx/1.jpg"
+
+
 class TestRequests:
     """2.4 请求模型校验"""
 

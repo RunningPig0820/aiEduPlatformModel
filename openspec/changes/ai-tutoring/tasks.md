@@ -52,3 +52,17 @@
 - [ ] 9.1 与 Java 侧 ai-tutoring 联调: decide → Java 护栏 → generate 全链路(类型先行 SSE、护栏拒绝无 token)
 - [x] 9.2 对齐 `docs/ai-tutoring-agent.md` 与契约(含 current_question 移除、从 history 推断;`reason` 字段是否纳入 Java 契约待 Java 侧确认)
 - [ ] 9.3 确认 TUTORING_* 配置接入 Java 侧 ai-edu.tutoring 配置一致(模型地址/内部 token)
+
+## 10. 豆包看图答疑(模型切 doubao + 图像优先,见 design 决策 14)
+
+- [x] 10.1 **技术预演 spike**(先做,决定后面怎么走): 配置 DOUBAO + Factory 加 doubao provider;用真实题图(含公式/受力图)实测:
+      ①图片+function calling 是否支持(①段 bind_tools 可用性) ②方舟能否直接访问 COS 签名 URL ③看图读题
+      另确认: 加 image_url 后纯文本题目(无图)契约与行为是否不受影响(双通道向后兼容)
+      结论决定: ①段走 tool calling 还是 json_mode;图片走 URL 还是 base64
+      **结论(2026-08)**: ①③全过——图片+function calling ✅、COS URL 直接访问 ✅、看图读题公式全对 ✅;正确 ID=doubao-seed-2-0-lite-260428;①段走 tool calling、图片走 URL(design 决策 14 已记录)
+- [x] 10.2 契约: `ChatTurn` 加 `image_url: Optional[str]`(文本与图片双通道;无图行为不变)
+- [x] 10.3 `structured.py` 消息化: 四段降级改收消息列表;② JSON hint 改追加 SystemMessage;纠错重试带图设计(R12)——**真实题图 E2E 已验: doubao+图片+function calling → 合法 ActionMeta,并从图内公式识别出知识点**
+- [x] 10.4 `prompts.py` 看图改造: 带图消息渲染 [图片题目] 占位 + 换题判定扩展(新图片消息→switch) + 看图决策指令
+- [x] 10.5 `decider.py`/`generator.py` 多模态: 组装 SystemMessage + HumanMessage(文本 + image_url)——**真实 E2E 已验: decide 从图内识别知识点出 approach;generate(hint) 结合图引导不泄答案**
+- [x] 10.6 测试回归(单元/集成)+ real 带图冒烟(doubao + 真实题图)——**2/2 通过: decide 读图识别知识点、generate 带图引导不泄答案;全量 115 passed**
+- [ ] 10.7 可选(等 Java 删 OCR 端点后)删 `core/ocr_service.py` + `api/ocr.py` + 对应测试

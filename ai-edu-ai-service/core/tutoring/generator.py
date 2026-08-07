@@ -13,9 +13,12 @@ from typing import Iterator, Optional
 from config.settings import settings
 from models.tutoring import GenerateRequest
 from core.tutoring.context import truncate_history, get_generate_llm
-from core.tutoring.prompts import build_generate_prompt
+from core.tutoring.prompts import build_generate_messages
 
 logger = logging.getLogger(__name__)
+
+# 空流兜底话术: 模型零 token(网络/服务抖动)时给固定引导,避免学生收到空回复
+_EMPTY_STREAM_FALLBACK = "我这边刚才有点卡顿，我们换个角度：你先说说，从题目里你读到了哪些关键条件？"
 
 
 def iter_tokens(request: GenerateRequest, llm=None) -> Iterator[dict]:
@@ -33,20 +36,27 @@ def iter_tokens(request: GenerateRequest, llm=None) -> Iterator[dict]:
     llm = llm or get_generate_llm()
 
     history = truncate_history(request.history)
-    prompt = build_generate_prompt(
+    messages = build_generate_messages(
         action_type=request.action_type.value,
         history=history,
         subject_hint=request.subject_hint,
     )
-    logger.debug("generate prompt(action=%s, head): %s", request.action_type.value, prompt[:100])
+    logger.debug("generate messages built (action=%s, n=%d)", request.action_type.value, len(messages))
 
     # meta 先行: 护栏已放行的 type,前端据此渲染
     yield {"event": "meta", "data": {"action_type": request.action_type.value}}
 
-    for chunk in llm.stream(prompt):
+    token_count = 0
+    for chunk in llm.stream(messages):
         content = chunk.content
         if content:
+            token_count += 1
             yield {"event": "token", "data": {"content": content}}
+
+    # 空流兜底: 零 token 时给固定引导话术,避免学生收到空回复(Java 零 token 不落库)
+    if token_count == 0:
+        logger.warning("generate: 空流(0 token),给兜底话术")
+        yield {"event": "token", "data": {"content": _EMPTY_STREAM_FALLBACK}}
 
     model_used = f"{settings.TUTORING_GENERATE_PROVIDER}/{settings.TUTORING_GENERATE_MODEL}"
     yield {"event": "done", "data": {"model_used": model_used}}

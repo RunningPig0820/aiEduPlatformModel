@@ -31,6 +31,9 @@ def pytest_configure(config):
         "markers", "requires_bailian: 需要 DASHSCOPE_API_KEY"
     )
     config.addinivalue_line(
+        "markers", "requires_doubao: 需要 DOUBAO_API_KEY"
+    )
+    config.addinivalue_line(
         "markers", "requires_neo4j: 需要 Neo4j 连接配置"
     )
 

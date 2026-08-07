@@ -44,8 +44,24 @@ class _Bound:
     def __init__(self, llm):
         self.llm = llm
 
+    def _text_of(self, prompt):
+        """structured 消息化后输入是消息列表,提取全部文本便于断言"""
+        if not isinstance(prompt, (list, tuple)):
+            return prompt
+        parts = []
+        for m in prompt:
+            content = getattr(m, "content", "") or ""
+            if isinstance(content, str):
+                parts.append(content)
+            elif isinstance(content, list):
+                # 多模态: content=[{type:text},{type:image_url}],只取 text 部分
+                parts.append(" ".join(
+                    p.get("text", "") for p in content if isinstance(p, dict)
+                ))
+        return "\n".join(parts)
+
     def invoke(self, prompt):
-        self.llm.prompts.append(prompt)
+        self.llm.prompts.append(self._text_of(prompt))
         if self.llm.fc_raises:
             raise self.llm.fc_raises
         if self.llm.fc_args is not None:
@@ -100,6 +116,42 @@ def _request(history=None, mastery_snapshot=None):
         mastery_snapshot=mastery_snapshot or [],
         subject_hint="math",
     )
+
+
+class TestNewQuestionSignal:
+    """Java 换题信号 is_new_question 短路 switch(2026-08 后端联调定稿)"""
+
+    def _req(self, is_new_question=False):
+        from models.tutoring import DecideRequest
+
+        return DecideRequest(
+            history=[{"role": "user", "content": "鸡兔同笼，共35头94脚，各几只？"}],
+            round_count=1,
+            answer_request_count=0,
+            mastery_snapshot=[],
+            subject_hint="math",
+            is_new_question=is_new_question,
+        )
+
+    def test_new_question_short_circuits_switch(self):
+        """is_new_question=true → 直接 switch,不调 LLM"""
+        from core.tutoring.decider import decide
+
+        fake = FakeLLM(fc_args=dict(VALID_META_DICT))
+        result = decide(self._req(is_new_question=True), llm=fake)
+
+        assert result.type.value == "switch"
+        assert len(fake.prompts) == 0  # 短路,没调 LLM
+
+    def test_not_new_question_normal_path(self):
+        """is_new_question=false(默认)→ 走正常决策"""
+        from core.tutoring.decider import decide
+
+        fake = FakeLLM(fc_args=dict(VALID_META_DICT))
+        result = decide(self._req(), llm=fake)
+
+        assert result.type.value == "hint"  # 来自 fake 的正常路径
+        assert len(fake.prompts) == 1
 
 
 class TestDecider:

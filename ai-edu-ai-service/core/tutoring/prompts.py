@@ -2,12 +2,15 @@
 提示词工厂 - decide 决策器系统提示词 + generate 分类型生成规约
 
 职责: 把答疑的产品规则翻译成 LLM 能遵守的指令。
-- build_decide_prompt: 教模型"怎么决策"(闭集、联动、边界、安全、label 接地)
-- GENERATION_RULES + build_generate_prompt: 教模型"怎么生成"(分类型硬约束)
+- build_decide_prompt / build_decide_messages: 教模型"怎么决策"
+- GENERATION_RULES + build_generate_prompt / build_generate_messages: 教模型"怎么生成"
 
-对齐: openspec/changes/ai-tutoring/design.md 决策 9(label 接地) / tasks.md 任务 4
+看图答疑(design 决策 14): 题目可能是图片(公式+图形)。带 image_url 的消息在文本中
+渲染为 [图片题目] 占位,真实图通过多模态消息通道(HumanMessage 的 image_url)进入模型。
 """
 from typing import Dict, List, Optional
+
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 
 # ============ 4.1 decide 决策器系统提示词 ============
@@ -15,7 +18,13 @@ from typing import Dict, List, Optional
 _DECIDE_SYSTEM = """你是数学答疑的"决策器"，只负责输出一个动作决策（ActionMeta），不做解答。
 
 ## 背景
-学生正在做数学题。你收到对话历史、学生掌握度快照。你的任务：根据学生当前状态，决定"下一步做什么动作"。当前题目需要从对话历史中推断。
+学生正在做数学题。你收到对话历史、学生掌握度快照。你的任务：根据学生当前状态，决定"下一步做什么动作"。当前题目需要从对话历史中推断（可能是文本，也可能是图片）。
+
+## 看图（题目是图片时）
+题目可能以图片给出（含公式、受力分析图、实例图、标注）。图片在对话历史中显示为 [图片题目]。
+- 必须结合图片内容决策：图中的题目文字、公式、图形、标注都是题目的一部分
+- 学生可能追问图中元素（如"图中这个力往哪"、"这个角是多少"），要能引用图作答
+- 换题判定：最新一条学生消息是新的题目图片（贴新图）→ type="switch"
 
 ## 输出格式（必须是合法 JSON，字段如下）
 {"type": 闭集之一, "reason": string|null, "eval": {"correct": bool, "error_type": string|null, "emotion": 七态之一, "exercise_complete": bool}, "mastery_signals": [{"kp_label": string, "signal": "mastered"|"practicing"|"struggling"}], "new_question": string|null, "end_reason": "COMPLETED"|"ANSWER_REVEALED"|"ABANDONED"|"ROUND_LIMIT"|null, "summary": string|null, "safety_flag": bool}
@@ -25,7 +34,7 @@ _DECIDE_SYSTEM = """你是数学答疑的"决策器"，只负责输出一个动�
 - "approach"：给思路步骤大纲（步骤名+关键公式），不给完整演算和最终数值
 - "reveal"：给出完整解答（仅在学生明确要答案时；是否放行由 Java 护栏决定）
 - "concept"：澄清/追问。学生输入过简或模糊（如"我不会""老师你好"）时选它，附一个澄清问题，不终止会话
-- "switch"：学生贴出新题要换题，new_question 填新题文本
+- "switch"：学生贴出新题要换题（新题可能是文本或图片），new_question 填新题文本
 - "end"：结束本轮。包括：独立解出、学生放弃、内容与学习无关、或轮次上限
 
 ## hint 与 approach 的区别（关键，各给一个例子）
@@ -37,8 +46,8 @@ _DECIDE_SYSTEM = """你是数学答疑的"决策器"，只负责输出一个动�
 学生回答正确且独立解出（exercise_complete=true）时，type 必须为 "end"，且 end_reason 必须为 "COMPLETED"。
 
 ## 当前题目判定（关键）
-当前正在解答的题目 = 对话历史中最近一条"自包含的完整题目"（学生贴出的题）。
-- 最新一条学生消息是独立完整新题（贴新题/换题）→ type="switch"，new_question 填新题文本
+当前正在解答的题目 = 对话历史中最近一条"自包含的完整题目"（学生贴出的题，文本或图片）。
+- 最新一条学生消息是独立完整新题（贴新题/换题，文本或图片）→ type="switch"，new_question 填新题文本
 - **首条消息（历史中只有这一条、没有任何老师回复）→ 绝不能是 "switch"**——没有旧题可换，这是会话开始，应输出 "hint"/"approach"（引导）或 "concept"（过简时澄清）
 - 最新一条学生消息是答题/追问/含糊表达 → 保持当前题目继续决策
 - 历史中出现的旧题只作参考，不能按旧题决策
@@ -60,18 +69,47 @@ mastery_signals 的 kp_label 优先复用下方快照候选 label；signal 用 m
 
 
 def _format_history(history) -> str:
-    """把对话历史格式化成"学生/老师：内容"文本(兼容 dict 或 BaseModel)"""
+    """把对话历史格式化成"学生/老师：内容"文本(兼容 dict 或 BaseModel)。
+
+    带 image_url 的消息渲染成 [图片题目] 占位——真实图走多模态消息通道(不进文本)。
+    """
     if not history:
         return "(无)"
     lines = []
     for turn in history:
         if isinstance(turn, dict):
             role, content = turn.get("role", ""), turn.get("content", "")
+            image_url = turn.get("image_url")
         else:
             role, content = turn.role, turn.content
+            image_url = getattr(turn, "image_url", None)
         speaker = "学生" if role == "user" else "老师"
-        lines.append(f"{speaker}：{content}")
+        if image_url:
+            lines.append(f"{speaker}：[图片题目]")
+        elif content:
+            lines.append(f"{speaker}：{content}")
+        else:
+            lines.append(f"{speaker}：(空)")
     return "\n".join(lines)
+
+
+def _find_question_image_url(history) -> Optional[str]:
+    """取对话历史中最近一条带 image_url 的消息(当前题目图;换题=新图进来)"""
+    for turn in reversed(history or []):
+        url = turn.get("image_url") if isinstance(turn, dict) else getattr(turn, "image_url", None)
+        if url:
+            return url
+    return None
+
+
+def _decide_system(snapshot_labels: Optional[List[str]]) -> str:
+    labels = "、".join(snapshot_labels) if snapshot_labels else "(无快照)"
+    # 用 replace 而非 format: 提示词里有 JSON 示例的 { } 花括号,format 会当占位符
+    return _DECIDE_SYSTEM.replace("{snapshot_labels}", labels)
+
+
+def _decide_task_text() -> str:
+    return "\n\n请输出你的决策（合法 JSON，只含 ActionMeta 字段，不要任何其他文字）。"
 
 
 def build_decide_prompt(
@@ -82,23 +120,38 @@ def build_decide_prompt(
 ) -> str:
     """渲染 decide 完整提示词(系统指令 + 对话历史 + 快照候选)。
 
-    当前题目不由后端传入: Java 零题目状态,模型从 history 推断当前题目
-    (对话历史首条用户消息通常是题目文本)。
-
-    Args:
-        history: 对话历史(list of dict 或 ChatTurn;题目在历史中)
-        snapshot_labels: 掌握度快照候选 label(接地,优先复用)
-        subject_hint: 学科(本期恒为 math)
+    纯文本通道(向后兼容)。图片题目用 build_decide_messages。
     """
-    labels = "、".join(snapshot_labels) if snapshot_labels else "(无快照)"
-    # 用 replace 而非 format: 提示词里有 JSON 示例的 { } 花括号,format 会当占位符
-    system = _DECIDE_SYSTEM.replace("{snapshot_labels}", labels)
+    system = _decide_system(snapshot_labels)
     convo = _format_history(history)
-    task = (
-        f"\n\n## 对话历史\n{convo}\n\n"
-        "请输出你的决策（合法 JSON，只含 ActionMeta 字段，不要任何其他文字）。"
-    )
-    return system + task
+    return system + f"\n\n## 对话历史\n{convo}\n\n" + _decide_task_text()
+
+
+def build_decide_messages(
+    *,
+    history,
+    snapshot_labels: Optional[List[str]] = None,
+    subject_hint: str = "math",
+) -> List[BaseMessage]:
+    """渲染 decide 多模态消息列表(图+文通道,看图答疑)。
+
+    无图时退回纯文本 HumanMessage(行为与 build_decide_prompt 一致);
+    有图时 HumanMessage 带 image_url,真实题目图进模型。
+    """
+    system = _decide_system(snapshot_labels)
+    convo = _format_history(history)
+    image_url = _find_question_image_url(history)
+    text_content = f"## 对话历史\n{convo}\n\n" + _decide_task_text()
+
+    messages: List[BaseMessage] = [SystemMessage(content=system)]
+    if image_url:
+        messages.append(HumanMessage(content=[
+            {"type": "text", "text": text_content},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ]))
+    else:
+        messages.append(HumanMessage(content=text_content))
+    return messages
 
 
 # ============ 4.2 generate 分类型生成规约 ============
@@ -113,26 +166,43 @@ GENERATION_RULES: Dict[str, str] = {
 }
 
 
+def _generate_system(action_type: str) -> str:
+    rule = GENERATION_RULES.get(action_type, GENERATION_RULES["hint"])
+    return (
+        '你是数学答疑的"生成器"，请按指定动作类型生成一段给学生的回复。\n\n'
+        f"## 生成规则（必须遵守）\n{rule}"
+    )
+
+
+def _generate_text_content(history) -> str:
+    convo = _format_history(history)
+    return f"## 对话历史\n{convo}\n\n请直接输出给你的回复正文（不要 JSON，不要解释）。"
+
+
 def build_generate_prompt(
     *,
     action_type: str,
     history,
     subject_hint: str = "math",
 ) -> str:
-    """渲染 generate 完整提示词: 嵌入对应动作类型的生成规约。
+    """渲染 generate 完整提示词(纯文本通道,向后兼容)。"""
+    return _generate_system(action_type) + "\n\n" + _generate_text_content(history)
 
-    当前题目不在 prompt 单列: 题目文本在 history 中,模型按对话历史生成。
 
-    Args:
-        action_type: Java 已放行的动作类型(闭集)
-        history: 对话历史(题目在历史中)
-        subject_hint: 学科
-    """
-    rule = GENERATION_RULES.get(action_type, GENERATION_RULES["hint"])
-    convo = _format_history(history)
-    return (
-        '你是数学答疑的"生成器"，请按指定动作类型生成一段给学生的回复。\n\n'
-        f"## 生成规则（必须遵守）\n{rule}\n\n"
-        f"## 对话历史\n{convo}\n\n"
-        "请直接输出给你的回复正文（不要 JSON，不要解释）。"
-    )
+def build_generate_messages(
+    *,
+    action_type: str,
+    history,
+    subject_hint: str = "math",
+) -> List[BaseMessage]:
+    """渲染 generate 多模态消息列表(图+文通道,看图答疑)。"""
+    image_url = _find_question_image_url(history)
+    messages: List[BaseMessage] = [SystemMessage(content=_generate_system(action_type))]
+    if image_url:
+        messages.append(HumanMessage(content=[
+            {"type": "text", "text": _generate_text_content(history)},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ]))
+    else:
+        messages.append(HumanMessage(content=_generate_text_content(history)))
+    return messages

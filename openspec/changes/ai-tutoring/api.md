@@ -64,6 +64,7 @@
 | answer_request_count | Integer | 是 | ≥0 | 已请求答案次数 |
 | mastery_snapshot | Array[{kp_key, label, mastery_level}] | 否 | — | 学生已有掌握度(label 候选,接地用) |
 | subject_hint | String | 是 | 默认 "math" | 学科(本期恒为 math) |
+| is_new_question | Boolean | 否 | 默认 false | 本轮是否新题目(Java 检测到新题图/新题时置 true;Python 短路直接返回 type=switch,不调 LLM) |
 
 ### 响应参数
 

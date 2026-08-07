@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     BAIDU_OCR_API_KEY: str = ""
     BAIDU_OCR_SECRET_KEY: str = ""
 
+    # ============ 豆包(火山方舟) ============
+    # 火山方舟 API Key (看图答疑用 doubao-seed-2-0-lite)
+    DOUBAO_API_KEY: str = ""
+
     # ============ 服务配置 ============
     # Java 后端调用 AI 服务的内部 Token
     INTERNAL_TOKEN: str = ""
@@ -44,13 +48,14 @@ class Settings(BaseSettings):
     DEFAULT_MODEL: str = "glm-4-flash"
 
     # ============ AI 答疑 (Tutoring) 模型配置 ============
-    # decide 决策模型(判断密集,选便宜快;测试阶段用 deepseek-v4-flash 走流程)
-    TUTORING_DECIDE_PROVIDER: str = "deepseek"
-    TUTORING_DECIDE_MODEL: str = "deepseek-v4-flash"
+    # 看图答疑需视觉能力(design 决策 14) → 豆包 doubao-seed-2-0-lite
+    # decide 决策模型(判断密集)
+    TUTORING_DECIDE_PROVIDER: str = "doubao"
+    TUTORING_DECIDE_MODEL: str = "doubao-seed-2-0-lite-260428"
 
     # generate 生成模型(内容生成)
-    TUTORING_GENERATE_PROVIDER: str = "deepseek"
-    TUTORING_GENERATE_MODEL: str = "deepseek-v4-flash"
+    TUTORING_GENERATE_PROVIDER: str = "doubao"
+    TUTORING_GENERATE_MODEL: str = "doubao-seed-2-0-lite-260428"
 
     # 温度: decide 偏低(判断要稳), generate 偏高(内容要有层次)
     TUTORING_DECIDE_TEMPERATURE: float = 0.3

@@ -2,18 +2,23 @@
 结构化输出保障 - 四段降级管线 (安全关键)
 
 保证 decide 接口绝不返回畸形 ActionMeta:
-① with_structured_output(function_calling)
+① bind_tools(function_calling)
 ② JSON mode
 ③ 正则提取 + Pydantic
-④ 兜底 ActionMeta(type=hint)
+④ 兜底 ActionMeta(type=hint, degraded=true)
 
-对齐: openspec/changes/ai-tutoring/design.md 决策 5 / tasks.md 任务 3
-冒烟结论(任务 1.3): deepseek-v4-flash function_calling ✅ / json_mode ✅,
-故 ① 是默认路径,②③④ 是保险。
+支持文本与多模态(图+文): generate_action_meta 接受 字符串 prompt 或 LangChain 消息列表。
+消息列表场景(看图答疑, design 决策 14):
+- ② 的 _JSON_HINT 以 SystemMessage 追加(字符串拼接在消息列表下会报错)
+- 纠错重试把纠错 SystemMessage 追加到原消息(图片仍在上下文中)
+
+对齐: openspec/changes/ai-tutoring/design.md 决策 5/14 / tasks.md 任务 3、10.3
 """
 import json
 import logging
-from typing import Optional
+from typing import List, Optional, Union
+
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from models.tutoring import ActionMeta, ActionType, Eval, EmotionF7
 
@@ -63,6 +68,13 @@ def _corrective_prompt(bad_raw: str, error: str) -> str:
 _JSON_HINT = "\n\n(重要: 你的最终回答必须是一个合法 JSON 对象,不要包含任何其他文字。)"
 
 
+def _as_messages(input) -> List[BaseMessage]:
+    """兼容字符串 prompt 或消息列表: 统一成 LangChain 消息列表(支持图片)。"""
+    if isinstance(input, (list, tuple)):
+        return list(input)
+    return [HumanMessage(content=input)]
+
+
 def _extract_json(text: str) -> Optional[str]:
     """从混杂文本中提取第一个平衡的 JSON 对象(处理嵌套花括号与字符串内引号)"""
     start = text.find("{")
@@ -89,11 +101,13 @@ def _parse_and_validate(
     raw: str,
     correction_llm,
     corrective_retries: int,
+    base_messages: Optional[List[BaseMessage]] = None,
     extract: bool = False,
 ) -> Optional[ActionMeta]:
-    """解析 + Pydantic 校验,失败时发纠错 prompt(只修 schema)。
+    """解析 + Pydantic 校验,失败时发纠错消息(只修 schema)。
 
     重试域: 不重试 LLM 整段调用,只做有上限的 schema 纠错。
+    base_messages 提供时(多模态),纠错 SystemMessage 追加到原消息(图片保持上下文)。
     返回 None 表示放弃本段,交给下一段。
     """
     for attempt in range(corrective_retries + 1):
@@ -117,7 +131,13 @@ def _parse_and_validate(
                 attempt + 1, corrective_retries, error,
             )
             try:
-                raw = correction_llm.invoke(_corrective_prompt(raw, error)).content
+                if base_messages is not None:
+                    corrective_msgs = list(base_messages) + [
+                        SystemMessage(content=_corrective_prompt(raw, error))
+                    ]
+                    raw = correction_llm.invoke(corrective_msgs).content
+                else:
+                    raw = correction_llm.invoke(_corrective_prompt(raw, error)).content
             except Exception as ce:
                 logger.warning("structured: 纠错调用失败: %s", ce)
                 return None
@@ -127,16 +147,16 @@ def _parse_and_validate(
     return None
 
 
-def _try_function_calling(llm, prompt: str) -> Optional[ActionMeta]:
+def _try_function_calling(llm, messages: List[BaseMessage]) -> Optional[ActionMeta]:
     """① function calling: bind_tools(ActionMeta) + 手动解析 tool_call
 
     不用 with_structured_output: langchain-openai 1.x 默认走 response_format=json_schema
     (Structured Outputs),deepseek 不支持(400);bind_tools 走原生 tool-calling,
-    任务 1.3 冒烟已实测可用。tool_call args 交给 Pydantic 校验,不合法则降级。
+    任务 1.3 冒烟 + 10.1 spike(图片+function calling)实测可用。args 交 Pydantic 校验。
     """
     try:
         llm_with_tool = llm.bind_tools([ActionMeta])
-        msg = llm_with_tool.invoke(prompt)
+        msg = llm_with_tool.invoke(messages)
         if not msg.tool_calls:
             logger.warning("structured: ①未返回 tool_call(content=%r)", getattr(msg, "content", None))
             return None
@@ -147,49 +167,67 @@ def _try_function_calling(llm, prompt: str) -> Optional[ActionMeta]:
         return None
 
 
-def _try_json_mode(llm, prompt: str, corrective_retries: int) -> Optional[ActionMeta]:
+def _try_json_mode(llm, messages: List[BaseMessage], corrective_retries: int) -> Optional[ActionMeta]:
     """② JSON mode: response_format=json_object + 解析校验"""
     try:
         llm_json = llm.bind(response_format={"type": "json_object"})
-        raw = llm_json.invoke(prompt + _JSON_HINT).content
+        # JSON hint 以 SystemMessage 追加(消息列表下不能字符串拼接)
+        raw = llm_json.invoke(messages + [SystemMessage(content=_JSON_HINT)]).content
     except Exception as e:
         logger.warning("structured: ②json_mode 调用失败: %s", e)
         return None
     if not raw:
         return None
-    # 纠错复用 json mode 绑定的 llm,保证再输出也是 JSON
-    return _parse_and_validate(raw, correction_llm=llm_json, corrective_retries=corrective_retries)
+    # 纠错复用 json mode 绑定的 llm,保证再输出也是 JSON;纠错消息带原上下文(含图)
+    return _parse_and_validate(
+        raw,
+        correction_llm=llm_json,
+        corrective_retries=corrective_retries,
+        base_messages=messages,
+    )
 
 
-def _try_regex_extract(llm, prompt: str, corrective_retries: int) -> Optional[ActionMeta]:
+def _try_regex_extract(llm, messages: List[BaseMessage], corrective_retries: int) -> Optional[ActionMeta]:
     """③ 正则提取 + Pydantic"""
     try:
-        raw = llm.invoke(prompt).content
+        raw = llm.invoke(messages).content
     except Exception as e:
         logger.warning("structured: ③文本调用失败: %s", e)
         return None
     if not raw:
         return None
-    return _parse_and_validate(raw, correction_llm=llm, corrective_retries=corrective_retries, extract=True)
+    return _parse_and_validate(
+        raw,
+        correction_llm=llm,
+        corrective_retries=corrective_retries,
+        base_messages=messages,
+        extract=True,
+    )
 
 
-def generate_action_meta(llm, prompt: str, corrective_retries: int = 1) -> ActionMeta:
+def generate_action_meta(
+    llm,
+    input: Union[str, List[BaseMessage]],
+    corrective_retries: int = 1,
+) -> ActionMeta:
     """四段降级管线,保证返回合法 ActionMeta(绝不抛异常、绝不吐畸形)。
 
     Args:
         llm: 已配置的 ChatModel(decide 用,配置驱动)
-        prompt: 渲染好的 decide 提示词
+        input: 渲染好的 decide 提示词(字符串) 或 LangChain 消息列表(图+文,看图答疑)
         corrective_retries: schema 纠错重试次数(默认 1,有上限)
     """
-    meta = _try_function_calling(llm, prompt)
+    messages = _as_messages(input)
+
+    meta = _try_function_calling(llm, messages)
     if meta is not None:
         return meta
 
-    meta = _try_json_mode(llm, prompt, corrective_retries)
+    meta = _try_json_mode(llm, messages, corrective_retries)
     if meta is not None:
         return meta
 
-    meta = _try_regex_extract(llm, prompt, corrective_retries)
+    meta = _try_regex_extract(llm, messages, corrective_retries)
     if meta is not None:
         return meta
 

@@ -50,6 +50,20 @@ def _request(action_type="hint"):
     )
 
 
+def _text_of(messages):
+    """消息列表 → 拼接文本(便于断言 prompt 内容)"""
+    if not isinstance(messages, (list, tuple)):
+        return messages
+    parts = []
+    for m in messages:
+        content = getattr(m, "content", "") or ""
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            parts.append(" ".join(p.get("text", "") for p in content if isinstance(p, dict)))
+    return "\n".join(parts)
+
+
 class TestGenerator:
     def test_yields_meta_then_tokens_then_done(self):
         from core.tutoring.generator import iter_tokens
@@ -74,7 +88,7 @@ class TestGenerator:
         fake = FakeStreamLLM(chunks=["ok"])
         list(iter_tokens(_request(action_type="approach"), llm=fake))
 
-        assert GENERATION_RULES["approach"] in fake.prompts[0]
+        assert GENERATION_RULES["approach"] in _text_of(fake.prompts[0])
 
     def test_mid_stream_error_raises(self):
         """中段抛错 → 异常向上抛(API 层转 event: error)"""
@@ -98,3 +112,15 @@ class TestGenerator:
 
         model_used = events[-1]["data"]["model_used"]
         assert "/" in model_used  # provider/model 格式
+
+    def test_empty_stream_fallback(self):
+        """零 token 流 → 兜底话术(避免学生收到空回复)"""
+        from core.tutoring.generator import iter_tokens
+
+        fake = FakeStreamLLM(chunks=[])  # 空流
+        events = list(iter_tokens(_request(), llm=fake))
+
+        tokens = [e for e in events if e["event"] == "token"]
+        assert len(tokens) == 1  # 只有兜底话术
+        assert tokens[0]["data"]["content"].strip()
+        assert events[-1]["event"] == "done"

@@ -54,9 +54,10 @@ class EndReason(str, Enum):
 
 
 class ChatTurn(BaseModel):
-    """对话轮次"""
+    """对话轮次(文本与图片双通道,见 design 决策 14)"""
     role: Literal["user", "ai"] = Field(..., description="角色: user/ai")
-    content: str = Field(..., description="消息内容")
+    content: str = Field(default="", description="消息内容(图片消息可为空)")
+    image_url: Optional[str] = Field(None, description="图片消息的 COS 签名 URL(题目图片);无图时为 None(纯文本通道)")
 
 
 class KpSnapshot(BaseModel):
@@ -126,6 +127,7 @@ class DecideRequest(BaseModel):
     answer_request_count: int = Field(default=0, ge=0, description="已请求答案次数")
     mastery_snapshot: List[KpSnapshot] = Field(default_factory=list, description="学生已有掌握度(label 候选)")
     subject_hint: str = Field(default="math", description="学科(本期恒为 math)")
+    is_new_question: bool = Field(default=False, description="本轮是否新题目(Java 检测到新题图/新题时置 true;Python 短路直接返回 switch,不调 LLM)")
 
 
 class GenerateRequest(BaseModel):

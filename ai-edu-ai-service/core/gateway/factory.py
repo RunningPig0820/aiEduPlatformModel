@@ -24,6 +24,7 @@ class LLMFactory:
         "zhipu": "glm-4-flash",
         "deepseek": "deepseek-chat",
         "bailian": "qwen-turbo",
+        "doubao": "doubao-seed-2-0-lite-260428",
     }
 
     # Provider 默认参数
@@ -37,6 +38,10 @@ class LLMFactory:
         },
         "bailian": {
             "api_key_env": "BAILIAN_API_KEY",
+        },
+        "doubao": {
+            "api_key_env": "DOUBAO_API_KEY",
+            "api_base": "https://ark.cn-beijing.volces.com/api/v3",
         },
     }
 
@@ -81,6 +86,8 @@ class LLMFactory:
             return LLMFactory._create_deepseek(model, temperature, **kwargs)
         elif provider == "bailian":
             return LLMFactory._create_bailian(model, temperature, **kwargs)
+        elif provider == "doubao":
+            return LLMFactory._create_doubao(model, temperature, **kwargs)
         else:
             raise ValueError(f"Provider {provider} not implemented")
 
@@ -139,6 +146,27 @@ class LLMFactory:
             temperature=temperature,
             openai_api_key=api_key,
             openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            **kwargs
+        )
+
+    @staticmethod
+    def _create_doubao(
+        model: str,
+        temperature: float,
+        **kwargs
+    ) -> BaseChatModel:
+        """创建豆包 ChatModel (火山方舟, OpenAI 兼容协议, 支持图+文全模态)"""
+        api_key = settings.DOUBAO_API_KEY
+        if not api_key:
+            raise ValueError("DOUBAO_API_KEY not configured in environment")
+
+        # 方舟 OpenAI 兼容接口: 模型 ID 可能是公开模型名(doubao-seed-2-0-lite)
+        # 或推理接入点(ep-xxxx),以方舟控制台开通后的实际 ID 为准
+        return ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            openai_api_key=api_key,
+            openai_api_base="https://ark.cn-beijing.volces.com/api/v3",
             **kwargs
         )
 

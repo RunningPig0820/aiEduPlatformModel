@@ -13,7 +13,10 @@ load_dotenv()
 def pytest_collection_modifyitems(config, items):
     """跳过没有 API Key 的测试"""
     skip_deepseek = pytest.mark.skip(reason="需要设置 DEEPSEEK_API_KEY 环境变量")
+    skip_doubao = pytest.mark.skip(reason="需要设置 DOUBAO_API_KEY 环境变量")
 
     for item in items:
         if "requires_deepseek" in item.keywords and not os.getenv("DEEPSEEK_API_KEY"):
             item.add_marker(skip_deepseek)
+        if "requires_doubao" in item.keywords and not os.getenv("DOUBAO_API_KEY"):
+            item.add_marker(skip_doubao)

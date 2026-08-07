@@ -140,3 +140,76 @@ class TestGenerationRules:
         )
         from core.tutoring.prompts import GENERATION_RULES
         assert GENERATION_RULES["hint"] in prompt
+
+
+class TestImageMultimodal:
+    """10.4/10.5 看图答疑: [图片题目]占位 + 多模态消息构建"""
+
+    IMAGE_HISTORY = [
+        {"role": "user", "content": "", "image_url": "https://cos-xxx/1.jpg"},
+        {"role": "ai", "content": "先看图中物块的受力"},
+    ]
+
+    def test_image_placeholder_in_prompt(self):
+        """带 image_url 的消息在文本 prompt 中渲染为 [图片题目] 占位"""
+        from core.tutoring.prompts import build_decide_prompt
+
+        prompt = build_decide_prompt(history=self.IMAGE_HISTORY)
+        assert "[图片题目]" in prompt
+        assert "1.jpg" not in prompt  # 真实 URL 不进文本(走多模态通道)
+
+    def test_vision_instruction_in_prompt(self):
+        """decide prompt 含看图决策指令"""
+        from core.tutoring.prompts import build_decide_prompt
+
+        prompt = build_decide_prompt(history=[{"role": "user", "content": "题"}])
+        assert "看图" in prompt
+        assert "图片" in prompt
+
+    def test_decide_messages_with_image(self):
+        """有图 → HumanMessage 含 text + image_url 两个 part"""
+        from core.tutoring.prompts import build_decide_messages
+        from langchain_core.messages import HumanMessage
+
+        msgs = build_decide_messages(history=self.IMAGE_HISTORY)
+        assert len(msgs) == 2
+        human = msgs[1]
+        assert isinstance(human, HumanMessage)
+        parts = human.content
+        assert any(p.get("type") == "image_url" and p["image_url"]["url"] == "https://cos-xxx/1.jpg"
+                   for p in parts if isinstance(p, dict))
+        assert any(p.get("type") == "text" and "[图片题目]" in p.get("text", "")
+                   for p in parts if isinstance(p, dict))
+
+    def test_decide_messages_text_only(self):
+        """无图 → HumanMessage 是纯文本(向后兼容,无 image_url part)"""
+        from core.tutoring.prompts import build_decide_messages
+        from langchain_core.messages import HumanMessage
+
+        msgs = build_decide_messages(history=[{"role": "user", "content": "鸡兔同笼"}])
+        assert len(msgs) == 2
+        assert isinstance(msgs[1], HumanMessage)
+        assert isinstance(msgs[1].content, str)
+        assert "鸡兔同笼" in msgs[1].content
+
+    def test_find_latest_image(self):
+        """当前题目图 = 历史中最近一条带 image_url 的消息(换题=新图)"""
+        from core.tutoring.prompts import _find_question_image_url
+
+        hist = [
+            {"role": "user", "content": "", "image_url": "http://old.jpg"},
+            {"role": "ai", "content": "..."},
+            {"role": "user", "content": "", "image_url": "http://new.jpg"},
+        ]
+        assert _find_question_image_url(hist) == "http://new.jpg"
+
+    def test_generate_messages_with_image(self):
+        """generate 多模态消息: 有图 → HumanMessage 带 image_url"""
+        from core.tutoring.prompts import build_generate_messages
+        from langchain_core.messages import HumanMessage
+
+        msgs = build_generate_messages(action_type="hint", history=self.IMAGE_HISTORY)
+        assert len(msgs) == 2
+        human = msgs[1]
+        assert isinstance(human, HumanMessage)
+        assert any(p.get("type") == "image_url" for p in human.content if isinstance(p, dict))
