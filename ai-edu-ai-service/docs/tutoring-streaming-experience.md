@@ -6,6 +6,16 @@
 
 ---
 
+## ✅ 最终结论(2026-08-12 已拍板,下文为过程记录)
+
+**决策: 全关思考模式。** 实测对比(见下文二),思考模式 = 模型"写草稿",是卡顿根源;
+关思考后切 `doubao-seed-2-0-mini`(四模态、便宜),decide ~1.5s / generate ~1.2s / 看图全流程 ~3.4s。
+**`thinking` 事件取消**,ActionMeta 契约不变,Java 零改动。已落地于:
+`config/settings.py`(mini)+ `core/tutoring/ark_stream.py`(`thinking: disabled`)。
+下面的 Q1~Q4 原本是请教模型端的问题,已由"换模型 + 关思考"绕开——不再需要方舟改造。
+
+---
+
 ## 一、现象(用户可感知)
 
 学生端 AI 答疑页面,用户反馈:

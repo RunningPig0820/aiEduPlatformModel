@@ -44,7 +44,8 @@ class _FakeToolBound:
             raise self.llm.fc_raises
         if self.llm.fc_args is not None:
             return _ToolMsg([{"name": "ActionMeta", "args": self.llm.fc_args, "id": "call_1", "type": "tool_call"}])
-        return _ToolMsg([])
+        # 无 tool_call: 模拟关思考后 mini 直接把 ActionMeta JSON 作为 content 返回
+        return _ToolMsg([], content=self.llm.fc_content or "")
 
 
 class _FakeBound:
@@ -66,10 +67,11 @@ class _FakeBound:
 class FakeLLM:
     """可控假 LLM: 按设置模拟各段成功/失败"""
 
-    def __init__(self, *, fc_args=None, fc_raises=None,
+    def __init__(self, *, fc_args=None, fc_raises=None, fc_content=None,
                  json_contents=None, json_raises=None,
                  text_contents=None, text_raises=None):
         self.fc_args = fc_args  # 传给 ActionMeta tool 的 args(合法或非法 dict)
+        self.fc_content = fc_content  # 无 tool_call 时的 content(模型直接吐 JSON)
         self.fc_raises = fc_raises
         self.json_contents = list(json_contents or [])
         self.json_raises = json_raises
@@ -161,6 +163,32 @@ class TestStructuredDegradation:
         assert llm.fc_calls == 1
         assert llm.json_calls == 1
 
+    def test_stage1_content_json_parsed_without_tool_call(self):
+        """① 无 tool_call 但 content 是合法 ActionMeta JSON → 第一段直接解析成功
+
+        2026-08 关思考后 mini 偶发: 模型不调工具,直接把 ActionMeta JSON 作为
+        content 返回(实测 content 里 reason/mastery_signals 都完整)。此前这段
+        content 被丢弃、降级到 ② 重试,导致 reason/mastery_signals 丢失。
+        """
+        from core.tutoring.structured import generate_action_meta
+
+        content_json = json.dumps({
+            "type": "approach",
+            "reason": "学生询问该题的解法,需提供解题思路大纲",
+            "eval": {"correct": False, "emotion": "NEUTRAL"},
+            "mastery_signals": [{"kp_label": "基本不等式求最值", "signal": "practicing"}],
+            "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
+        }, ensure_ascii=False)
+        llm = FakeLLM(fc_args=None, fc_content=content_json,
+                      json_contents=["{}"])  # 若降级到 ②,返回空(证明不该走)
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "approach"
+        assert result.reason == "学生询问该题的解法,需提供解题思路大纲"
+        assert len(result.mastery_signals) == 1
+        assert llm.json_calls == 0  # 第一段就成功,没降级到 ②
+
     def test_stage1_invalid_args_degrades(self):
         """① tool_call args 校验失败 → 降级到 ②"""
         from core.tutoring.structured import generate_action_meta
@@ -244,6 +272,48 @@ class TestCorrectiveRetry:
         assert result.type.value == "hint"
         # 第一次调用 + 一次纠错 = 2 次 json 调用
         assert llm.json_calls == 2
+
+
+class TestEmotionLenient:
+    """3.3 emotion 宽容归一化(2026-08 关思考后,mini 偶发填中文/小写情绪值)
+
+    真实模型把 emotion 填成 '困惑'/'confused' 等,导致整条 ActionMeta 校验失败
+    → 纠错重试 → 已填好的 mastery_signals 丢失。修复: 校验前归一化到大写枚举。
+    """
+
+    def _parse(self, emotion_value):
+        from core.tutoring.structured import _parse_and_validate
+
+        raw = json.dumps({
+            "type": "hint",
+            "reason": "x",
+            "eval": {"correct": True, "emotion": emotion_value},
+            "mastery_signals": [{"kp_label": "基本不等式求最值", "signal": "practicing"}],
+            "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
+        })
+        # correction_llm=None + corrective_retries=0: 不重试,失败即返回 None
+        # 若归一化生效则直接成功(不靠重试)
+        return _parse_and_validate(raw, correction_llm=None, corrective_retries=0)
+
+    def test_chinese_emotion_normalized(self):
+        """'困惑' → CONFUSED,且保留 mastery_signals"""
+        meta = self._parse("困惑")
+        assert meta is not None
+        assert meta.eval.emotion.value == "CONFUSED"
+        assert len(meta.mastery_signals) == 1
+        assert meta.mastery_signals[0].kp_label == "基本不等式求最值"
+
+    def test_lowercase_emotion_normalized(self):
+        """'confused' → CONFUSED"""
+        meta = self._parse("confused")
+        assert meta is not None
+        assert meta.eval.emotion.value == "CONFUSED"
+
+    def test_standard_emotion_unchanged(self):
+        """大写枚举值照常通过"""
+        meta = self._parse("INTERESTED")
+        assert meta is not None
+        assert meta.eval.emotion.value == "INTERESTED"
 
     def test_corrective_retries_bounded(self):
         """纠错有上限,仍失败则继续降级到正则段"""

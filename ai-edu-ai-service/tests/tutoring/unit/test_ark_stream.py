@@ -142,8 +142,8 @@ class TestDoubaoConn:
         from config.settings import settings
         from core.gateway.factory import LLMFactory
 
-        conn = doubao_conn("doubao-seed-2-0-lite-260428", 0.3)
+        conn = doubao_conn("doubao-seed-2-0-mini-260428", 0.3)
         assert conn["api_base"] == LLMFactory.PROVIDER_CONFIGS["doubao"]["api_base"]
         assert conn["api_key"] == settings.DOUBAO_API_KEY
-        assert conn["model"] == "doubao-seed-2-0-lite-260428"
+        assert conn["model"] == "doubao-seed-2-0-mini-260428"
         assert conn["temperature"] == 0.3

@@ -77,16 +77,16 @@ MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
     "doubao": {
         "display_name": "豆包(火山方舟)",
         "models": {
-            "doubao-seed-2-0-lite-260428": {
-                "display_name": "Doubao Seed 2.0 Lite",
+            "doubao-seed-2-0-mini-260428": {
+                "display_name": "Doubao Seed 2.0 Mini",
                 "free": False,
                 "allowed": True,  # 允许外部调用
                 "supports_tools": True,
                 "supports_vision": True,  # 全模态: 图+文(看图答疑用)
-                "description": "看图答疑模型(公式/图形题目整体进图);260428=版本化ID"
+                "description": "看图答疑模型(公式/图形题目整体进图);轻量快速,关思考实测 1.2s 出答案"
             }
         },
-        "default_model": "doubao-seed-2-0-lite-260428"
+        "default_model": "doubao-seed-2-0-mini-260428"
     },
     "bailian": {
         "display_name": "阿里百炼",

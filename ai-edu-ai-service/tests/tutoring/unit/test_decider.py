@@ -355,3 +355,30 @@ class TestIterDecideEvents:
         assert "".join(t["data"]["content"] for t in thinkings) == "推理中"
         assert metas[0]["data"]["type"] == "hint"
         assert len(fake_llm.prompts) == 0  # 未降级,没调 decide()
+
+    def test_content_json_chinese_emotion_normalized(self):
+        """content 兜底遇中文 emotion('困惑') → 归一化成功,不降级、reason 保留
+
+        2026-08 关思考后 mini 偶发: 模型把 emotion 填中文/小写,且直接吐 content
+        (不走 tool_call)。decider 的 content 兜底必须同样归一化,否则触发降级
+        → 丢失原始 reason/mastery_signals。
+        """
+        from core.tutoring.decider import iter_decide_events
+
+        fake_llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        content = json.dumps({
+            "type": "approach",
+            "reason": "学生询问该题的解法,需提供解题思路大纲",
+            "eval": {"correct": False, "error_type": None, "emotion": "困惑", "exercise_complete": False},
+            "mastery_signals": [{"kp_label": "基本不等式求最值", "signal": "practicing"}],
+            "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
+        }, ensure_ascii=False)
+        fs = _FakeStreamer([_delta_content(content)])
+        events = list(iter_decide_events(self._req(), streamer=fs, llm=fake_llm))
+
+        metas = [e for e in events if e["event"] == "meta"]
+        assert metas[0]["data"]["type"] == "approach"
+        assert metas[0]["data"]["eval"]["emotion"] == "CONFUSED"  # 归一化
+        assert metas[0]["data"]["reason"] == "学生询问该题的解法,需提供解题思路大纲"  # reason 保留
+        assert len(metas[0]["data"]["mastery_signals"]) == 1      # mastery_signals 保留
+        assert len(fake_llm.prompts) == 0  # 未降级

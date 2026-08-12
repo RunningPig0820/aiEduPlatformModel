@@ -97,6 +97,37 @@ def _extract_json(text: str) -> Optional[str]:
     return None
 
 
+# 中文/小写情绪值 → 大写枚举(2026-08 关思考后,mini 偶发填 '困惑'/'confused')
+_EMOTION_ALIASES = {
+    "neutral": "NEUTRAL", "平静": "NEUTRAL", "中性": "NEUTRAL",
+    "confused": "CONFUSED", "困惑": "CONFUSED",
+    "frustrated": "FRUSTRATED", "沮丧": "FRUSTRATED",
+    "anxious": "ANXIOUS", "焦虑": "ANXIOUS",
+    "confident": "CONFIDENT", "自信": "CONFIDENT",
+    "interested": "INTERESTED", "感兴趣": "INTERESTED", "好奇": "INTERESTED",
+    "bored": "BORED", "无聊": "BORED",
+}
+
+
+def _normalize_emotion(data: dict) -> dict:
+    """宽容归一化 eval.emotion: 中文/小写 → 大写枚举值。
+
+    修复: 模型(关思考后)把 emotion 填成 '困惑'/'confused',导致整条 ActionMeta
+    Pydantic 校验失败 → 纠错重试 → 已填好的 mastery_signals 丢失。归一化后
+    直接通过,不触发整条丢弃。非 dict/无 eval 时原样返回(由 Pydantic 决定对错)。
+    """
+    if isinstance(data, dict):
+        ev = data.get("eval")
+        if isinstance(ev, dict):
+            emo = ev.get("emotion")
+            if isinstance(emo, str):
+                key = emo.strip().lower()
+                mapped = _EMOTION_ALIASES.get(key)
+                if mapped:
+                    ev["emotion"] = mapped
+    return data
+
+
 def _parse_and_validate(
     raw: str,
     correction_llm,
@@ -121,7 +152,7 @@ def _parse_and_validate(
                 error = f"JSON 解析失败: {e}"
             else:
                 try:
-                    return ActionMeta.model_validate(data)
+                    return ActionMeta.model_validate(_normalize_emotion(data))
                 except Exception as ve:
                     error = f"Pydantic 校验失败: {ve}"
 
@@ -158,10 +189,21 @@ def _try_function_calling(llm, messages: List[BaseMessage]) -> Optional[ActionMe
         llm_with_tool = llm.bind_tools([ActionMeta])
         msg = llm_with_tool.invoke(messages)
         if not msg.tool_calls:
-            logger.warning("structured: ①未返回 tool_call(content=%r)", getattr(msg, "content", None))
+            # 2026-08 关思考后 mini 偶发: 不调工具,直接把 ActionMeta JSON 作为 content
+            # 返回(实测 reason/mastery_signals 都完整)。此前直接丢弃降级到 ②,导致
+            # reason/mastery_signals 丢失。这里尝试从 content 提取解析(含 emotion 归一化)。
+            content = getattr(msg, "content", None)
+            logger.warning("structured: ①未返回 tool_call(content=%r)", content)
+            if content:
+                meta = _parse_and_validate(
+                    content, correction_llm=None, corrective_retries=0, extract=True
+                )
+                if meta is not None:
+                    logger.info("structured: ①从 content 解析 ActionMeta 成功 type=%s", meta.type.value)
+                    return meta
             return None
         args = msg.tool_calls[0].get("args") or {}
-        return ActionMeta.model_validate(args)
+        return ActionMeta.model_validate(_normalize_emotion(args))
     except Exception as e:
         logger.warning("structured: ①function_calling 失败: %s", e)
         return None

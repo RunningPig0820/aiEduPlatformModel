@@ -16,7 +16,7 @@ from models.tutoring import ActionMeta, ActionType, DecideRequest, Eval
 from core.tutoring import ark_stream
 from core.tutoring.context import truncate_history, snapshot_top_n, get_decide_llm
 from core.tutoring.prompts import build_decide_messages
-from core.tutoring.structured import _extract_json, generate_action_meta
+from core.tutoring.structured import _extract_json, _normalize_emotion, generate_action_meta
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,9 @@ def iter_decide_events(request: DecideRequest, streamer=None, llm=None):
             # 兜底: 模型未走 tool_call、直接吐 ActionMeta JSON(实测 doubao 偶发)→ 直接解析
             obj = _extract_json(content_acc)
             if obj:
-                meta = ActionMeta.model_validate(json.loads(obj))
+                # _normalize_emotion: 与 structured.py 一致,宽容中文/小写情绪值,
+                # 避免 emotion 校验失败触发降级(丢失原始 reason/mastery_signals)
+                meta = ActionMeta.model_validate(_normalize_emotion(json.loads(obj)))
                 logger.info("decide: content JSON 流式解析成功 type=%s", meta.type.value)
     except Exception as e:
         logger.warning("decide: 原始流失败,降级非流式 decide(): %s", e)

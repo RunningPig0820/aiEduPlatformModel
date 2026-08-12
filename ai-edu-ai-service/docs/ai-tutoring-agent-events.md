@@ -3,28 +3,33 @@
 > 对应 OpenSpec change `tutoring-agent-protocol`(Python 仓库)。本文件是**给 Java 团队的对接说明**,可直接转发。
 > 对应 Java 侧 `TutoringLlmPort` / `TutoringLlmClient` / `TutoringAppService`。
 
-## 〇、新增:`thinking` 事件(思考过程展示,Java 零改动)
+## 〇、`thinking` 事件已取消(2026-08 全关思考模式)
 
-**背景**: 保留豆包思考模式(不关闭),把模型真实推理 `reasoning_content` 作为**附加内容流**流式透传,
-前端用可折叠"思考过程"面板展示(类似 DeepSeek/Kimi)。decide 和 generate 都会吐。
+**背景**: 曾保留豆包思考模式,把模型真实推理 `reasoning_content` 流式透传(思考过程展示)。
+**2026-08 实测决定全关思考**(见 `docs/tutoring-streaming-experience.md`):
+思考模式 = 模型"写草稿",是卡顿根源(decide 17~48s、看图 generate 50~145s);
+全关后切 `doubao-seed-2-0-mini`(关思考),decide ~1.5s、generate ~1.2s、看图全流程 ~3.4s。
+
+**因此 `thinking` 事件现在不再发送**(`reasoning_content` 关思考后不返回)。
 
 ```
+# 不再出现
 event: thinking
-data: {"content": "<推理分片>"}     # 与 token 同构,前端按 chunk 拼接
+data: {"content": "<推理分片>"}
 ```
 
-**对 Java 的影响: 零改动。**
-- decide 消费已改为"只过滤 `meta` 事件",`thinking` 事件会被 `.filter(e -> "meta".equals(e.event()))` 自动忽略,无需处理
-- generate 的 `Flux<ServerSentEvent<String>>` 直接透传,`thinking` 事件随流到达前端
-- 仅前端新增渲染(可选,不渲染则自动忽略)
+**对 Java 的影响: 仍零改动。**
+- decide 消费只过滤 `meta` 事件,`thinking` 事件即使有也会被 `.filter(e -> "meta".equals(e.event()))` 忽略——现在没有了,行为不变
+- generate 的 `Flux<ServerSentEvent<String>>` 直接透传,不再有 thinking 事件到达前端
+- 前端"思考过程"面板不再有内容,**前端需处理空 thinking(隐藏面板)**,Java 无需处理
 
 ## 一、总览:BREAKING + 两处事件注入
 
 ```
 [Python decide] 现在返回 SSE 流(不再是 JSON)  ← ①BREAKING,Java 消费方式要改
-[Python decide/generate] 流里新增 thinking*(模型真实推理) ← 附加事件,Java 忽略/透传即可
 [Python generate] 流里已有 agent(generate)/token*/done
 [Java] 需要: ② 护栏后注入 agent(guardrail)  ③ 落库后注入 agent(memory 完成)
+[已取消] thinking* 事件(2026-08 全关思考,模型不再返回 reasoning_content)
 ```
 
 ## 二、① BREAKING:decide 从"读 JSON"改"解析 SSE 提取 meta"
@@ -51,11 +56,12 @@ ActionMeta meta = tutoringWebClient.post()
 ```
 
 **说明:**
-- Python 现在发:`event: agent(perceive/analyze/plan) → event: thinking* → event: agent(decide) → event: meta(data=ActionMeta) → event: done`
-- `thinking*` 是模型真实推理分片(可多条,最长可达 decide 全程,即原来 17~48s 的黑盒等待变可见)
+- Python 现在发:`event: agent(perceive/analyze/plan) → event: agent(decide) → event: meta(data=ActionMeta) → event: done`
+- 2026-08 起**不再有 thinking 事件**(全关思考);decide 决策质量不变(实测 5 种场景全对),但耗时从 17~48s 降到 ~1.5s
 - `meta` 事件的 data 就是 ActionMeta,字段与之前完全一致(闭集 type/eval/mastery_signals 等)
 - decide 重试语义保留(Java 侧 `agentRetry` 逻辑不变,只是解析方式变了)
 - **仅此一处 breaking**,generate/ocr 不动
+- **可选优化**: 全关思考后 decide 耗时 ~1.5s,Java 侧 `decideTimeout` 可相应调小(如 10s)
 
 ## 三、② 护栏后注入 `agent(guardrail)` 事件
 
@@ -98,21 +104,23 @@ data: {"level":"sub","stage":"guardrail","label":"安全把关","status":"done",
 3. **decide 重试/超时(流式后)**: 仅"未收到任何 SSE 事件"时可重试 1 次(无副作用);已收到 agent 事件后失败 → 不重试,透传 `error`,Java 降级。超时 = 等 meta 事件超时。
 4. **decide 流中错误**: 透传 `event: error` 给前端,不重试,对外 40004"网络波动",会话保持。
 5. **短路/兜底分支**: is_new_question 短路 / degraded 兜底均走同一 SSE 流,Java 从 meta 取 type 走护栏(逻辑不变)。
+6. **全关思考(2026-08)**: `thinking` 事件取消。模型切 `doubao-seed-2-0-mini` + `thinking: disabled`。decide/generate 耗时从 17~48s/6.5s+ 降到 ~1.5s/~1.2s。ActionMeta 契约不变,Java 零改动;前端需隐藏"思考过程"面板。
 
 ## 事件时序总览(改造后完整一轮)
 
 ```
 前端 ◀── Java ◀── Python
   agent(perceive/analyze/plan)           ← Python decide(阶段占位)
-  thinking* ...                          ← Python decide(模型真实推理,黑盒变可见)
   agent(decide)
   meta(ActionMeta)
   done
   agent(guardrail)                       ← Java 护栏(新)
   meta(action_type)                      ← Python generate
   agent(generate)
-  thinking* ...                          ← Python generate(推理,前端可折叠展示)
   token* ...
   done
   agent(memory)                          ← Java 落库后发(完成)
 ```
+
+> 注: 2026-08 全关思考后,完整时序中**不再有 thinking 事件**(原时序见 git 历史)。
+> 耗时实测: decide ~1.5s / generate ~1.2s / 看图全流程 ~3.4s(切 `doubao-seed-2-0-mini` 关思考)。

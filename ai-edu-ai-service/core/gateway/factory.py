@@ -24,7 +24,7 @@ class LLMFactory:
         "zhipu": "glm-4-flash",
         "deepseek": "deepseek-chat",
         "bailian": "qwen-turbo",
-        "doubao": "doubao-seed-2-0-lite-260428",
+        "doubao": "doubao-seed-2-0-mini-260428",
     }
 
     # Provider 默认参数

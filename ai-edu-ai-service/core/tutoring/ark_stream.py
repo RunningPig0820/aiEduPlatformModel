@@ -1,13 +1,16 @@
 """
-方舟(Ark)原始 SSE 流式客户端 - 保留豆包思考模式并透传推理内容
+方舟(Ark)原始 SSE 流式客户端 - 直连方舟读原始 SSE
 
 背景: langchain-openai 的 ChatOpenAI 流式解析会**丢弃 reasoning_content**
-(实测 additional_kwargs 也为空),无法把思考过程展示给前端。故 decide/generate
-的流式主路径改为**直连方舟 OpenAI 兼容接口**读原始 SSE:
+(实测 additional_kwargs 也为空)。故 decide/generate 的流式主路径改为
+**直连方舟 OpenAI 兼容接口**读原始 SSE:
 
-- 请求体带 `thinking: {"type": "enabled"}`(显式开思考,与默认一致但更确定)
-- 流式 delta 同时可能含 `reasoning_content`(→ thinking 事件)、`content`(→ token 事件)、
-  `tool_calls`(→ decide function-calling 的 ActionMeta 参数,按 index 累积)
+- 请求体带 `thinking: {"type": "disabled"}`(2026-08 全关思考: 见
+  `docs/tutoring-streaming-experience.md`——思考模式 = 模型写草稿,是"卡顿"
+  的根源;mini 关思考看图实测 1.2s 出答案,开思考 50~145s)
+- 流式 delta 含 `content`(→ token 事件)、`tool_calls`(→ decide function-calling
+  的 ActionMeta 参数,按 index 累积);reasoning_content 关思考后不再返回
+  (thinking 事件为空,前端按空处理)
 
 测试: tests/tutoring/unit/test_ark_stream.py(_parse_sse_lines 为纯函数,可离线测)
 """
@@ -103,8 +106,10 @@ def stream_chat(
         "messages": messages,
         "stream": True,
         "temperature": temperature,
-        # 显式开思考: 保证 reasoning_content 流式返回(与默认一致,更确定)
-        "thinking": {"type": "enabled"},
+        # 2026-08 全关思考: mini 关思考看图实测 1.2s 出答案,开思考要 50~145s
+        # (思考模式 = 模型写草稿,是"卡顿"的根源)。reasoning_content 不再返回,
+        # 前端 thinking 事件为空。若将来恢复,改回 enabled 即可。
+        "thinking": {"type": "disabled"},
     }
     if tools:
         payload["tools"] = tools
