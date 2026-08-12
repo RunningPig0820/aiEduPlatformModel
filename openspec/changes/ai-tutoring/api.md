@@ -31,6 +31,8 @@
 
 ## 1. 决策 decide
 
+> **⚠️ 2026-08 演进(`tutoring-agent-protocol` 变更)**: decide 响应已从 JSON 改 **SSE 流**(agent 思考阶段 + `meta`(ActionMeta) + `done`)。Java 消费改"解析 SSE 流提取 meta 事件"。详见 `openspec/changes/tutoring-agent-protocol/api.md` 与 `ai-edu-ai-service/docs/ai-tutoring-agent-events.md`。下文为原始(非流式)契约。
+
 ### 基本信息
 
 | 项目 | 值 |

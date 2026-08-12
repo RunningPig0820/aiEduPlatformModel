@@ -57,10 +57,14 @@ class TestDoubaoImageTutoring:
             subject_hint="math",
             action_type="hint",
         )
-        events = list(iter_tokens(req, llm=_doubao_llm()))
+        # 默认 streamer 直连方舟(配置即 doubao),图片经 messages_to_openai 透传
+        events = list(iter_tokens(req))
 
         assert events[0]["event"] == "meta"
         assert events[-1]["event"] == "done"
+        # 思考展示: 推理分片流式出现(thinking 事件)
+        think_text = "".join(e["data"]["content"] for e in events if e["event"] == "thinking")
+        assert think_text.strip()
         text = "".join(e["data"]["content"] for e in events if e["event"] == "token")
         assert text.strip()  # 引导语非空
         # hint 不得直接泄答案(本图最终是 A 选项,允许提到选项但不应直接说"选A")

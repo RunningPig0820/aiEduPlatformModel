@@ -57,11 +57,11 @@ ai-edu-ai-service/
 
 ## 3. 端点契约
 
-### 3.1 `POST /api/tutoring/decide`（非流式）
+### 3.1 `POST /api/tutoring/decide`（流式 SSE，展示 agent 思考阶段）
 
-Java 内部调用，携带 `x-internal-token`。
+Java 内部调用，携带 `x-internal-token`。**BREAKING（2026-08，tutoring-agent-protocol）：响应从 JSON 改 SSE 流。**
 
-**请求：**
+**请求：**（不变）
 ```json
 {
   "history": [
@@ -77,22 +77,22 @@ Java 内部调用，携带 `x-internal-token`。
 }
 ```
 
-**响应（ActionMeta）：**
-```json
-{
-  "type": "hint",
-  "reason": "学生已列方程，下一步给一条引导性反问",          // 可选，调试/评估用
-  "eval": {"correct": true, "error_type": null,
-           "emotion": "NEUTRAL", "exercise_complete": false},
-  "mastery_signals": [{"kp_label": "二元一次方程组", "signal": "practicing"}],
-  "new_question": null,
-  "end_reason": null,
-  "summary": null,
-  "safety_flag": false
-}
+**响应（SSE 流，决策结果在 `meta` 事件）：**
+```
+event: agent  data: {"level":"sub","stage":"perceive","label":"读取题目","status":"done"}
+event: agent  data: {"level":"sub","stage":"analyze","label":"解析意图","status":"processing"}
+event: agent  data: {"level":"sub","stage":"plan","label":"规划引导","status":"processing"}
+event: agent  data: {"level":"sub","stage":"decide","label":"决策完成","status":"done"}
+event: meta   data: {"type":"hint", "reason":"学生已列方程，下一步给一条引导性反问",
+                     "eval":{"correct":true,"error_type":null,"emotion":"NEUTRAL","exercise_complete":false},
+                     "mastery_signals":[{"kp_label":"二元一次方程组","signal":"practicing"}],
+                     "new_question":null,"end_reason":null,"summary":null,"safety_flag":false}
+event: done   data: {"model_used":"doubao/doubao-seed-2-0-lite-260428"}
 ```
 
+> `meta` 事件的 data 就是 ActionMeta，字段与流式化之前完全一致。Java 解析 SSE、提取 `meta` 事件即可。
 > `type` 是闭集；`eval` 是软信号（Java 放宽处理），`type` 是硬信号（Java 护栏据此放行/拒绝）。
+> 错误语义不变：403（缺 token）/ 422（参数校验）在流式前返回。
 
 ### 3.2 `POST /api/tutoring/generate`（流式 SSE）
 

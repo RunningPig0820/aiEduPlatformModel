@@ -1,21 +1,26 @@
 """
 AI 答疑 API 端点 - Java↔Python 内部调用(需 x-internal-token)
 
-- POST /api/tutoring/decide    决策(非流式) → ActionMeta
+- POST /api/tutoring/decide    决策(流式 SSE) → agent 阶段事件 + meta(ActionMeta) + done
 - POST /api/tutoring/generate  生成(流式 SSE) → meta/token/done/error
 
-对齐: openspec/changes/ai-tutoring/api.md + design.md 决策 2(decide → guard → generate)
+对齐: openspec/changes/tutoring-agent-protocol/api.md(decide 流式契约 + agent 事件)
+     + ai-tutoring design.md 决策 2(decide → guard → generate)
 """
 import json
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 
+from config.settings import settings
 from api.chat import verify_internal_token
-from models.tutoring import ActionMeta, DecideRequest, GenerateRequest
-from core.tutoring.decider import decide
+from models.tutoring import DecideRequest, GenerateRequest
+from core.tutoring.agent_events import (
+    agent_event,
+    STATUS_PROCESSING,
+)
+from core.tutoring.decider import iter_decide_events
 from core.tutoring.generator import iter_tokens
 
 logger = logging.getLogger(__name__)
@@ -23,22 +28,52 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/tutoring", tags=["Tutoring"])
 
 
-@router.post("/decide", response_model=ActionMeta)
+def _sse(event: str, data: dict) -> str:
+    """格式化 SSE 事件行"""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/decide")
 async def tutoring_decide(
     request: DecideRequest,
     x_internal_token: str = Header(None),
 ):
-    """决策端点(非流式): 接收对话上下文,返回 ActionMeta。
+    """决策端点(流式 SSE): 先发 agent 思考阶段,再 thinking*(真实推理),再 meta(ActionMeta),最后 done。
 
-    Java 每轮先调 decide → 护栏审批 type → 再调 generate。
-    decide 可重试 1 次(纯函数),仍失败由 Java 对外兜底。
+    BREAKING(相对 ai-tutoring): 响应从 JSON 改 SSE 流。Java 解析 SSE 提取 meta 事件。
+    403/422 仍在流式前返回(与改造前一致)。
+    Java 每轮先调 decide → 护栏审批 type(从 meta 取)→ 再调 generate。
+    thinking 事件为附加内容流(豆包真实推理),Java 过滤 meta 时自动忽略,零改动。
     """
     verify_internal_token(x_internal_token)
-    try:
-        return decide(request)
-    except Exception as e:
-        logger.error("decide failed: %s", e)
-        raise HTTPException(status_code=500, detail="decide failed")
+
+    async def decide_stream():
+        try:
+            yield _sse("agent", agent_event("perceive"))
+            yield _sse("agent", agent_event("analyze", status=STATUS_PROCESSING))
+            yield _sse("agent", agent_event("plan", status=STATUS_PROCESSING))
+
+            # 流式决策: thinking*(真实推理)→ agent(decide)→ meta(换题短路/降级兜底均保证合法)
+            for ev in iter_decide_events(request):
+                if ev["event"] == "meta":
+                    yield _sse("agent", agent_event("decide"))
+                yield _sse(ev["event"], ev["data"])
+
+            yield _sse("done", {
+                "model_used": f"{settings.TUTORING_DECIDE_PROVIDER}/{settings.TUTORING_DECIDE_MODEL}",
+            })
+        except Exception as e:
+            logger.error("decide failed: %s", e)
+            yield _sse("error", {"code": "500", "message": "decide failed"})
+
+    return StreamingResponse(
+        decide_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/generate")
@@ -48,7 +83,8 @@ async def tutoring_generate(
 ):
     """生成端点(流式 SSE): 按已放行的 action_type 流式返回正文。
 
-    类型先行: 先 event: meta(已放行 type)→ event: token(正文流)→ event: done。
+    事件序列: meta(已放行 type)→ agent(generate)→ token* → agent(memory)→ done。
+    (memory 为 Python 占位;Java 真实落库后可再发完成事件)
     中段失败 → event: error,流终止(Java 不可重试,提示重发)。
     """
     verify_internal_token(x_internal_token)
@@ -56,12 +92,16 @@ async def tutoring_generate(
     async def generate_stream():
         try:
             for ev in iter_tokens(request):
-                data = json.dumps(ev["data"], ensure_ascii=False)
-                yield f"event: {ev['event']}\ndata: {data}\n\n"
+                if ev["event"] == "meta":
+                    # 类型先行: 先发 meta(action_type),再进入生成阶段
+                    yield _sse("meta", ev["data"])
+                    yield _sse("agent", agent_event("generate", status=STATUS_PROCESSING))
+                else:
+                    # 注: memory 事件由 Java 在真实落库后发(Python 不发占位,避免双发)
+                    yield _sse(ev["event"], ev["data"])
         except Exception as e:
             logger.error("generate failed: %s", e)
-            error_data = json.dumps({"code": "500", "message": "生成失败"}, ensure_ascii=False)
-            yield f"event: error\ndata: {error_data}\n\n"
+            yield _sse("error", {"code": "500", "message": "生成失败"})
 
     return StreamingResponse(
         generate_stream(),

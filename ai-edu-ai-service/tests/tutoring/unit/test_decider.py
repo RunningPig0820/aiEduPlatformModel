@@ -212,3 +212,146 @@ class TestDecider:
         result = decide(_request(), llm=fake)
 
         assert result.type.value == "hint"
+
+
+# ============ iter_decide_events 流式决策(thinking 展示) ============
+
+
+class _FakeStreamer:
+    """decide 流式用假 streamer: 按设置 yield delta dict 或抛错,记录调用。
+
+    契约: __call__(**kwargs) → iterable of {"reasoning","content","tool_calls"}
+    """
+
+    def __init__(self, deltas=None, error=None):
+        self.deltas = deltas or []
+        self.error = error
+        self.calls = []
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.error:
+            raise self.error
+        for d in self.deltas:
+            yield d
+
+
+def _thinking(content):
+    return {"reasoning": content, "content": None, "tool_calls": None}
+
+
+def _delta_content(content):
+    return {"reasoning": None, "content": content, "tool_calls": None}
+
+
+def _tool_delta(arguments, index=0, name="ActionMeta"):
+    return {
+        "reasoning": None,
+        "content": None,
+        "tool_calls": [{"index": index, "name": name, "arguments": arguments}],
+    }
+
+
+def _tool_call_deltas(args_dict):
+    """完整 tool args 拆两片分片到达(模拟真实流式)"""
+    s = json.dumps(args_dict, ensure_ascii=False)
+    mid = max(1, len(s) // 2)
+    return [_tool_delta(s[:mid]), _tool_delta(s[mid:])]
+
+
+class TestIterDecideEvents:
+    def _req(self, **overrides):
+        from models.tutoring import DecideRequest
+
+        base = dict(
+            history=[
+                {"role": "user", "content": "鸡兔同笼，共35头94脚，各几只？"},
+                {"role": "user", "content": "设鸡有x只"},
+            ],
+            round_count=2,
+            answer_request_count=0,
+            mastery_snapshot=[],
+            subject_hint="math",
+        )
+        base.update(overrides)
+        return DecideRequest(**base)
+
+    def test_yields_thinking_then_meta(self):
+        """thinking 事件按推理分片流式,meta 从 tool args 解析,thinking 在 meta 前"""
+        from core.tutoring.decider import iter_decide_events
+
+        deltas = [_thinking("先判断学生是否答对"), _thinking("答对了")] + _tool_call_deltas(dict(VALID_META_DICT))
+        events = list(iter_decide_events(self._req(), streamer=_FakeStreamer(deltas)))
+
+        thinkings = [e for e in events if e["event"] == "thinking"]
+        metas = [e for e in events if e["event"] == "meta"]
+        assert "".join(t["data"]["content"] for t in thinkings) == "先判断学生是否答对答对了"
+        assert len(metas) == 1
+        assert metas[0]["data"]["type"] == "hint"  # 来自 VALID_META_DICT
+        assert events[0]["event"] == "thinking"
+        assert events[-1]["event"] == "meta"
+
+    def test_streamer_receives_openai_messages_and_tool(self):
+        """传给 streamer 的是 OpenAI 格式消息 + ActionMeta function tool"""
+        from core.tutoring.decider import iter_decide_events
+
+        fs = _FakeStreamer(_tool_call_deltas(dict(VALID_META_DICT)))
+        list(iter_decide_events(self._req(), streamer=fs))
+
+        assert len(fs.calls) == 1
+        call = fs.calls[0]
+        assert call["messages"][0]["role"] == "system"
+        assert call["messages"][0]["content"]  # decide 系统提示词非空
+        assert call["tools"][0]["function"]["name"] == "ActionMeta"
+
+    def test_is_new_question_short_circuits_no_thinking(self):
+        """换题信号短路: 只有 meta(type=switch),无 thinking,streamer 不被调用"""
+        from core.tutoring.decider import iter_decide_events
+
+        fs = _FakeStreamer(_tool_call_deltas(dict(VALID_META_DICT)))
+        events = list(iter_decide_events(self._req(is_new_question=True), streamer=fs))
+
+        assert len(events) == 1
+        assert events[0]["event"] == "meta"
+        assert events[0]["data"]["type"] == "switch"
+        assert fs.calls == []  # 短路,没走流
+
+    def test_raw_failure_falls_back_to_decide(self):
+        """原始流失败 → 降级非流式 decide(llm) → meta 仍合法"""
+        from core.tutoring.decider import iter_decide_events
+
+        fake_llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        fs = _FakeStreamer(error=RuntimeError("conn down"))
+        events = list(iter_decide_events(self._req(), streamer=fs, llm=fake_llm))
+
+        metas = [e for e in events if e["event"] == "meta"]
+        assert len(metas) == 1
+        assert metas[0]["data"]["type"] == "hint"
+        assert len(fake_llm.prompts) == 1  # 降级走了 decide()
+
+    def test_tool_args_invalid_falls_back(self):
+        """tool args 非法(非 JSON/校验失败)→ 降级 decide(llm),不抛异常"""
+        from core.tutoring.decider import iter_decide_events
+
+        fake_llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        fs = _FakeStreamer([_tool_delta("not-json{{{")])
+        events = list(iter_decide_events(self._req(), streamer=fs, llm=fake_llm))
+
+        metas = [e for e in events if e["event"] == "meta"]
+        assert metas[0]["data"]["type"] == "hint"
+        assert len(fake_llm.prompts) == 1
+
+    def test_content_json_without_tool_call_parsed(self):
+        """模型未走 tool_call、直接吐 ActionMeta JSON → 直接解析,不降级(实测 doubao 偶发)"""
+        from core.tutoring.decider import iter_decide_events
+
+        fake_llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        s = json.dumps(dict(VALID_META_DICT), ensure_ascii=False)
+        fs = _FakeStreamer([_thinking("推理中"), _delta_content(s)])
+        events = list(iter_decide_events(self._req(), streamer=fs, llm=fake_llm))
+
+        thinkings = [e for e in events if e["event"] == "thinking"]
+        metas = [e for e in events if e["event"] == "meta"]
+        assert "".join(t["data"]["content"] for t in thinkings) == "推理中"
+        assert metas[0]["data"]["type"] == "hint"
+        assert len(fake_llm.prompts) == 0  # 未降级,没调 decide()

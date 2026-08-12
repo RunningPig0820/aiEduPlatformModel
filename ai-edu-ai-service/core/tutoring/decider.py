@@ -1,16 +1,22 @@
 """
-决策器 - decide 单次调用
+决策器 - decide 单次调用 + 流式决策(思考展示)
 
-组装上下文(历史截断 + 快照 top-N)→ 渲染 decide prompt → structured 四段降级 → ActionMeta
+- decide(): 非流式,组装上下文 → structured 四段降级 → ActionMeta(降级兜底路径)
+- iter_decide_events(): 流式,直连方舟读原始 SSE,边吐 thinking 事件(豆包真实推理)
+  边收集 function-calling 的 tool args → ActionMeta;原始流失败时降级到 decide()
 
-对齐: openspec/changes/ai-tutoring/design.md 决策 2(交互模型)/7(单次调用,schema 可拆)
+对齐: openspec/changes/ai-tutoring/design.md 决策 2/7
+     + tutoring-thinking-display(thinking 事件,保留思考模式)
 """
+import json
 import logging
 
+from config.settings import settings
 from models.tutoring import ActionMeta, ActionType, DecideRequest, Eval
+from core.tutoring import ark_stream
 from core.tutoring.context import truncate_history, snapshot_top_n, get_decide_llm
 from core.tutoring.prompts import build_decide_messages
-from core.tutoring.structured import generate_action_meta
+from core.tutoring.structured import _extract_json, generate_action_meta
 
 logger = logging.getLogger(__name__)
 
@@ -49,3 +55,77 @@ def decide(request: DecideRequest, llm=None) -> ActionMeta:
     logger.debug("decide messages built (n=%d)", len(messages))
 
     return generate_action_meta(llm, messages)
+
+
+def iter_decide_events(request: DecideRequest, streamer=None, llm=None):
+    """流式决策: 保留豆包思考模式,边吐 thinking 事件(真实推理)边收集决策,绝不抛异常。
+
+    主路径(直连方舟,见 ark_stream): 原始 SSE 流里 reasoning_content → thinking 事件;
+    tool_calls 按 index 累积 → ActionMeta。原始流失败/args 非法 → 降级 decide()
+    (非流式四段管线,该次无 thinking 展示,罕见)。
+
+    Yields:
+        {"event": "thinking", "data": {"content": str}}  # 思考分片(可多条)
+        {"event": "meta", "data": ActionMeta}             # 收尾,唯一
+    换题信号短路: 只 yield meta(type=switch),无 thinking。
+    """
+    # Java 换题信号: 本轮新增了题目 → 短路 switch(不调 LLM,不吐思考)
+    if request.is_new_question:
+        logger.info("decide: Java 换题信号 is_new_question=true → 短路 type=switch")
+        meta = ActionMeta(
+            type=ActionType.SWITCH,
+            reason="Java 检测到新题信号,短路换题",
+            eval=Eval(correct=False),
+        )
+        yield {"event": "meta", "data": meta.model_dump(mode="json")}
+        return
+
+    streamer = streamer or ark_stream.stream_chat
+    messages = build_decide_messages(
+        history=truncate_history(request.history),
+        snapshot_labels=[s.label for s in snapshot_top_n(request.mastery_snapshot)],
+        subject_hint=request.subject_hint,
+    )
+
+    meta = None
+    try:
+        conn = ark_stream.doubao_conn(
+            settings.TUTORING_DECIDE_MODEL, settings.TUTORING_DECIDE_TEMPERATURE,
+        )
+        acc = {}  # tool_call index → {"name", "arguments"}
+        content_acc = ""
+        for delta in streamer(
+            **conn,
+            messages=ark_stream.messages_to_openai(messages),
+            tools=[ark_stream.action_meta_tool()],
+        ):
+            if delta.get("reasoning"):
+                yield {"event": "thinking", "data": {"content": delta["reasoning"]}}
+            if delta.get("content"):
+                content_acc += delta["content"]
+            for tc in (delta.get("tool_calls") or []):
+                idx = tc.get("index", 0)
+                prev = acc.get(idx, {"name": "", "arguments": ""})
+                acc[idx] = {
+                    "name": tc.get("name") or prev["name"],
+                    "arguments": prev["arguments"] + (tc.get("arguments") or ""),
+                }
+        if acc:
+            # 主路径: function-calling 返回 tool args
+            args = json.loads(acc[0]["arguments"])
+            meta = ActionMeta.model_validate(args)
+            logger.info("decide: function-calling 流式成功 type=%s", meta.type.value)
+        elif content_acc:
+            # 兜底: 模型未走 tool_call、直接吐 ActionMeta JSON(实测 doubao 偶发)→ 直接解析
+            obj = _extract_json(content_acc)
+            if obj:
+                meta = ActionMeta.model_validate(json.loads(obj))
+                logger.info("decide: content JSON 流式解析成功 type=%s", meta.type.value)
+    except Exception as e:
+        logger.warning("decide: 原始流失败,降级非流式 decide(): %s", e)
+
+    if meta is None:
+        # 降级: 非流式四段管线(绝不抛异常);is_new_question 短路已被上面处理,这里正常路径
+        meta = decide(request, llm)
+
+    yield {"event": "meta", "data": meta.model_dump(mode="json")}

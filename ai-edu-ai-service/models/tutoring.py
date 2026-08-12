@@ -8,7 +8,7 @@ AI 答疑数据模型 - Java 后端与 Python Agent 的契约层
 """
 from typing import List, Optional, Literal
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ============ 2.1 枚举(闭集词汇表) ============
@@ -54,7 +54,14 @@ class EndReason(str, Enum):
 
 
 class ChatTurn(BaseModel):
-    """对话轮次(文本与图片双通道,见 design 决策 14)"""
+    """对话轮次(文本与图片双通道,见 design 决策 14)
+
+    extra='ignore': 显式固化"容忍附加字段"契约。Java 会在历史消息上附加 thinking
+    字段(仅 Java 存储/前端展示用),出现在 decide/generate 请求里应被静默忽略;
+    防止未来误开严格模式(extra='forbid')导致校验失败。
+    """
+    model_config = ConfigDict(extra="ignore")
+
     role: Literal["user", "ai"] = Field(..., description="角色: user/ai")
     content: str = Field(default="", description="消息内容(图片消息可为空)")
     image_url: Optional[str] = Field(None, description="图片消息的 COS 签名 URL(题目图片);无图时为 None(纯文本通道)")

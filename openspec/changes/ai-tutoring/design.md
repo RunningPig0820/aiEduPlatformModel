@@ -34,6 +34,8 @@
 
 ### 2. 交互模型:decide → guard → generate(类型先行流式)
 
+> **⚠️ 2026-08 演进(`tutoring-agent-protocol` 变更)**: decide 从非流式改 **SSE 流式**(发 agent 思考阶段 → `meta`(ActionMeta) → `done`),Java 从"读 JSON"改"解析 SSE 提取 meta"。类型先行安全不变(Java 仍在内容流出前审批 type)。事件协议见 `tutoring-agent-protocol`。
+
 **选择**: 一次学生消息 = 两次 Python 调用,中间 Java 护栏:
 ```
 ① Java 安全预检 → 组装上下文 → 调 decide(非流式,快)→ action 元数据

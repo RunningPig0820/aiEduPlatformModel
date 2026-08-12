@@ -1,8 +1,8 @@
 """
 任务 5.3: generator.py 测试
 
-按已放行 action_type 渲染生成规约 → llm.stream() → 事件流(meta/token/done)
-(注入假 LLM,断言事件序列与 token 拼接)
+按已放行 action_type 渲染生成规约 → 原始方舟流式 → 事件流(meta/thinking/token/done)
+(注入假 streamer,断言事件序列、thinking 穿插与 token 拼接)
 """
 import sys
 import os
@@ -15,26 +15,29 @@ sys.path.insert(
 import pytest
 
 
-class _Msg:
-    def __init__(self, content):
-        self.content = content
+def _delta(content=None, reasoning=None):
+    """构造方舟 delta dict(reasoning/content/tool_calls 固定结构)"""
+    return {"reasoning": reasoning, "content": content, "tool_calls": None}
 
 
-class FakeStreamLLM:
-    """generate 用假 LLM: stream() 按设置产出 token 或中段抛错"""
+class FakeStreamer:
+    """generate 用假 streamer: __call__(**kwargs) → iterable of delta dict。
 
-    def __init__(self, chunks=None, raise_after=None, error=None):
-        self.chunks = chunks or []
+    契约与 core.tutoring.ark_stream.stream_chat 一致(连接参数忽略,测试不联网)。
+    """
+
+    def __init__(self, deltas=None, raise_after=None, error=None):
+        self.deltas = deltas or []
         self.raise_after = raise_after
         self.error = error
-        self.prompts = []
+        self.calls = []
 
-    def stream(self, prompt):
-        self.prompts.append(prompt)
-        for i, c in enumerate(self.chunks):
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        for i, d in enumerate(self.deltas):
             if self.raise_after is not None and i >= self.raise_after:
                 raise self.error
-            yield _Msg(c)
+            yield d
 
 
 def _request(action_type="hint"):
@@ -50,26 +53,17 @@ def _request(action_type="hint"):
     )
 
 
-def _text_of(messages):
-    """消息列表 → 拼接文本(便于断言 prompt 内容)"""
-    if not isinstance(messages, (list, tuple)):
-        return messages
-    parts = []
-    for m in messages:
-        content = getattr(m, "content", "") or ""
-        if isinstance(content, str):
-            parts.append(content)
-        elif isinstance(content, list):
-            parts.append(" ".join(p.get("text", "") for p in content if isinstance(p, dict)))
-    return "\n".join(parts)
+def _system_text(call):
+    """从传给 streamer 的 OpenAI 消息里取 system 提示词(便于断言 prompt 内容)"""
+    return call["messages"][0]["content"]
 
 
 class TestGenerator:
     def test_yields_meta_then_tokens_then_done(self):
         from core.tutoring.generator import iter_tokens
 
-        fake = FakeStreamLLM(chunks=["思路：", "先设x", "再列方程"])
-        events = list(iter_tokens(_request(), llm=fake))
+        fake = FakeStreamer(deltas=[_delta(content="思路："), _delta(content="先设x"), _delta(content="再列方程")])
+        events = list(iter_tokens(_request(), streamer=fake))
 
         # meta 先行
         assert events[0]["event"] == "meta"
@@ -85,18 +79,40 @@ class TestGenerator:
         from core.tutoring.generator import iter_tokens
         from core.tutoring.prompts import GENERATION_RULES
 
-        fake = FakeStreamLLM(chunks=["ok"])
-        list(iter_tokens(_request(action_type="approach"), llm=fake))
+        fake = FakeStreamer(deltas=[_delta(content="ok")])
+        list(iter_tokens(_request(action_type="approach"), streamer=fake))
 
-        assert GENERATION_RULES["approach"] in _text_of(fake.prompts[0])
+        assert GENERATION_RULES["approach"] in _system_text(fake.calls[0])
+
+    def test_thinking_events_interleave_before_tokens(self):
+        """推理分片 → thinking 事件;思考在 token 前,meta 在 thinking 前"""
+        from core.tutoring.generator import iter_tokens
+
+        fake = FakeStreamer(deltas=[
+            _delta(reasoning="先读题"),
+            _delta(reasoning="条件不足,引导"),
+            _delta(content="这题要先设未知数"),
+            _delta(content="再列方程"),
+        ])
+        events = list(iter_tokens(_request(), streamer=fake))
+
+        thinkings = [e for e in events if e["event"] == "thinking"]
+        tokens = [e for e in events if e["event"] == "token"]
+        assert "".join(t["data"]["content"] for t in thinkings) == "先读题条件不足,引导"
+        assert "".join(t["data"]["content"] for t in tokens) == "这题要先设未知数再列方程"
+
+        def _idx(event):
+            return next(i for i, (e, _) in enumerate([(x["event"], x) for x in events]) if e == event)
+
+        assert _idx("meta") < _idx("thinking") < _idx("token") < _idx("done")
 
     def test_mid_stream_error_raises(self):
         """中段抛错 → 异常向上抛(API 层转 event: error)"""
         from core.tutoring.generator import iter_tokens
 
-        fake = FakeStreamLLM(chunks=["a", "b"], raise_after=1, error=RuntimeError("mid-stream"))
+        fake = FakeStreamer(deltas=[_delta(content="a"), _delta(content="b")], raise_after=1, error=RuntimeError("mid-stream"))
 
-        gen = iter_tokens(_request(), llm=fake)
+        gen = iter_tokens(_request(), streamer=fake)
         first = next(gen)          # meta
         second = next(gen)         # token "a"
         assert first["event"] == "meta"
@@ -107,18 +123,18 @@ class TestGenerator:
     def test_model_used_format(self):
         from core.tutoring.generator import iter_tokens
 
-        fake = FakeStreamLLM(chunks=["x"])
-        events = list(iter_tokens(_request(), llm=fake))
+        fake = FakeStreamer(deltas=[_delta(content="x")])
+        events = list(iter_tokens(_request(), streamer=fake))
 
         model_used = events[-1]["data"]["model_used"]
         assert "/" in model_used  # provider/model 格式
 
     def test_empty_stream_fallback(self):
-        """零 token 流 → 兜底话术(避免学生收到空回复)"""
+        """零 token 流(仅思考或无内容)→ 兜底话术(避免学生收到空回复)"""
         from core.tutoring.generator import iter_tokens
 
-        fake = FakeStreamLLM(chunks=[])  # 空流
-        events = list(iter_tokens(_request(), llm=fake))
+        fake = FakeStreamer(deltas=[_delta(reasoning="只在思考")])  # 无 content
+        events = list(iter_tokens(_request(), streamer=fake))
 
         tokens = [e for e in events if e["event"] == "token"]
         assert len(tokens) == 1  # 只有兜底话术

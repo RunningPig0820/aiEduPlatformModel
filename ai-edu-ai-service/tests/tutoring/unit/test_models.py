@@ -173,6 +173,36 @@ class TestChatTurn:
         assert t.content == ""
         assert t.image_url == "https://cos-xxx/1.jpg"
 
+    def test_tolerates_extra_thinking_field(self):
+        """Java 在历史消息上附加 thinking 字段(仅存储/展示用)→ 忽略,校验不失败(extra='ignore' 契约)"""
+        from models.tutoring import ChatTurn
+
+        t = ChatTurn.model_validate({
+            "role": "user",
+            "content": "设鸡有x只",
+            "thinking": "学生尝试设未知数",  # Java 附加字段
+        })
+        assert t.content == "设鸡有x只"
+        assert "thinking" not in t.model_fields_set  # 附加字段被忽略,不入模型
+        assert not hasattr(t, "thinking")
+
+    def test_extra_thinking_field_in_request_history(self):
+        """请求级校验: history 里带 thinking 字段仍合法(decide/generate 请求契约)"""
+        from models.tutoring import DecideRequest
+
+        req = DecideRequest(
+            history=[
+                {"role": "user", "content": "鸡兔同笼，共35头94脚，各几只？"},
+                {"role": "user", "content": "设鸡有x只", "thinking": "学生列出方程思路"},
+            ],
+            round_count=1,
+            answer_request_count=0,
+            mastery_snapshot=[],
+            subject_hint="math",
+        )
+        assert req.history[1].content == "设鸡有x只"
+        assert len(req.history) == 2
+
 
 class TestRequests:
     """2.4 请求模型校验"""
