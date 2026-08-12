@@ -75,6 +75,21 @@ class TestDecidePrompt:
         assert "不能是 \"switch\"" in prompt or "绝不能是" in prompt
         assert "会话开始" in prompt
 
+    def test_first_message_defaults_to_hint(self):
+        """B2 修复(2026-08): 首条消息默认 hint(引导反问),不默认 approach(完整步骤大纲)"""
+        prompt = self._prompt(history=[{"role": "user", "content": "测试题"}])
+        assert "默认输出" in prompt or "默认 \"hint\"" in prompt
+        assert "绝不作" in prompt or "不作为首条消息的默认选择" in prompt
+        assert "approach" in prompt
+        assert "我不会" in prompt or "太难了" in prompt or "给个思路" in prompt  # 求助升 approach 触发词
+
+    def test_think_one_step_first_in_prompt(self):
+        """先想一步原则: hint 与 approach 区别处声明默认 hint、求助才 approach"""
+        prompt = self._prompt()
+        assert "先想一步原则" in prompt
+        assert "只有学生明确求助" in prompt or "只有学生明确" in prompt
+        assert "才升" in prompt or "才" in prompt
+
     def test_safety_flag_in_prompt(self):
         """安全 flag 检测在提示词里"""
         prompt = self._prompt()
