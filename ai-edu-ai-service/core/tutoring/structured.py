@@ -41,6 +41,7 @@ def _schema_instructions() -> str:
     return (
         'type: "hint"|"approach"|"reveal"|"concept"|"switch"|"end", '
         'reason: string|null, '
+        'question_kps: [string, ...]|null, '
         'eval: {"correct": bool, "error_type": string|null, "emotion": '
         '"NEUTRAL"|"CONFUSED"|"FRUSTRATED"|"ANXIOUS"|"CONFIDENT"|"INTERESTED"|"BORED", '
         '"exercise_complete": bool}, '

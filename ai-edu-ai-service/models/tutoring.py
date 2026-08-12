@@ -111,6 +111,7 @@ class ActionMeta(BaseModel):
     """
     type: ActionType = Field(..., description="动作类型(硬信号,Java 据此放行)")
     reason: Optional[str] = Field(None, description="决策理由(可选,调试用)")
+    question_kps: Optional[List[str]] = Field(None, description="题目涉及知识点(模型读题顺手列出,可空;前端知识点分析数据源)")
     eval: Eval = Field(..., description="学生回答评估(软信号)")
     mastery_signals: List[MasterySignalItem] = Field(default_factory=list, description="掌握度信号")
     new_question: Optional[str] = Field(None, description="switch 时的新题文本")

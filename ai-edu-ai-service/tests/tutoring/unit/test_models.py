@@ -112,7 +112,7 @@ class TestActionMeta:
 
         dumped = ActionMeta(**self._valid_meta()).model_dump()
         assert set(dumped.keys()) == {
-            "type", "reason", "eval", "mastery_signals",
+            "type", "reason", "question_kps", "eval", "mastery_signals",
             "new_question", "end_reason", "summary", "safety_flag", "degraded",
         }
         # eval 是嵌套子结构
@@ -126,6 +126,22 @@ class TestActionMeta:
 
         meta = ActionMeta(**self._valid_meta())
         assert meta.degraded is False
+
+    def test_question_kps_optional(self):
+        """question_kps 可空:不传时默认为 None,校验不失败"""
+        from models.tutoring import ActionMeta
+
+        meta = ActionMeta(**self._valid_meta())
+        assert meta.question_kps is None
+
+    def test_question_kps_kept_on_dump(self):
+        """question_kps 有值时 model_dump 保留(前端知识点分析数据源)"""
+        from models.tutoring import ActionMeta
+
+        data = self._valid_meta()
+        data["question_kps"] = ["二元一次方程组", "一元一次方程"]
+        meta = ActionMeta(**data)
+        assert meta.model_dump()["question_kps"] == ["二元一次方程组", "一元一次方程"]
 
 
 class TestIndependentSubStructures:

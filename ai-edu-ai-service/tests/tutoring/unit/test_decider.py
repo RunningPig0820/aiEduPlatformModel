@@ -382,3 +382,24 @@ class TestIterDecideEvents:
         assert metas[0]["data"]["reason"] == "学生询问该题的解法,需提供解题思路大纲"  # reason 保留
         assert len(metas[0]["data"]["mastery_signals"]) == 1      # mastery_signals 保留
         assert len(fake_llm.prompts) == 0  # 未降级
+
+    def test_content_json_question_kps_kept(self):
+        """content 兜底流式路径 question_kps 字段透传到 meta(前端知识点分析数据源)"""
+        from core.tutoring.decider import iter_decide_events
+
+        fake_llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        content = json.dumps({
+            "type": "hint",
+            "reason": "学生已列出方程",
+            "question_kps": ["二元一次方程组", "一元一次方程"],
+            "eval": {"correct": True, "error_type": None, "emotion": "NEUTRAL", "exercise_complete": False},
+            "mastery_signals": [],
+            "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
+        }, ensure_ascii=False)
+        fs = _FakeStreamer([_delta_content(content)])
+        events = list(iter_decide_events(self._req(), streamer=fs, llm=fake_llm))
+
+        metas = [e for e in events if e["event"] == "meta"]
+        assert metas[0]["data"]["type"] == "hint"
+        assert metas[0]["data"]["question_kps"] == ["二元一次方程组", "一元一次方程"]
+        assert len(fake_llm.prompts) == 0  # 未降级

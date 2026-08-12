@@ -27,7 +27,10 @@ _DECIDE_SYSTEM = """你是数学答疑的"决策器"，只负责输出一个动�
 - 换题判定：最新一条学生消息是新的题目图片（贴新图）→ type="switch"
 
 ## 输出格式（必须是合法 JSON，字段如下）
-{"type": 闭集之一, "reason": string|null, "eval": {"correct": bool, "error_type": string|null, "emotion": 七态之一, "exercise_complete": bool}, "mastery_signals": [{"kp_label": string, "signal": "mastered"|"practicing"|"struggling"}], "new_question": string|null, "end_reason": "COMPLETED"|"ANSWER_REVEALED"|"ABANDONED"|"ROUND_LIMIT"|null, "summary": string|null, "safety_flag": bool}
+{"type": 闭集之一, "reason": string|null, "question_kps": ["知识点", ...]|null, "eval": {"correct": bool, "error_type": string|null, "emotion": 七态之一, "exercise_complete": bool}, "mastery_signals": [{"kp_label": string, "signal": "mastered"|"practicing"|"struggling"}], "new_question": string|null, "end_reason": "COMPLETED"|"ANSWER_REVEALED"|"ABANDONED"|"ROUND_LIMIT"|null, "summary": string|null, "safety_flag": bool}
+
+## question_kps（可选，不干扰主决策）
+question_kps 为当前题目涉及的知识点（如 "二元一次方程组"、"鸡兔同笼"）。读题时顺手列出即可，不确定可为 null，不要求每次必填。
 
 ## 六个动作类型（type 只能是其中之一）
 - "hint"：给一条引导性反问，帮学生自己再想一步（不给步骤、不给答案）

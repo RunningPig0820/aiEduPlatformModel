@@ -90,6 +90,12 @@ class TestDecidePrompt:
         assert "只有学生明确求助" in prompt or "只有学生明确" in prompt
         assert "才升" in prompt or "才" in prompt
 
+    def test_question_kps_in_prompt(self):
+        """question_kps 字段 + 知识点语义指令在 decide prompt 中(前端知识点分析数据源)"""
+        prompt = self._prompt()
+        assert "question_kps" in prompt
+        assert "知识点" in prompt
+
     def test_safety_flag_in_prompt(self):
         """安全 flag 检测在提示词里"""
         prompt = self._prompt()

@@ -189,6 +189,26 @@ class TestStructuredDegradation:
         assert len(result.mastery_signals) == 1
         assert llm.json_calls == 0  # 第一段就成功,没降级到 ②
 
+    def test_stage1_content_question_kps_kept(self):
+        """① content 兜底解析时 question_kps 字段保留(前端知识点分析数据源)"""
+        from core.tutoring.structured import generate_action_meta
+
+        content_json = json.dumps({
+            "type": "hint",
+            "reason": "学生已列出方程",
+            "question_kps": ["二元一次方程组", "一元一次方程"],
+            "eval": {"correct": True, "emotion": "NEUTRAL"},
+            "mastery_signals": [],
+            "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
+        }, ensure_ascii=False)
+        llm = FakeLLM(fc_args=None, fc_content=content_json, json_contents=["{}"])
+
+        result = generate_action_meta(llm, "prompt")
+
+        assert result.type.value == "hint"
+        assert result.question_kps == ["二元一次方程组", "一元一次方程"]
+        assert llm.json_calls == 0  # 第一段就成功,没降级
+
     def test_stage1_invalid_args_degrades(self):
         """① tool_call args 校验失败 → 降级到 ②"""
         from core.tutoring.structured import generate_action_meta
