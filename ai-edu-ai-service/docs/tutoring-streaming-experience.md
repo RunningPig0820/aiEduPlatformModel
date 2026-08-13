@@ -6,13 +6,19 @@
 
 ---
 
-## ✅ 最终结论(2026-08-12 已拍板,下文为过程记录)
+## ✅ 最终结论(2026-08-13 更新:分层思考开关)
 
-**决策: 全关思考模式。** 实测对比(见下文二),思考模式 = 模型"写草稿",是卡顿根源;
-关思考后切 `doubao-seed-2-0-mini`(四模态、便宜),decide ~1.5s / generate ~1.2s / 看图全流程 ~3.4s。
-**`thinking` 事件取消**,ActionMeta 契约不变,Java 零改动。已落地于:
-`config/settings.py`(mini)+ `core/tutoring/ark_stream.py`(`thinking: disabled`)。
-下面的 Q1~Q4 原本是请教模型端的问题,已由"换模型 + 关思考"绕开——不再需要方舟改造。
+**决策: 分阶段思考开关 —— decide 关思考(意图秒出)、generate 开思考(思考 = AI 版进度条)。**
+
+- 2026-08-12 曾拍板"全关思考":思考模式 = 模型"写草稿",是卡顿根源;关思考后切
+  `doubao-seed-2-0-mini`(四模态、便宜),decide ~1.5s / generate ~1.2s / 看图全流程 ~3.4s。
+- 2026-08-13 前端需求:等待期要有过程输出("思考过程 = AI 版的进度条")。权衡后仅对
+  **generate** 重开思考——引导解答段(最长等待)流式吐 `reasoning_content` → `thinking` 事件,
+  前端思考条实时流入;decide 保持关思考,意图分类秒出(~1.5s,无思考文本)。
+- 落地:`core/tutoring/ark_stream.py` 的 `stream_chat(enable_thinking=...)` 参数化开关,
+  `generator.py` 传 `enable_thinking=True`,`decider.py` 保持默认(False)。
+- 遗留风险:开思考的 generate 可能有首发静默(~数秒)+ 内容短时涌出(见 §2.2 实测),
+  由前端打字机 reveal + "思考中…"脉动提示兜底。
 
 ---
 

@@ -56,7 +56,9 @@ def iter_tokens(request: GenerateRequest, streamer=None) -> Iterator[dict]:
         settings.TUTORING_GENERATE_MODEL, settings.TUTORING_GENERATE_TEMPERATURE,
     )
     token_count = 0
-    for delta in streamer(**conn, messages=ark_stream.messages_to_openai(messages)):
+    # generate 开思考: 解答段流式吐 reasoning_content → thinking 事件,前端"思考过程"逐字流入
+    # (decide 关思考保持意图秒出;generate 是长等待段,思考即 AI 版进度条,见 ark_stream)
+    for delta in streamer(**conn, messages=ark_stream.messages_to_openai(messages), enable_thinking=True):
         if delta.get("reasoning"):
             yield {"event": "thinking", "data": {"content": delta["reasoning"]}}
         content = delta.get("content")

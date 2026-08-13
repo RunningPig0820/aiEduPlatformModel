@@ -5,12 +5,12 @@
 (实测 additional_kwargs 也为空)。故 decide/generate 的流式主路径改为
 **直连方舟 OpenAI 兼容接口**读原始 SSE:
 
-- 请求体带 `thinking: {"type": "disabled"}`(2026-08 全关思考: 见
-  `docs/tutoring-streaming-experience.md`——思考模式 = 模型写草稿,是"卡顿"
-  的根源;mini 关思考看图实测 1.2s 出答案,开思考 50~145s)
+- 请求体带 `thinking: {"type": "disabled"}`(decide 关思考: mini 关思考看图实测 1.2s 出答案,
+  开思考要 50~145s——思考模式 = 模型写草稿,是"卡顿"的根源;意图分类秒出)
+- generate 开思考(enable_thinking=True): 引导解答段流式吐 reasoning_content → thinking 事件,
+  前端"思考过程"逐字流入(思考 = AI 版进度条)
 - 流式 delta 含 `content`(→ token 事件)、`tool_calls`(→ decide function-calling
-  的 ActionMeta 参数,按 index 累积);reasoning_content 关思考后不再返回
-  (thinking 事件为空,前端按空处理)
+  的 ActionMeta 参数,按 index 累积);decide 关思考后 reasoning_content 不再返回
 
 测试: tests/tutoring/unit/test_ark_stream.py(_parse_sse_lines 为纯函数,可离线测)
 """
@@ -86,6 +86,7 @@ def stream_chat(
     messages: List[dict],
     tools: Optional[List[dict]] = None,
     timeout: float = 120.0,
+    enable_thinking: bool = False,
 ) -> Iterator[Dict[str, Any]]:
     """直连方舟 chat/completions 流式读取(OpenAI 兼容)。
 
@@ -95,6 +96,8 @@ def stream_chat(
         temperature: 采样温度
         messages: OpenAI 格式消息(见 messages_to_openai)
         tools: OpenAI 格式工具列表(decide 的 ActionMeta function tool)
+        enable_thinking: 是否开思考模式(吐 reasoning_content)。decide 关(意图秒出),
+            generate 开(解答段流式展示推理,思考 = AI 版进度条)
 
     Yields:
         _parse_sse_lines 的 delta dict(reasoning/content/tool_calls)
@@ -106,10 +109,9 @@ def stream_chat(
         "messages": messages,
         "stream": True,
         "temperature": temperature,
-        # 2026-08 全关思考: mini 关思考看图实测 1.2s 出答案,开思考要 50~145s
-        # (思考模式 = 模型写草稿,是"卡顿"的根源)。reasoning_content 不再返回,
-        # 前端 thinking 事件为空。若将来恢复,改回 enabled 即可。
-        "thinking": {"type": "disabled"},
+        # 思考开关: decide 保持 disabled(意图秒出,实测 1.2s);generate 传 enable_thinking=True
+        # (mini 开思考要 50~145s,故只给长输出的 generate 开,作为"AI 版进度条")
+        "thinking": {"type": "enabled" if enable_thinking else "disabled"},
     }
     if tools:
         payload["tools"] = tools
