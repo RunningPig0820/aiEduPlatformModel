@@ -5,6 +5,7 @@
 - 4.1 decide 决策器系统提示词(闭集+语义、hint/approach 反例、exercise_complete 联动、
       current_question 权威、终止 vs 澄清、安全 flag、snapshot label 注入)
 - 4.2 generate 分类型生成规约(六类齐全、hint 禁数值、approach 无最终答案等)
+- 4.3 decide 两分法判定(在答题→引导/不在答题→concept引导回题)、end 收紧三类、reveal 门禁、end 不给答案
 """
 import sys
 import os
@@ -62,11 +63,47 @@ class TestDecidePrompt:
         assert "大纲" in prompt or "步骤" in prompt  # approach 思路大纲
 
     def test_end_vs_concept_distinction(self):
-        """终止型无关 vs 澄清型模糊 区分"""
+        """无关(闲聊)→ concept 继续(不终止),绝不被当成 end 收尾"""
         prompt = self._prompt()
         assert "concept" in prompt
         assert "不终止" in prompt  # 澄清不终止会话
-        assert "闲聊" in prompt or "无关" in prompt  # 无关 → end
+        assert "闲聊" in prompt  # 无关 → concept 继续
+        assert "绝不 end" in prompt  # 无关绝不归 end
+
+    def test_answer_leads_to_guide_not_end(self):
+        """作答答错/答偏 → hint/approach 引导、保持活跃，绝不 end/reveal（两分法"在答题"档）"""
+        prompt = self._prompt()
+        assert "作答" in prompt  # 两分法"在答题"档
+        assert "eval.correct=false" in prompt  # 答错软信号
+        assert "绝不输出 type=\"end\"" in prompt  # 否定硬规则: 绝不 end
+        assert "绝不输出 type=\"reveal\"" in prompt  # 否定硬规则: 绝不 reveal
+        assert "答对但未独立解出" in prompt  # 答对未解出 → approach 续推(不 end)
+
+    def test_end_tightened_three_categories(self):
+        """end 收紧三类 + 排除答错/答偏/求助/无关闲聊（作答与无关绝不归 end）"""
+        prompt = self._prompt()
+        assert "仅三类" in prompt  # end 收紧为三类
+        assert "COMPLETED" in prompt  # 独立解出
+        assert "ABANDONED" in prompt  # 主动明确表达结束
+        assert "答错" in prompt and "答偏" in prompt and "求助" in prompt  # 排除项
+        assert "无关" in prompt  # 无关闲聊同样不归 end
+        assert "绝不归 end" in prompt
+
+    def test_unrelated_maps_to_concept_keep_active(self):
+        """不在答题(闲聊/太热了)→ concept 引导回题、保持 ACTIVE、绝不 end;仅明确结束才 end"""
+        prompt = self._prompt()
+        assert "无法确定" in prompt  # 两分法:不做精细意图解读
+        assert "太热了" in prompt  # 状态表达正例(结束意图无法确定→不终止)
+        assert "保持会话 ACTIVE" in prompt or "保持会话继续" in prompt  # 继续不终止
+        assert "绝不 end" in prompt
+        assert "我不做了" in prompt  # 明确结束正例 → 才 end(ABANDONED)
+
+    def test_reveal_gated_on_explicit_ask(self):
+        """reveal 门禁: 仅明确要答案触发，答错/答偏绝不触发"""
+        prompt = self._prompt()
+        assert "明确表达要答案" in prompt  # reveal 触发条件收紧
+        assert "给答案" in prompt  # 明确要答案例子
+        assert "绝不触发 reveal" in prompt  # 答错绝不 reveal
 
     def test_first_message_not_switch_in_prompt(self):
         """B1 修复: 首条消息(无老师回复)不能输出 switch 的规则必须在 prompt 中"""
@@ -150,6 +187,14 @@ class TestGenerationRules:
         """reveal: 完整解答"""
         rule = self._rule("reveal")
         assert "完整" in rule or "解答" in rule
+
+    def test_end_rule_no_solution(self):
+        """end 规约: 只说明原因/鼓励，禁止写入完整解答或最终数值（不给答案）"""
+        rule = self._rule("end")
+        assert "禁止写入完整解答或最终数值" in rule
+        assert "鼓励" in rule  # 原因/鼓励语义
+        # 不含"允许给答案"语义(reveal 才允许完整解答)
+        assert "可以出现最终数值答案" not in rule
 
     def test_generate_prompt_embeds_rule(self):
         """build_generate_prompt 把对应规约嵌入 prompt"""

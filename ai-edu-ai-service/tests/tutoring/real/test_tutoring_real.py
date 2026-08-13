@@ -46,13 +46,13 @@ class TestTutoringRealFlow:
         assert meta.type.value in {"concept", "hint", "approach", "reveal"}
         assert meta.type.value != "end"
 
-    def test_unrelated_chatter_ends(self):
-        """闲聊(无关)→ end 终止"""
+    def test_unrelated_chatter_continues(self):
+        """闲聊(无关)→ 不终止(concept 接住+引导回题);仅学生主动表明结束才 end"""
         meta = _decide([
             {"role": "user", "content": Q_CHICKEN_RABBIT},
             {"role": "user", "content": "今天天气怎么样"},
         ])
-        assert meta.type.value == "end"
+        assert meta.type.value != "end"
 
     def test_switch_on_new_question(self):
         """对话中贴新题 → switch + new_question(换题判定由 Python 从 history 推断)"""

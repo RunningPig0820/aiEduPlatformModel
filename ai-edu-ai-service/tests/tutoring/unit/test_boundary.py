@@ -4,8 +4,8 @@
 每种场景 mock LLM 返回预期 ActionMeta,断言 decide 透传正确(字段不丢):
 - "我不会"→concept 澄清不终止
 - "老师你好"→concept 澄清
-- "今天天气"→end 终止
-- "英语题"→end 终止
+- "今天天气"→concept 继续(无关不终止)
+- "英语题"→concept 继续(说明只辅导数学,引导回来)
 - 贴新题→switch + new_question 透传
 - 独立解出→end + COMPLETED 联动
 - 高危内容→safety_flag=true
@@ -93,16 +93,15 @@ class TestBoundaryScenarios:
         result = self._decide("老师你好", _base_meta(type="concept"))
         assert result.type.value == "concept"
 
-    def test_weather_end(self):
-        """'今天天气' → end(终止)"""
-        result = self._decide("今天天气怎么样", _base_meta(type="end", end_reason="ABANDONED"))
-        assert result.type.value == "end"
-        assert result.end_reason.value == "ABANDONED"
+    def test_weather_continue(self):
+        """'今天天气' → concept(无关→继续,不终止)"""
+        result = self._decide("今天天气怎么样", _base_meta(type="concept"))
+        assert result.type.value == "concept"
 
-    def test_english_question_end(self):
-        """英语题 → end(终止)"""
-        result = self._decide("这个英语单词怎么读", _base_meta(type="end", end_reason="ABANDONED"))
-        assert result.type.value == "end"
+    def test_english_question_continue(self):
+        """英语题 → concept(说明只辅导数学,引导回来,不终止)"""
+        result = self._decide("这个英语单词怎么读", _base_meta(type="concept"))
+        assert result.type.value == "concept"
 
     def test_new_question_switch(self):
         """贴新题 → switch + new_question 透传"""
