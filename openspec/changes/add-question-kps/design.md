@@ -67,3 +67,22 @@ class ActionMeta(BaseModel):
 - **模型输出质量**:question_kps 是模型自由发挥,可能不准/为空。→ 前端占位"—",且后续完整功能替换数据源,低风险。
 - **tool schema 变大**:多一个可选字段,方舟/deepseek 对 schema 的容忍已验证(ActionMeta 已有更多字段),低风险。
 - **兼容性**:additive 可选字段,旧 Java/前端解析忽略未知字段,向后兼容。
+
+## 验收记录(2026-08-13 前端交接)
+
+前端 `show-tutoring-agent-workflow` 阶段二(六阶段移入 AI 回答气泡,每回合走一遍)为**纯前端重构**。前端确认:**后端与模型端零改动,契约冻结**。本 change 交付的字段已被前端全部用上:
+
+| Python 交付项 | 前端用途 | 状态 |
+|---------------|----------|------|
+| `question_kps`(可空 List) | ②知识点分析,每回合展示 | ✅ 已用 |
+| `reason`(决策自由文本) | ①决策行 hover 补充(主文案由前端按 type/denied 确定性推导) | ✅ 已用 |
+| decide 阶段 agent 事件(perceive/analyze/plan/decide) | SENDING 期实时"解析意图…"(①意图分类处理中) | ✅ 已用 |
+| `mastery_signals` | 知识点 chips(KpChips) | ✅ 已用 |
+| `type`/`denied`/`eval`/`status` | 各阶段点亮判定 | ✅ 既有 |
+
+**前端唯一提醒**——decide 阶段 agent 事件时序稳定 `perceive→analyze→plan→decide→meta`:当前 `api/tutoring.py:52-60` 固定该顺序,零改动即满足。
+
+**换题行为确认**:前端每回合读本回合 `questionKps`,要求换题后是新题知识点。当前实现——换题短路轮(is_new_question)返回 `type=switch`、`question_kps=None`(该轮无新题知识点可分析,前端占位"—");下一轮正常答题 decide 重新调用模型,即输出新题知识点。与前端预期一致,零改动。
+
+**结论**:Python 端交付完成,契约冻结,无后续任务。
+
