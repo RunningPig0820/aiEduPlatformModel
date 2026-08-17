@@ -370,7 +370,7 @@ class TestIterDecideEvents:
             "type": "approach",
             "reason": "学生询问该题的解法,需提供解题思路大纲",
             "eval": {"correct": False, "error_type": None, "emotion": "困惑", "exercise_complete": False},
-            "mastery_signals": [{"kp_label": "基本不等式求最值", "signal": "practicing"}],
+            "mastery_signals": [{"topic_label": "基本不等式求最值", "signal": "practicing"}],
             "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
         }, ensure_ascii=False)
         fs = _FakeStreamer([_delta_content(content)])

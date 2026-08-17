@@ -38,7 +38,7 @@ class TestDecidePrompt:
         return build_decide_prompt(**kwargs)
 
     def test_snapshot_labels_injected(self):
-        """掌握度快照 label 候选注入 prompt(接地)"""
+        """掌握度快照 label 注入 prompt(背景参考,不作 mastery_signals 题型名接地)"""
         prompt = self._prompt()
         assert "二元一次方程组" in prompt
         assert "一元一次方程" in prompt
@@ -132,6 +132,30 @@ class TestDecidePrompt:
         prompt = self._prompt()
         assert "question_kps" in prompt
         assert "知识点" in prompt
+
+    def test_mastery_signal_topic_semantics(self):
+        """mastery_signals 输出题型语义: topic_label=题型名,不是知识点(题型化核心)"""
+        prompt = self._prompt()
+        assert "topic_label" in prompt
+        assert "题型" in prompt
+        assert "鸡兔同笼" in prompt  # 题型正例
+        assert "不要输出知识点名" in prompt  # 反例:知识点交给后端派生
+
+    def test_mastery_signal_topic_name_stable(self):
+        """题型名稳定规范: 别换说法,用最常见最短的题型名"""
+        prompt = self._prompt()
+        assert "别随意换说法" in prompt
+        assert "最常见" in prompt
+
+    def test_mastery_signal_not_grounded_to_snapshot(self):
+        """mastery_signals 不再接地快照候选(题型与知识点快照不同源)"""
+        prompt = self._prompt()
+        assert "优先复用" not in prompt  # 移除接地指令
+
+    def test_question_kps_still_knowledge_point(self):
+        """question_kps 仍输出知识点(不翻题型)"""
+        prompt = self._prompt()
+        assert "题目涉及的知识点" in prompt
 
     def test_safety_flag_in_prompt(self):
         """安全 flag 检测在提示词里"""

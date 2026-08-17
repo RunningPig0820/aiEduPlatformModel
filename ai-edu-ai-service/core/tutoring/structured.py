@@ -45,7 +45,7 @@ def _schema_instructions() -> str:
         'eval: {"correct": bool, "error_type": string|null, "emotion": '
         '"NEUTRAL"|"CONFUSED"|"FRUSTRATED"|"ANXIOUS"|"CONFIDENT"|"INTERESTED"|"BORED", '
         '"exercise_complete": bool}, '
-        'mastery_signals: [{"kp_label": string, "signal": "mastered"|"practicing"|"struggling"}], '
+        'mastery_signals: [{"topic_label": string, "signal": "mastered"|"practicing"|"struggling"}], '
         'new_question: string|null, '
         'end_reason: "COMPLETED"|"ANSWER_REVEALED"|"ABANDONED"|"ROUND_LIMIT"|null, '
         'summary: string|null, '

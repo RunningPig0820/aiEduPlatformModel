@@ -176,7 +176,7 @@ class TestStructuredDegradation:
             "type": "approach",
             "reason": "学生询问该题的解法,需提供解题思路大纲",
             "eval": {"correct": False, "emotion": "NEUTRAL"},
-            "mastery_signals": [{"kp_label": "基本不等式求最值", "signal": "practicing"}],
+            "mastery_signals": [{"topic_label": "基本不等式求最值", "signal": "practicing"}],
             "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
         }, ensure_ascii=False)
         llm = FakeLLM(fc_args=None, fc_content=content_json,
@@ -293,6 +293,14 @@ class TestCorrectiveRetry:
         # 第一次调用 + 一次纠错 = 2 次 json 调用
         assert llm.json_calls == 2
 
+    def test_schema_instructions_uses_topic_label(self):
+        """纠错提示词字段名与模型同步: topic_label,不含旧名 kp_label(防掌握度静默丢失)"""
+        from core.tutoring.structured import _schema_instructions
+
+        instructions = _schema_instructions()
+        assert "topic_label" in instructions
+        assert "kp_label" not in instructions
+
 
 class TestEmotionLenient:
     """3.3 emotion 宽容归一化(2026-08 关思考后,mini 偶发填中文/小写情绪值)
@@ -308,7 +316,7 @@ class TestEmotionLenient:
             "type": "hint",
             "reason": "x",
             "eval": {"correct": True, "emotion": emotion_value},
-            "mastery_signals": [{"kp_label": "基本不等式求最值", "signal": "practicing"}],
+            "mastery_signals": [{"topic_label": "基本不等式求最值", "signal": "practicing"}],
             "new_question": None, "end_reason": None, "summary": None, "safety_flag": False,
         })
         # correction_llm=None + corrective_retries=0: 不重试,失败即返回 None
@@ -321,7 +329,7 @@ class TestEmotionLenient:
         assert meta is not None
         assert meta.eval.emotion.value == "CONFUSED"
         assert len(meta.mastery_signals) == 1
-        assert meta.mastery_signals[0].kp_label == "基本不等式求最值"
+        assert meta.mastery_signals[0].topic_label == "基本不等式求最值"
 
     def test_lowercase_emotion_normalized(self):
         """'confused' → CONFUSED"""

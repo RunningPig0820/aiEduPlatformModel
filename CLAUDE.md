@@ -17,11 +17,11 @@ cd ai-edu-ai-service && python main.py
 # Or with uvicorn directly:
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-# Run tests
-pytest ai-edu-ai-service/tests/
+# Run tests (must run from ai-edu-ai-service/: settings loads .env relative to cwd)
+cd ai-edu-ai-service && pytest tests/
 
 # Run specific test file
-pytest ai-edu-ai-service/tests/test_factory.py -v
+cd ai-edu-ai-service && pytest tests/test_factory.py -v
 ```
 
 ## Architecture

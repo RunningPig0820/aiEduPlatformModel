@@ -50,6 +50,25 @@ class TestEnums:
         }
 
 
+class TestMasterySignalItem:
+    """2.2 MasterySignalItem: 字段 topic_label(题型),不是 kp_label(知识点)"""
+
+    def test_topic_label_field(self):
+        """字段名为 topic_label,语义为题型"""
+        from models.tutoring import MasterySignalItem
+
+        item = MasterySignalItem(topic_label="鸡兔同笼", signal="practicing")
+        assert item.topic_label == "鸡兔同笼"
+        assert item.signal.value == "practicing"
+
+    def test_old_kp_label_rejected(self):
+        """旧字段名 kp_label 不再接受(topic_label required → 校验失败)"""
+        from models.tutoring import MasterySignalItem
+
+        with pytest.raises(ValidationError):
+            MasterySignalItem(kp_label="鸡兔同笼", signal="practicing")
+
+
 class TestActionMeta:
     """2.3 ActionMeta 校验与契约"""
 
@@ -58,7 +77,7 @@ class TestActionMeta:
             "type": "hint",
             "reason": "学生已列方程",
             "eval": {"correct": True, "error_type": None, "emotion": "NEUTRAL", "exercise_complete": False},
-            "mastery_signals": [{"kp_label": "二元一次方程组", "signal": "practicing"}],
+            "mastery_signals": [{"topic_label": "鸡兔同笼", "signal": "practicing"}],
             "new_question": None,
             "end_reason": None,
             "summary": None,

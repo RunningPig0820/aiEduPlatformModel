@@ -86,8 +86,8 @@ class Eval(BaseModel):
 
 
 class MasterySignalItem(BaseModel):
-    """掌握度信号 - kp_label 接地到 mastery_snapshot 候选"""
-    kp_label: str = Field(..., description="知识点 label(优先复用快照候选)")
+    """掌握度信号 - topic_label 为题型名(知识点由后端派生)"""
+    topic_label: str = Field(..., description="题型 label(如「鸡兔同笼」,非知识点)")
     signal: MasterySignal = Field(..., description="掌握度信号")
 
 

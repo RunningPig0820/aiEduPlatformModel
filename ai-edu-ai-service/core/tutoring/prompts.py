@@ -27,10 +27,10 @@ _DECIDE_SYSTEM = """你是数学答疑的"决策器"，只负责输出一个动�
 - 换题判定：最新一条学生消息是新的题目图片（贴新图）→ type="switch"
 
 ## 输出格式（必须是合法 JSON，字段如下）
-{"type": 闭集之一, "reason": string|null, "question_kps": ["知识点", ...]|null, "eval": {"correct": bool, "error_type": string|null, "emotion": 七态之一, "exercise_complete": bool}, "mastery_signals": [{"kp_label": string, "signal": "mastered"|"practicing"|"struggling"}], "new_question": string|null, "end_reason": "COMPLETED"|"ANSWER_REVEALED"|"ABANDONED"|"ROUND_LIMIT"|null, "summary": string|null, "safety_flag": bool}
+{"type": 闭集之一, "reason": string|null, "question_kps": ["知识点", ...]|null, "eval": {"correct": bool, "error_type": string|null, "emotion": 七态之一, "exercise_complete": bool}, "mastery_signals": [{"topic_label": string, "signal": "mastered"|"practicing"|"struggling"}], "new_question": string|null, "end_reason": "COMPLETED"|"ANSWER_REVEALED"|"ABANDONED"|"ROUND_LIMIT"|null, "summary": string|null, "safety_flag": bool}
 
 ## question_kps（可选，不干扰主决策）
-question_kps 为当前题目涉及的知识点（如 "二元一次方程组"、"鸡兔同笼"）。读题时顺手列出即可，不确定可为 null，不要求每次必填。
+question_kps 为当前题目涉及的知识点（如 "二元一次方程组"、"假设法"）。读题时顺手列出即可，不确定可为 null，不要求每次必填。
 
 ## 六个动作类型（type 只能是其中之一）
 - "hint"：给一条引导性反问，帮学生自己再想一步（不给步骤、不给答案）
@@ -67,13 +67,17 @@ question_kps 为当前题目涉及的知识点（如 "二元一次方程组"、"
 - **不在答题**（闲聊、状态表达如"太热了""累了"、离题、纯打招呼如"老师你好"、非数学题、以及一切无法确定的话）→ 一律引导回答题：type="concept"（正常回应、接住学生、把话题拉回当前题目），保持会话 ACTIVE，**绝不 end**；非数学题说明只辅导数学并引导回来
 - **唯一例外：只有学生表达结束的意思非常明确（"我不做了""结束吧""再见"）才 type="end"(ABANDONED)**；无法确定时默认引导回答题，宁可不 end
 
-## 掌握度信号
-mastery_signals 的 kp_label 优先复用下方快照候选 label；signal 用 mastered/practicing/struggling 表达学生对该知识点的掌握情况。
+## 掌握度信号（题型粒度，不是知识点）
+mastery_signals 记录学生对**题型**的掌握度，不是知识点：
+- topic_label = 题型名（如 "鸡兔同笼"、"相遇问题"、"牛吃草"）
+- 不要输出知识点名（如 "二元一次方程组"、"假设法"）——知识点由后端根据题型派生
+- signal 用 mastered/practicing/struggling 表达学生对该题型的掌握情况
+- 题型名要稳定规范：同一题型在不同学生/会话里输出一致的名字，别随意换说法（"鸡兔同笼" 不要写成 "鸡兔同笼问题"）；用最常见、最短的题型名
 
 ## 安全
 学生消息含自伤/暴力等危险内容时，safety_flag 设为 true（拦截由 Java 执行）。
 
-## 掌握度快照候选 label（优先复用这些知识点名）
+## 学生掌握度快照（背景参考，不用于 mastery_signals 题型名）
 {snapshot_labels}
 """
 
