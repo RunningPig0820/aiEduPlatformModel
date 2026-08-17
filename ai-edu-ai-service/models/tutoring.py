@@ -147,3 +147,25 @@ class GenerateRequest(BaseModel):
     subject_hint: str = Field(default="math", description="学科")
     action_type: ActionType = Field(..., description="已放行的动作类型(Java 已审批)")
     action_meta: Optional[ActionMeta] = Field(None, description="Java 放行时附带的决策元数据")
+
+
+# ============ 2.5 视觉题目理解(题型分析图片入口,方案 B) ============
+
+
+class QuestionUnderstandRequest(BaseModel):
+    """视觉题目理解请求 - Java 上传 COS 后传签名 URL(无会话,一请求一返回)
+
+    方案 B: 独立 stateless 视觉端点,模型写死 doubao(见 design D1/D3)。
+    """
+    image_url: str = Field(..., description="题目图片的 COS 签名 URL(Java 上传后传)")
+    topic_hint: Optional[List[str]] = Field(None, description="题型库 top-N 题型名参考词表(收敛命名,可选)")
+    grade: Optional[int] = Field(None, ge=1, le=12, description="年级锚(可选,本期不强用)")
+
+
+class QuestionUnderstandResponse(BaseModel):
+    """视觉题目理解响应 - 看图识别题型名 + 顺带知识点
+
+    空 topic_labels = 识别失败(Java 降级 PENDING,不视为错误)。
+    """
+    topic_labels: List[str] = Field(default_factory=list, description="识别的题型名(1~5 个,空=识别失败)")
+    question_kps: Optional[List[str]] = Field(None, description="顺带识别的知识点名(可选,不强求)")

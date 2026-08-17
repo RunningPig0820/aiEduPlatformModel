@@ -15,13 +15,14 @@ from fastapi.responses import StreamingResponse
 
 from config.settings import settings
 from api.chat import verify_internal_token
-from models.tutoring import DecideRequest, GenerateRequest
+from models.tutoring import DecideRequest, GenerateRequest, QuestionUnderstandRequest, QuestionUnderstandResponse
 from core.tutoring.agent_events import (
     agent_event,
     STATUS_PROCESSING,
 )
 from core.tutoring.decider import iter_decide_events
 from core.tutoring.generator import iter_tokens
+from core.tutoring.question_understand import understand_question
 
 logger = logging.getLogger(__name__)
 
@@ -111,3 +112,18 @@ async def tutoring_generate(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.post("/question-understand", response_model=QuestionUnderstandResponse)
+async def tutoring_question_understand(
+    request: QuestionUnderstandRequest,
+    x_internal_token: str = Header(None),
+):
+    """视觉题目理解(无会话,一请求一返回 JSON)。
+
+    看图 → 题型名 + 顺带知识点。视觉失败 → 空 topic_labels(Java 降级 PENDING,不视为错误)。
+    不同于 decide/generate(SSE): 本端点同步 JSON,模型写死 doubao(design D1/D3)。
+    字段 snake_case(与 decide/generate 一致);直接返回模型 JSON(同 /api/llm/chat 惯例)。
+    """
+    verify_internal_token(x_internal_token)
+    return understand_question(request)
