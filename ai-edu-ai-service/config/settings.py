@@ -82,6 +82,22 @@ class Settings(BaseSettings):
     # ============ Redis 配置 (可选) ============
     REDIS_URL: str = ""
 
+    # ============ COS 向量桶 (题型聚集向量服务) ============
+    # 腾讯云 COS 向量桶(Vertex Bucket)——Java 无 SDK, 向量操作走 Python 桥。
+    # 复用 DASHSCOPE_API_KEY 做 embedding, 不新增密钥。
+    COS_VECTORS_SECRET_ID: str = ""
+    COS_VECTORS_SECRET_KEY: str = ""
+    COS_VECTORS_REGION: str = "ap-guangzhou"
+    COS_VECTORS_BUCKET: str = ""                # "xxx-125xxxxxxx"
+
+    # 逻辑类型 → 物理索引 路由表(多索引)。vector_type 必填, 每次 put/query 由 Java 显式传入。
+    # 本期唯一合法值 "topic"(题型名向量); question/rag 为配置占位, 后续加索引 Python 零代码改动。
+    COS_VECTORS_INDEXES: dict = {
+        "topic": "topic-index",
+        # "question": "question-index",         # 相似题, 预留不建
+        # "rag": "rag-index",                   # RAG, 预留不建
+    }
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
