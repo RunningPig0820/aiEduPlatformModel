@@ -22,8 +22,13 @@ class TestChatAPI:
 
     @pytest.fixture
     def headers(self):
-        """创建认证头"""
-        return {"x-internal-token": os.environ.get("INTERNAL_TOKEN", "test_internal_token")}
+        """创建认证头 - 用真实鉴权配置(settings.INTERNAL_TOKEN), 与 tutoring integration 测试一致。
+
+        不用 os.environ: 组合跑时其他测试顶层 import 会提前实例化 settings 单例(锁定 .env 真实 token),
+        os.environ 的 test 值与之不匹配 → 403 误报。用 settings 保证两端一致。
+        """
+        from config.settings import settings
+        return {"x-internal-token": settings.INTERNAL_TOKEN}
 
     def test_chat_missing_token(self, client):
         """测试缺少 Token"""
@@ -123,8 +128,9 @@ class TestStreamAPI:
 
     @pytest.fixture
     def headers(self):
-        """创建认证头"""
-        return {"x-internal-token": os.environ.get("INTERNAL_TOKEN", "test_internal_token")}
+        """创建认证头 - 用真实鉴权配置(settings.INTERNAL_TOKEN), 与 tutoring integration 测试一致。"""
+        from config.settings import settings
+        return {"x-internal-token": settings.INTERNAL_TOKEN}
 
     def test_stream_missing_token(self, client):
         """测试流式 API 缺少 Token"""
