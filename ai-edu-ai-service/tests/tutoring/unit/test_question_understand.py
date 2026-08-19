@@ -122,3 +122,35 @@ class TestUnderstandQuestion:
         parts = {p.get("type"): p for p in llm.messages[1].content}
         assert parts["image_url"]["image_url"]["url"] == "https://cos/signed"
         assert "text" in parts
+
+    def test_factory_creates_doubao_thinking_off_with_timeout(self):
+        """工厂路径: 必须关思考 + 设超时 + 关 SDK 重试(慢 30s+ 修复的回归护栏)。
+
+        doubao mini 默认开思考(先写草稿再答) → 30s+ 卡顿根源;decide 路径显式
+        thinking: disabled(ark_stream.py)。本端点 llm 不注入时走工厂,必须带上这些参数。
+        """
+        from unittest.mock import patch
+
+        from core.tutoring.question_understand import (
+            _UNDERSTAND_MODEL,
+            _UNDERSTAND_PROVIDER,
+            _UNDERSTAND_TEMPERATURE,
+            understand_question,
+        )
+        from models.tutoring import QuestionUnderstandRequest
+
+        with patch(
+            "core.tutoring.question_understand.LLMFactory.create",
+            return_value=FakeLLM(content="鸡兔同笼"),
+        ) as m:
+            # 不走 _understand helper(它会注入 FakeLLM): 直接传 req,llm 默认 None → 走工厂
+            req = QuestionUnderstandRequest(image_url="https://cos/signed")
+            resp = understand_question(req)
+            assert resp.topic_labels == ["鸡兔同笼"]
+
+        args, kwargs = m.call_args
+        assert args == (_UNDERSTAND_PROVIDER, _UNDERSTAND_MODEL)
+        assert kwargs["temperature"] == _UNDERSTAND_TEMPERATURE
+        assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+        assert kwargs["request_timeout"] == 20
+        assert kwargs["max_retries"] == 0

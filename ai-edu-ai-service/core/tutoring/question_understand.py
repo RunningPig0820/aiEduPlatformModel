@@ -81,6 +81,13 @@ def understand_question(request: QuestionUnderstandRequest, llm=None) -> Questio
     try:
         llm = llm or LLMFactory.create(
             _UNDERSTAND_PROVIDER, _UNDERSTAND_MODEL, temperature=_UNDERSTAND_TEMPERATURE,
+            # 关思考(与 decide 同款): doubao mini 默认开思考 = 先写草稿再答,
+            # 实测开思考 50~145s、关思考看图 1.2s(见 ark_stream.py 注释)——32s+ 卡顿根源。
+            extra_body={"thinking": {"type": "disabled"}},
+            # 无内部超时 → openai SDK 默认 600s 才失败;设 20s + 关 SDK 重试,
+            # 慢/失败快速返回空 topic_labels(Java 降级 PENDING),不让调用方无限等。
+            request_timeout=20,
+            max_retries=0,
         )
         messages = [
             SystemMessage(content=_build_system(request.topic_hint)),
