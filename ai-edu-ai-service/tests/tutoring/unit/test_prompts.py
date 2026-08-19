@@ -133,6 +133,46 @@ class TestDecidePrompt:
         assert "question_kps" in prompt
         assert "知识点" in prompt
 
+    def test_uncertain_tone_correct_answer(self):
+        """答对判定: 疑问/不确定措辞(「是18吗」)也算作答,正确性看数值不看语气,绝不因问句判错"""
+        prompt = self._prompt()
+        assert "是18吗" in prompt  # 疑问语气正例
+        assert "不看语气" in prompt  # 语气不确定 ≠ 判错
+        assert "问句" in prompt
+
+    def test_verify_by_substitution_required(self):
+        """判对前必须代入验算: 把数值代回题目算一遍(例 38+18=56、56=2×28),不可凭直觉/语气"""
+        prompt = self._prompt()
+        assert "代入验算" in prompt
+        assert "38+18" in prompt  # 验算正例
+        assert "判错" in prompt  # 代入不成立 → 判错
+
+    def test_correct_value_means_completed(self):
+        """学生独立给出正确数值(含用问句确认)= 独立解出 → end COMPLETED,不回到 hint 循环"""
+        prompt = self._prompt()
+        assert "独立给出正确数值" in prompt
+        assert "COMPLETED" in prompt
+        assert "确认收尾" in prompt
+        assert "hint 引导循环" not in prompt or "不要因" in prompt  # 显式否定回到 hint
+
+    def test_assert_correct_is_confirmation_request(self):
+        """学生断言答对(「我刚刚答案是对的」)→ 要求确认/复核,不是闲聊、不是引导回题"""
+        prompt = self._prompt()
+        assert "我刚刚答案是对的" in prompt
+        assert "要求确认/复核" in prompt
+        assert "不是引导回题" in prompt
+
+    def test_assert_correct_verified_ends(self):
+        """断言答对核实为对 → end COMPLETED 确认收尾"""
+        prompt = self._prompt()
+        assert "确认答对并收尾" in prompt
+
+    def test_assert_correct_but_wrong_clear(self):
+        """断言答对但实际错误 → 明确告知「答案不对」+ 继续引导,绝不 end"""
+        prompt = self._prompt()
+        assert "答案不对" in prompt  # 明确对错判断
+        assert "继续引导" in prompt
+
     def test_mastery_signal_topic_semantics(self):
         """mastery_signals 输出题型语义: topic_label=题型名,不是知识点(题型化核心)"""
         prompt = self._prompt()

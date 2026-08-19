@@ -403,3 +403,103 @@ class TestIterDecideEvents:
         assert metas[0]["data"]["type"] == "hint"
         assert metas[0]["data"]["question_kps"] == ["二元一次方程组", "一元一次方程"]
         assert len(fake_llm.prompts) == 0  # 未降级
+
+
+class TestEndConsistencyGuard:
+    """_sanitize_end_consistency: type=end 必须满足 end 联动契约,否则降级 concept(确定性护栏)。
+
+    背景(2026-08-19 实测): doubao「断言答对但答案错误」场景 reason 明说"不应收尾"
+    却输出 type=end,end_reason 偶发 null/COMPLETED/ANSWER_REVEALED 与 correct=false 矛盾
+    → Java 真收尾 + 答错被恭喜。护栏兜底,不信任模型格式。
+    """
+
+    def _meta(self, **overrides):
+        from core.tutoring.decider import _sanitize_end_consistency
+        from models.tutoring import ActionMeta
+
+        data = dict(VALID_META_DICT)
+        data.update(overrides)
+        return _sanitize_end_consistency(ActionMeta.model_validate(data))
+
+    def test_valid_completed_passes_through(self):
+        """合法 end(COMPLETED + correct=true + exercise_complete=true)→ 原样保留"""
+        meta = self._meta(
+            type="end", end_reason="COMPLETED",
+            eval={"correct": True, "error_type": None, "emotion": "NEUTRAL", "exercise_complete": True},
+            summary="答对了",
+        )
+        assert meta.type.value == "end"
+        assert meta.end_reason.value == "COMPLETED"
+        assert meta.summary == "答对了"
+
+    def test_end_missing_reason_downgraded(self):
+        """type=end 但 end_reason 缺失 → 降级 concept,清 end 字段,保持会话"""
+        meta = self._meta(type="end", end_reason=None)
+        assert meta.type.value == "concept"
+        assert meta.end_reason is None
+        assert meta.summary is None
+
+    def test_completed_wrong_downgraded(self):
+        """end COMPLETED 但 correct=false → 无效(答错被恭喜)→ 降级 concept"""
+        meta = self._meta(
+            type="end", end_reason="COMPLETED",
+            eval={"correct": False, "error_type": "答案错误", "emotion": "NEUTRAL", "exercise_complete": False},
+            summary="恭喜你答对了",
+        )
+        assert meta.type.value == "concept"
+        assert meta.end_reason is None
+        assert meta.summary is None  # 泄出的总结一并清掉
+
+    def test_completed_not_independent_downgraded(self):
+        """end COMPLETED 但 exercise_complete=false(未独立解出)→ 无效 → 降级 concept"""
+        meta = self._meta(
+            type="end", end_reason="COMPLETED",
+            eval={"correct": True, "error_type": None, "emotion": "NEUTRAL", "exercise_complete": False},
+        )
+        assert meta.type.value == "concept"
+        assert meta.end_reason is None
+
+    def test_non_end_passes_through(self):
+        """非 end 类型(hint/concept 等)→ 原样,不受护栏影响"""
+        meta = self._meta(type="hint")
+        assert meta.type.value == "hint"
+
+    def test_abandoned_passes_through(self):
+        """end ABANDONED(学生明确结束)→ 合法保留"""
+        meta = self._meta(
+            type="end", end_reason="ABANDONED",
+            eval={"correct": False, "error_type": None, "emotion": "NEUTRAL", "exercise_complete": False},
+        )
+        assert meta.type.value == "end"
+        assert meta.end_reason.value == "ABANDONED"
+
+    def test_decide_path_sanitized(self):
+        """decide() 全链路: 模型返回非法 end(COMPLETED+correct=false)→ 输出 concept"""
+        from core.tutoring.decider import decide
+
+        bad = dict(VALID_META_DICT)
+        bad.update(
+            type="end", end_reason="COMPLETED",
+            eval={"correct": False, "error_type": "答案错误", "emotion": "NEUTRAL", "exercise_complete": False},
+            summary="恭喜你答对了",
+        )
+        fake = FakeLLM(fc_args=bad)
+        result = decide(_request(), llm=fake)
+        assert result.type.value == "concept"
+        assert result.end_reason is None
+
+    def test_streaming_path_sanitized(self):
+        """流式 function-calling 路径: 非法 end → meta 输出 concept"""
+        from core.tutoring.decider import iter_decide_events
+
+        bad = dict(VALID_META_DICT)
+        bad.update(
+            type="end", end_reason="COMPLETED",
+            eval={"correct": False, "error_type": "答案错误", "emotion": "NEUTRAL", "exercise_complete": False},
+        )
+        fake_llm = FakeLLM(fc_args=dict(VALID_META_DICT))
+        fs = _FakeStreamer(_tool_call_deltas(bad))
+        events = list(iter_decide_events(_request(), streamer=fs, llm=fake_llm))
+        metas = [e for e in events if e["event"] == "meta"]
+        assert metas[0]["data"]["type"] == "concept"
+        assert metas[0]["data"]["end_reason"] is None

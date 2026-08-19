@@ -12,13 +12,45 @@ import json
 import logging
 
 from config.settings import settings
-from models.tutoring import ActionMeta, ActionType, DecideRequest, Eval
+from models.tutoring import ActionMeta, ActionType, DecideRequest, EndReason, Eval
 from core.tutoring import ark_stream
 from core.tutoring.context import truncate_history, snapshot_top_n, get_decide_llm
 from core.tutoring.prompts import build_decide_messages
 from core.tutoring.structured import _extract_json, _normalize_emotion, generate_action_meta
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_end_consistency(meta: ActionMeta) -> ActionMeta:
+    """保证 type=end 与 end_reason/eval 联动一致(确定性护栏,不信任模型格式)。
+
+    实测 doubao「断言答对但答案错误」场景: reason 明说"不应收尾/继续引导"却输出
+    type=end,且 end_reason 偶发 null / COMPLETED / ANSWER_REVEALED 与 correct=false 矛盾
+    (java 会真收尾,答错的学生被"恭喜";summary 还可能泄出完整解答)。end 联动契约:
+    - COMPLETED 必须 correct=true 且 exercise_complete=true(独立解出)
+    - end_reason 缺失 → 无效 end
+    无效 end → 降级 type=concept(生成规约允许"明确引导/确认、拉回题目、不给答案",
+    可告知"答案不对"),清掉 end 字段,保持会话 ACTIVE、不终止。
+    """
+    if meta.type != ActionType.END:
+        return meta
+    invalid = (
+        meta.end_reason is None
+        or (
+            meta.end_reason == EndReason.COMPLETED
+            and not (meta.eval.correct and meta.eval.exercise_complete)
+        )
+    )
+    if not invalid:
+        return meta
+    logger.warning(
+        "decide: type=end 但 end 联动不一致(end_reason=%s, correct=%s, exercise_complete=%s) → 降级 concept 保持会话",
+        meta.end_reason, meta.eval.correct, meta.eval.exercise_complete,
+    )
+    meta.type = ActionType.CONCEPT
+    meta.end_reason = None
+    meta.summary = None
+    return meta
 
 
 def decide(request: DecideRequest, llm=None) -> ActionMeta:
@@ -54,7 +86,7 @@ def decide(request: DecideRequest, llm=None) -> ActionMeta:
     )
     logger.debug("decide messages built (n=%d)", len(messages))
 
-    return generate_action_meta(llm, messages)
+    return _sanitize_end_consistency(generate_action_meta(llm, messages))
 
 
 def iter_decide_events(request: DecideRequest, streamer=None, llm=None):
@@ -130,4 +162,5 @@ def iter_decide_events(request: DecideRequest, streamer=None, llm=None):
         # 降级: 非流式四段管线(绝不抛异常);is_new_question 短路已被上面处理,这里正常路径
         meta = decide(request, llm)
 
-    yield {"event": "meta", "data": meta.model_dump(mode="json")}
+    # 流式成功路径也过一致性护栏(decide() 内部已护栏,幂等)
+    yield {"event": "meta", "data": _sanitize_end_consistency(meta).model_dump(mode="json")}
