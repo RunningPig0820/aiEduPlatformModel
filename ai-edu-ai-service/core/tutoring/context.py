@@ -2,7 +2,7 @@
 上下文组装与模型路由
 
 - truncate_history: 历史截断(保留最近 ~12 条;当前题目由 history 推断,Java 零题目状态)
-- snapshot_top_n: 掌握度快照 top-N(防体积撑爆窗口;薄弱知识点优先)
+- snapshot_top_n: 掌握度快照 top-N(防体积撑爆窗口;薄弱题型优先)
 - get_decide_llm / get_generate_llm: decide/generate 按配置独立取模型
 
 对齐: openspec/changes/ai-tutoring/design.md 决策 6(模型配对)/10(无状态与上下文压缩)
@@ -33,7 +33,7 @@ def _mastery_level(item) -> int:
 def snapshot_top_n(snapshot, top_n: int = DEFAULT_SNAPSHOT_TOP_N):
     """掌握度快照取 top-N。
 
-    按掌握度升序排列(薄弱知识点在前),让模型优先关注薄弱点;
+    按掌握度升序排列(薄弱题型在前,2026-08 主体从知识点切题型),让模型优先关注薄弱项;
     同时限制快照体积,避免撑爆上下文窗口。
     """
     if not snapshot:

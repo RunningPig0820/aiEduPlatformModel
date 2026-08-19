@@ -85,7 +85,7 @@ mastery_signals 记录学生对**题型**的掌握度，不是知识点：
 ## 安全
 学生消息含自伤/暴力等危险内容时，safety_flag 设为 true（拦截由 Java 执行）。
 
-## 学生掌握度快照（背景参考，不用于 mastery_signals 题型名）
+## 学生题型掌握度快照（背景参考：学生练得好的题型；仅作上下文提示，不照抄为 mastery_signals 的 topic_label）
 {snapshot_labels}
 """
 

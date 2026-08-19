@@ -68,10 +68,15 @@ class ChatTurn(BaseModel):
 
 
 class KpSnapshot(BaseModel):
-    """掌握度快照条目(Java 从 t_student_kp_mastery 组装)"""
-    kp_key: str = Field(..., description="TextbookKP URI")
-    label: str = Field(..., description="知识点名(冗余,便于展示与 label 接地)")
-    mastery_level: int = Field(default=0, ge=0, le=100, description="掌握度 0-100")
+    """掌握度快照条目(2026-08 语义变更: 掌握度主体从知识点切为题型,Java 从题型掌握表组装)
+
+    字段名不变,值语义变了: kp_key 现在是**题型名(canonical,如「鸡兔同笼」)**,不是
+    TextbookKP URI。Python **不要**拿 kp_key 反查图谱/做题型↔知识点映射(桥已移到后端
+    ADMIN 维护接口);kp_key/label 仅作题型展示 + "学生该题型练得怎么样"的上下文提示。
+    """
+    kp_key: str = Field(..., description="题型名(canonical,如「鸡兔同笼」);非知识点 URI")
+    label: str = Field(..., description="题型名(与 kp_key 相同,冗余便于展示)")
+    mastery_level: int = Field(default=0, ge=0, le=100, description="题型掌握度 0-100(累计平均正确率)")
 
 
 # ============ 2.2 评估与掌握度信号 ============

@@ -191,6 +191,25 @@ class TestDecider:
 
         assert "二元一次方程组" in fake.prompts[0]
 
+    def test_decide_accepts_topic_snapshot(self):
+        """验收(2026-08 语义变更): mastery_snapshot kp_key=题型名(canonical)正常处理不报错。
+
+        Java 从题型掌握表组装,结构字段名不变,值语义从"知识点 URI"切为"题型名"。
+        Python 只用 label+mastery_level 作背景上下文,不反查 kp_key 图谱 → 天然兼容。
+        """
+        from core.tutoring.decider import decide
+
+        fake = FakeLLM(fc_args=dict(VALID_META_DICT))
+        result = decide(
+            _request(mastery_snapshot=[
+                {"kp_key": "鸡兔同笼", "label": "鸡兔同笼", "mastery_level": 64},
+            ]),
+            llm=fake,
+        )
+
+        assert result.type.value == "hint"  # 正常决策
+        assert "鸡兔同笼" in fake.prompts[0]  # 题型名作为上下文注入 prompt
+
     def test_decide_graceful_on_llm_failure(self):
         """LLM 全失败 → 兜底 ActionMeta(type=hint),不抛异常"""
         from core.tutoring.decider import decide
