@@ -8,7 +8,7 @@ AI 答疑数据模型 - Java 后端与 Python Agent 的契约层
 """
 from typing import List, Optional, Literal
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ============ 2.1 枚举(闭集词汇表) ============
@@ -174,3 +174,47 @@ class QuestionUnderstandResponse(BaseModel):
     """
     topic_labels: List[str] = Field(default_factory=list, description="识别的题型名(1~5 个,空=识别失败)")
     question_kps: Optional[List[str]] = Field(None, description="顺带识别的知识点名(可选,不强求)")
+
+
+# ============ 2.6 学科分类(subject-classify,学科门前置判定) ============
+
+
+class SubjectType(str, Enum):
+    """学科闭集(K12 九门 + other)- Java 据此分流(非 math 跳过,仅支持数学)
+
+    2026-08 扩为完整 K12: 语文/数学/英语/物理/生物/化学/政治/地理/历史。
+    本期 Java 只放行 math,其余学科跳过;显式枚举便于会话记录真实学科 + 后续分学科答疑。
+    """
+    MATH = "math"
+    PHYSICS = "physics"
+    CHEMISTRY = "chemistry"
+    BIOLOGY = "biology"
+    CHINESE = "chinese"
+    ENGLISH = "english"
+    POLITICS = "politics"
+    GEOGRAPHY = "geography"
+    HISTORY = "history"
+    OTHER = "other"
+
+
+class SubjectClassifyRequest(BaseModel):
+    """学科分类请求 - Java 在 decide 之前调用,判定题目学科(文本 + 图片)"""
+    content: Optional[str] = Field(None, description="题目文本(与 image_url 至少一个非空)")
+    image_url: Optional[str] = Field(None, description="题目图片 URL(与 content 至少一个非空)")
+
+    @model_validator(mode="after")
+    def _at_least_one_non_empty(self):
+        if not self.content and not self.image_url:
+            raise ValueError("content 与 image_url 至少一个非空")
+        return self
+
+
+class SubjectClassifyResponse(BaseModel):
+    """学科分类响应 - subject 闭集之一;失败/异常/闭集外 → None(Java 按 math 放行)
+
+    None 语义 = 拿不到学科结果 = Java 放行(宁可漏拦不误拦)。
+    """
+    subject: Optional[str] = Field(
+        None,
+        description="学科(math/physics/chemistry/biology/other);空=失败放行",
+    )

@@ -15,7 +15,10 @@ from fastapi.responses import StreamingResponse
 
 from config.settings import settings
 from api.chat import verify_internal_token
-from models.tutoring import DecideRequest, GenerateRequest, QuestionUnderstandRequest, QuestionUnderstandResponse
+from models.tutoring import (
+    DecideRequest, GenerateRequest, QuestionUnderstandRequest, QuestionUnderstandResponse,
+    SubjectClassifyRequest, SubjectClassifyResponse,
+)
 from core.tutoring.agent_events import (
     agent_event,
     STATUS_PROCESSING,
@@ -23,6 +26,7 @@ from core.tutoring.agent_events import (
 from core.tutoring.decider import iter_decide_events
 from core.tutoring.generator import iter_tokens
 from core.tutoring.question_understand import understand_question
+from core.tutoring.subject_classify import classify_subject
 
 logger = logging.getLogger(__name__)
 
@@ -127,3 +131,19 @@ async def tutoring_question_understand(
     """
     verify_internal_token(x_internal_token)
     return understand_question(request)
+
+
+@router.post("/subject-classify", response_model=SubjectClassifyResponse)
+async def tutoring_subject_classify(
+    request: SubjectClassifyRequest,
+    x_internal_token: str = Header(None),
+):
+    """学科分类(decide 之前,学科门): 文本/图片 → 闭集 subject。
+
+    Java 在 decide 前调用,非 math 跳过(不建/不续会话、不落库)。失败 → 空 subject
+    (Java 按 math 放行,不阻断答疑)。不同于 decide/generate(SSE): 本端点同步 JSON,
+    模型写死 doubao(与 question-understand 同款,见 subject_classify.py)。
+    字段 snake_case;直接返回模型 JSON(同 /api/llm/chat 惯例)。
+    """
+    verify_internal_token(x_internal_token)
+    return classify_subject(request)
