@@ -60,22 +60,18 @@ def _ref_section(ref: str) -> str:
 # ============ 3.3 LLM 判分 ============
 
 
-_JUDGE_SYSTEM = """你是 RAG 检索质量评审。给定"面试问题 + 检索到的语料块 + 生成答案 + 预期要点"，给答案质量打分。
+_JUDGE_SYSTEM = """你是 RAG 检索质量评审。给定"面试问题 + 检索到的语料块 + 生成答案 + 预期要点"，严格按下列业务规则打分。
 
-评分规则(0~5 整数, 按以下锚定):
-- 5: 答案覆盖全部预期要点(允许同义表述), 且全部基于语料, 无编造
-- 4: 覆盖大部分要点, 无编造
-- 3: 覆盖部分要点, 或有一处编造
-- 2: 覆盖少部分要点, 或有明显编造
-- 1: 基本未覆盖要点
-- 0: 答案严重偏离语料 / 编造主导 / 空答案
+【输出判定】(逐条比对预期要点, 只报告两个事实, 不要自己算总分):
+1. covered_count: 答案**覆盖了多少条**预期要点(整数, 同义表述覆盖即算覆盖, 不要求逐字出现; 如"出口两次"算覆盖"reveal两次出口")。
+2. fabricated: 是否存在**编造**内容(布尔, true/false)。判断依据=检索到的语料块: 答案表述只要在任意一块语料中有直接原文或合理推断支撑即不算编造; 语料含多源(完善文档/代码/坑档案/语雀/OpenSpec), 有出处就不算; 语料块因 600 字截断导致无法验证的部分, 不算编造。
 
-判定要点:
-- 预期要点**以同义表述覆盖即算覆盖**——不要求字面出现。例如要点"ScoreMapper 累计"被"题型掌握度累计/按题型聚合"表述覆盖即计覆盖
-- 判断"编造"时以**检索到的语料块**为准: 答案的表述只要在语料块中有支撑, 就不算编造; 只有语料块完全没提到才算编造
-- 答案引用了语料块、且表述有支撑 → 引用正确
+分数由外部按规则计算(你不要输出 score)。只需:
+- 逐条判断每个预期要点覆盖了没有
+- 判断整体是否有编造
+- 若预期要点被完整列出, 请把"覆盖了几条/共几条"写进 rationale
 
-严格输出 JSON: {"score": 0~5 整数, "rationale": "一句话理由(要点覆盖+是否有编造)"}。不要任何其他文字。"""
+严格输出 JSON: {"covered_count": 整数, "fabricated": true/false, "rationale": "覆盖X/Y条; 编造有/无; 未覆盖的要点(若有)"}。不要任何其他文字。"""
 
 
 def judge_quality(question: str, answer: str, expected_points: List[str],
@@ -100,13 +96,38 @@ def judge_quality(question: str, answer: str, expected_points: List[str],
                 HumanMessage(content=prompt),
             ]).content or ""
             data = _extract_json(text)
-            score = int(data.get("score"))
-            if 0 <= score <= 5:
-                return {"score": score, "rationale": str(data.get("rationale", "")), "judged": True}
-            logger.warning("判分 score 越界(%s), 重试", score)
+            covered = int(data.get("covered_count", -1))
+            fabricated = bool(data.get("fabricated"))
+            total = len(expected_points)
+            if 0 <= covered <= total:
+                return {"score": _score_from_covered(covered, total, fabricated),
+                        "rationale": str(data.get("rationale", "")), "judged": True}
+            logger.warning("判分 covered_count 越界(%s), 重试", covered)
         except Exception as e:
             logger.warning("判分解析失败(尝试%d): %s", attempt + 1, e)
     return {"score": 0, "rationale": "判分解析失败", "judged": False}
+
+
+def _score_from_covered(covered: int, total: int, fabricated: bool) -> int:
+    """按覆盖比例 + 编造封顶硬算分数(消除 LLM 百分比计算波动)。
+
+    编造 ≥1 处 → 封顶 3 分(编造权重高于遗漏)。
+    覆盖比例: 100%→5, ≥80%→4, ≥60%→3, ≥40%→2, >0%→1, 0%→0。
+    """
+    if covered <= 0:
+        return 0
+    ratio = covered / total if total else 0
+    if ratio >= 1.0:
+        base = 5
+    elif ratio >= 0.8:
+        base = 4
+    elif ratio >= 0.6:
+        base = 3
+    elif ratio >= 0.4:
+        base = 2
+    else:
+        base = 1
+    return min(base, 3) if fabricated else base
 
 
 def _make_judge_llm():

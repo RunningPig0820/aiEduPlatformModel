@@ -93,30 +93,59 @@ class FakeLLM:
         return type("R", (), {"content": self.text})()
 
 
+class TestScoreFromCovered:
+    """_score_from_covered 纯函数: 覆盖比例 + 编造封顶硬算"""
+
+    def test_full_cover_no_fab(self):
+        assert eval_agent._score_from_covered(5, 5, False) == 5
+        assert eval_agent._score_from_covered(4, 5, False) == 4   # 80%
+        assert eval_agent._score_from_covered(3, 5, False) == 3   # 60%
+        assert eval_agent._score_from_covered(2, 5, False) == 2   # 40%
+        assert eval_agent._score_from_covered(1, 5, False) == 1   # 20%
+        assert eval_agent._score_from_covered(0, 5, False) == 0
+
+    def test_fabricated_caps_at_3(self):
+        """编造封顶 3 分: 覆盖全对但编造 → 3; 覆盖少+编造 → 1~2"""
+        assert eval_agent._score_from_covered(5, 5, True) == 3    # 全覆盖也封顶
+        assert eval_agent._score_from_covered(4, 5, True) == 3
+        assert eval_agent._score_from_covered(2, 5, True) == 2    # 覆盖少 + 编造 → min(2,3)
+        assert eval_agent._score_from_covered(1, 5, True) == 1
+        assert eval_agent._score_from_covered(0, 5, True) == 0
+
+
 class TestJudgeQuality:
-    """3.3 LLM 判分"""
+    """3.3 LLM 判分(模型报 covered_count/fabricated, 代码算分)"""
 
     def test_judge_ok(self):
-        llm = FakeLLM('{"score": 4, "rationale": "覆盖大部分要点"}')
-        r = eval_agent.judge_quality("q", "a", ["p1"], llm=llm)
-        assert r == {"score": 4, "rationale": "覆盖大部分要点", "judged": True}
+        # 覆盖 4/5, 无编造 → 4 分
+        llm = FakeLLM('{"covered_count": 4, "fabricated": false, "rationale": "覆盖4/5"}')
+        r = eval_agent.judge_quality("q", "a", ["p"] * 5, llm=llm)
+        assert r["score"] == 4 and r["judged"] and r["rationale"] == "覆盖4/5"
 
-    def test_judge_score_out_of_range_retries(self):
-        # 第一次越界(score=9), 第二次正常 → 返回正常
-        llm = FakeLLM(text='{"score": 4, "rationale": "ok"}')
-        # 让第一次输出越界: 用计数控制
+    def test_judge_full_cover_no_fab_5(self):
+        llm = FakeLLM('{"covered_count": 5, "fabricated": false, "rationale": "全覆盖"}')
+        assert eval_agent.judge_quality("q", "a", ["p"] * 5, llm=llm)["score"] == 5
+
+    def test_judge_fabricated_caps(self):
+        # 覆盖 5/5 但编造 → 封顶 3
+        llm = FakeLLM('{"covered_count": 5, "fabricated": true, "rationale": "全覆盖但编造"}')
+        assert eval_agent.judge_quality("q", "a", ["p"] * 5, llm=llm)["score"] == 3
+
+    def test_judge_count_out_of_range_retries(self):
+        # 第一次越界(covered_count=9), 第二次正常 → 返回正常
+        llm = FakeLLM(text='{"covered_count": 4, "fabricated": false, "rationale": "ok"}')
         orig_extract = eval_agent._extract_json
         call_count = [0]
 
         def flaky(text):
             call_count[0] += 1
             if call_count[0] == 1:
-                return {"score": 9, "rationale": "bad"}
-            return {"score": 4, "rationale": "ok"}
+                return {"covered_count": 9, "fabricated": False, "rationale": "bad"}
+            return {"covered_count": 4, "fabricated": False, "rationale": "ok"}
 
         eval_agent._extract_json = flaky
         try:
-            r = eval_agent.judge_quality("q", "a", ["p"], llm=llm)
+            r = eval_agent.judge_quality("q", "a", ["p"] * 5, llm=llm)
             assert r["score"] == 4 and r["judged"]
         finally:
             eval_agent._extract_json = orig_extract
@@ -124,12 +153,12 @@ class TestJudgeQuality:
     def test_judge_parse_fail_marks_0(self):
         # 两次都解析失败 → score 0, judged False
         llm = FakeLLM(text="不是 JSON")
-        r = eval_agent.judge_quality("q", "a", ["p"], llm=llm)
+        r = eval_agent.judge_quality("q", "a", ["p"] * 5, llm=llm)
         assert r["score"] == 0 and r["judged"] is False
 
     def test_judge_llm_exception_marks_0(self):
         llm = FakeLLM(exc=RuntimeError("down"))
-        r = eval_agent.judge_quality("q", "a", ["p"], llm=llm)
+        r = eval_agent.judge_quality("q", "a", ["p"] * 5, llm=llm)
         assert r["score"] == 0 and r["judged"] is False
 
 
