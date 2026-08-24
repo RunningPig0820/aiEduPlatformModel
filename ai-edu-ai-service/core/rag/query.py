@@ -38,11 +38,16 @@ MAX_GEN_TEXT = 1200 # 生成时单块 text 截断(上下文长度保护)
 # 页面锚定: 问题关键词 → 锁定完善文档节。命中节加权 1.5, 其余 1.0。
 # 1.6B: 这是最朴素意图分类器——未来换 LLM 判断意图类别, 接口不变(数据驱动, 每模块一份)。
 ANCHOR_RULES = [
-    (("项目", "介绍", "整体", "架构", "是什么", "做什么", "模块", "微服务", "分工"), ("01", "03")),
-    (("怎么", "如何", "流程", "步骤", "操作", "图片", "OCR", "一次"), ("02", "06")),
-    (("难点", "防", "套答案", "作弊", "安全", "护栏", "流式", "性能", "慢", "卡"), ("04", "07")),
-    (("数据", "掌握度", "落库", "关联", "存储", "统计"), ("05",)),
-    (("演进", "未来", "题库", "agent", "最危险", "规划", "路线", "坑", "闭环"), ("08",)),
+    # 项目介绍 → 01/03
+    (("项目", "介绍", "架构", "模块", "微服务", "分工", "区别", "定位", "整体", "做什么", "是什么"), ("01", "03")),
+    # 操作 → 02/06: 领域名词锚定, 不用万能疑问词(怎么/如何会稀释所有类)
+    (("流程", "步骤", "操作", "图片", "OCR", "一次", "完整", "图片题", "走"), ("02", "06")),
+    # 难点 → 04/07
+    (("防", "套答案", "作弊", "安全", "护栏", "幻觉", "流式", "性能", "慢", "卡", "延迟"), ("04", "07")),
+    # 数据关联 → 05
+    (("数据", "掌握度", "落库", "关联", "存储", "统计", "图谱", "知识点", "点亮", "选错", "联动"), ("05",)),
+    # 最危险/防御 → 08
+    (("题库", "没问", "答错", "乱给", "兜底", "待入库", "防御"), ("08",)),
 ]
 ANCHOR_WEIGHT = 1.5
 
@@ -52,16 +57,73 @@ _STOP = set("的了是在和与就都以及呢吗啊呀吧么这那我有你要�
 # ============ 意图钩子 (1.6B) ============
 
 
-def classify(question: str) -> dict:
-    """问题 → 锁策略{locked_sections, strategy}。可命中多个规则。
+# 意图类别 → 锁节映射(与 ANCHOR_RULES 一致的页面锚定目标; 供 LLM 意图识别用)
+CATEGORY_SECTIONS = {
+    "项目介绍": ("01", "03"),
+    "操作": ("02", "06"),
+    "难点": ("04", "07"),
+    "数据关联": ("05",),
+    "最危险": ("08",),
+    "其他": (),
+}
 
-    现在: ANCHOR_RULES 关键词查表; 未来: LLM 判断意图类别, 检索/生成只消费结果, 不关心实现。
-    """
+_CLASSIFY_SYSTEM = """你是「AI答疑」项目的意图分类器。只判断面试官在问哪类问题，不回答内容。
+
+只能输出一个类别（闭集）：项目介绍 / 操作 / 难点 / 数据关联 / 最危险 / 其他。
+
+判断规则（看问题的语义重点，不是看字面词）：
+- 项目介绍：问项目定位、架构、模块分工、和别的东西的区别
+- 操作：问流程怎么走、步骤、图片题处理、OCR
+- 难点：问防作弊、防套答案、安全护栏、流式性能、卡顿
+- 数据关联：问掌握度、落库、存储、知识图谱联动、知识点点亮
+- 最危险：问没有题库怎么办、模型答错、学生没问这题、防御性问题
+- 其他：以上都不属于（天气、闲聊、无关话题）
+
+只输出类别名，不要解释、不要多余文字。"""
+
+# 失败/非闭集 → 回退关键词查表(1.6B: 意图钩子换 LLM, 接口不变, 降级保底)
+def _fallback_anchor(question: str) -> set:
     locked = set()
     for kws, secs in ANCHOR_RULES:
         if any(k in question for k in kws):
             locked.update(secs)
-    return {"locked_sections": sorted(locked), "strategy": "retrieve"}
+    return locked
+
+
+def classify(question: str) -> dict:
+    """问题 → 锁策略{locked_sections, strategy}。
+
+    1.6B 意图钩子: 优先 LLM 语义判断意图类别(闭集映射锁节), 失败/非闭集 → 回退关键词查表。
+    接口不变(返回结构固定), 检索/生成只消费结果, 不关心实现。
+    """
+    category = _llm_category(question)
+    if category in CATEGORY_SECTIONS:
+        return {"locked_sections": list(CATEGORY_SECTIONS[category]), "strategy": "retrieve"}
+    return {"locked_sections": sorted(_fallback_anchor(question)), "strategy": "retrieve"}
+
+
+def _llm_category(question: str) -> str:
+    """LLM 判意图类别 → 闭集之一; 失败/超时/非闭集 → ""(调用方回退关键词)。
+
+    复用 subject_classify 模式: doubao mini 关思考(秒出, 不卡 RAG 查询) + 20s 超时 + 关重试。
+    """
+    try:
+        llm = LLMFactory.create(
+            "doubao", settings.TUTORING_DECIDE_MODEL, temperature=0.0,
+            extra_body={"thinking": {"type": "disabled"}},
+            request_timeout=20, max_retries=0,
+        )
+        text = llm.invoke([
+            SystemMessage(content=_CLASSIFY_SYSTEM),
+            HumanMessage(content=f"面试官问题：{question}\n\n请判断属于哪个类别（只输出类别名）。"),
+        ]).content or ""
+        for cat in CATEGORY_SECTIONS:
+            if cat in text.strip():
+                return cat
+        return ""
+    except Exception as e:
+        logger.warning("RAG 意图分类 LLM 失败, 回退关键词锚定: %s", e)
+        return ""
 
 
 # ============ 语料加载 + text 反查 ============

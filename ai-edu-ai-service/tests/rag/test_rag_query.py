@@ -53,20 +53,39 @@ def stub_generate(monkeypatch):
 
 
 class TestClassify:
-    """意图钩子: 关键词 → 锁完善文档节"""
+    """意图钩子: LLM 语义判断(闭集映射锁节) + 失败回退关键词"""
 
-    def test_anchor_locks_04_07(self):
-        s = rag_core.classify("怎么防学生套答案？")
-        assert "04" in s["locked_sections"]
+    def _fake_category(self, monkeypatch, cat):
+        monkeypatch.setattr(rag_core, "_llm_category", lambda q: cat)
+
+    def test_llm_category_maps_sections(self, monkeypatch):
+        """LLM 返回闭集类别 → 映射锁节(项目介绍→01/03, 数据关联→05)"""
+        self._fake_category(monkeypatch, "项目介绍")
+        s = rag_core.classify("AI答疑是什么")
+        assert s["locked_sections"] == ["01", "03"]
         assert s["strategy"] == "retrieve"
 
-    def test_data_question_locks_05(self):
-        s = rag_core.classify("掌握度怎么落库")
-        assert "05" in s["locked_sections"]
+        self._fake_category(monkeypatch, "数据关联")
+        assert rag_core.classify("掌握度怎么落库")["locked_sections"] == ["05"]
 
-    def test_no_anchor_empty(self):
-        s = rag_core.classify("讲讲天气")
-        assert s["locked_sections"] == []
+    def test_llm_category_other_empty(self, monkeypatch):
+        """LLM 判'其他' → 不锁任何节(不锚定, 全量加权)"""
+        self._fake_category(monkeypatch, "其他")
+        assert rag_core.classify("讲讲天气")["locked_sections"] == []
+
+    def test_llm_fail_fallback_anchor(self, monkeypatch):
+        """LLM 失败/非闭集 → 回退关键词锚定(不空锁, 保底)"""
+        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "非闭集垃圾")
+        s = rag_core.classify("怎么防学生套答案？")
+        assert "04" in s["locked_sections"]  # 关键词命中 04/07
+
+    def test_fallback_anchor_locks_04_07(self):
+        """关键词锚定直接验证: 防套答案 → 04/07"""
+        locked = rag_core._fallback_anchor("怎么防学生套答案？")
+        assert "04" in locked and "07" in locked
+
+    def test_fallback_anchor_no_anchor_empty(self):
+        assert rag_core._fallback_anchor("讲讲天气") == set()
 
 
 class TestBM25:
@@ -82,7 +101,9 @@ class TestBM25:
 class TestOrchestrate:
     """编排器: RRF × authority × 锚定加权"""
 
-    def test_fusion_rank_authority_boost(self):
+    def test_fusion_rank_authority_boost(self, monkeypatch):
+        # mock LLM 意图分类(避免真实 doubao 调用), 直接锁 04/07(难点)
+        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
         strategy = rag_core.classify("怎么防学生套答案")
         # 向量路: 返回与 BM25 相同的 04 块(模拟两路都命中)
         vec = {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
@@ -120,6 +141,11 @@ class TestOrchestrate:
 
 class TestRagAPI:
     """API 契约(1.6C): POST /api/tutoring/rag/query 返回结构"""
+
+    @pytest.fixture(autouse=True)
+    def mock_intent_llm(self, monkeypatch):
+        """API 全链路 mock 掉 LLM 意图分类(避免真实 doubao), 统一按'难点'锁 04/07"""
+        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
 
     def setup_method(self):
         from api.rag import router as rag_router
