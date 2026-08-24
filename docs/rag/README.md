@@ -17,11 +17,11 @@
 
 | 模块 | 文件 | 定位 |
 |------|------|------|
-| 知识图谱 | `knowledge-graph.md` | Neo4j 图谱 + GraphRAG |
-| AI答疑 | `ai-tutoring.md` | decide/generate/question-understand 链路 |
-| 题型知识点 | `question-type-knowledge.md` | 题型聚集 + 掌握度 |
-| 组织中心 | `org-center.md` | DDD 组织/权限 |
-| RAG问答系统 | `rag-system.md` | 本项目自身（问题最多，重点） |
+| 知识图谱 | `knowledge-graph/knowledge-graph.md` | Neo4j 图谱 + GraphRAG |
+| AI答疑 | `ai-tutoring/ai-tutoring.md` | decide/generate/question-understand 链路 |
+| 题型知识点 | `question-type-knowledge/question-type-knowledge.md` | 题型聚集 + 掌握度 |
+| 组织中心 | `org-center/org-center.md` | DDD 组织/权限 |
+| RAG问答系统 | `rag-system/rag-system.md` | 本项目自身（问题最多，重点） |
 
 ## 系统级开场引导（还没点页面，先讲 3 句）
 
