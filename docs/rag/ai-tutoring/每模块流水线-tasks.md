@@ -123,13 +123,13 @@
 - [x] **向量入桶**：build_index.py 纯 COS——`embed(summary+text)` → 分批 `put_vectors` → `rag-1318177119/rag-index`（独立桶，topic 在 question-bank 不受影响）— 2026-08-24 完成, 234 块入桶验证
 - [x] **索引路由**：`vector_store` 按 vector_type 路由桶（rag → `rag-1318177119`；topic → `question-bank-1318177119`）— 2026-08-24 完成, `_resolve_bucket_index` 返回 (bucket, index)
 - [x] **版本与幂等**：version 走 metadata（`YYYY-MM-DD-<sha1[:6]>`）；`--clear` = `list_vectors` → `delete_vectors` 清空 → 重写；查询按 version 过滤 — 2026-08-24 完成, version=2026-08-24-e966ac
-- [ ] **多路召回**：向量（COS `query_vectors`）+ BM25（本地 jsonl jieba）+ 页面锚定过滤（问题提到哪页锁哪页）；每路独立单元，返回「命中+置信度」
-- [ ] **打分**：RRF 融合 × authority 权威度 × 页面锚定加权（向量/BM25 两路 rank 融合）；编排器统一决策
-- [ ] **text 反查**：命中块 text 按 key 从 jsonl 反查（metadata 不含 text，20KB 限制）
-- [ ] 检索代码按 1.6B 接口纪律分层（意图钩子 / 独立召回单元 / 编排器）——为未来 agent 化(熔断/自适应/意图判断)留缝
+- [x] **多路召回**：向量（COS `query_vectors`）+ BM25（本地 jsonl jieba）+ 页面锚定过滤（问题提到哪页锁哪页）；每路独立单元，返回「命中+置信度」— 2026-08-24 完成, 实测「怎么防套答案」锁04/07, 向量12hits conf0.65
+- [x] **打分**：RRF 融合 × authority 权威度 × 页面锚定加权（向量/BM25 两路 rank 融合）；编排器统一决策 — 2026-08-24 完成, 完善文档1.0排前/锚定×1.5
+- [x] **text 反查**：命中块 text 按 key 从 jsonl 反查（metadata 不含 text，20KB 限制）— 2026-08-24 完成, orchestrate 内联 keymap
+- [x] 检索代码按 1.6B 接口纪律分层（意图钩子 / 独立召回单元 / 编排器）——为未来 agent 化(熔断/自适应/意图判断)留缝 — 2026-08-24 完成, core/rag/query.py: classify/retrieve_vector/retrieve_bm25/orchestrate/generate
 - [x] 语料副本：jsonl 留本地 `scripts/rag/data/rag_slices.jsonl`（BM25/反查运行时读）— 2026-08-24 完成；**不传 COS 普通对象**（向量桶 role mode 拒 put_object, AccessDenied 实测）
-- [ ] **查询 API 端点**：`POST /api/tutoring/rag/query`（契约见 1.6C；后端/前端页面并行开工的前置条件）
-- [ ] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序、API 契约返回结构）
+- [x] **查询 API 端点**：`POST /api/tutoring/rag/query`（契约见 1.6C；后端/前端页面并行开工的前置条件）— 2026-08-24 完成, api/rag.py, 实测200 + 降级语义
+- [x] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序、API 契约返回结构）— 2026-08-24 完成, tests/rag/test_rag_query.py 13 passed
 
 #### 1.6A 向量桶数据结构设计（2026-08-24 定稿）
 
