@@ -23,7 +23,9 @@
 └──────────────────────────────────────────────────────────────┘
 ```
 
-AI 答疑是典型的 ②Workflow。Java 的 TutoringSession 状态机像"总控器"，它决定该调哪个 scene（intent / socratic / eval / kp_extract），每个 scene 就是一次"单发 prompt + 结构化 JSON 输出"。LLM 没有任何自主决策权——它不决定"下一步是问提示还是给答案"，这个决定是 answer_request_count、round_count 这些 Java 计数器做的。
+AI 答疑是典型的 ②Workflow。
+
+> ⚠️ **最新逻辑（2026-08 代码）**：本节"Java 状态机总控器决定调哪个 scene"是**中间态**——后续演进为**受限 agent + 护栏**：Java 不再做流程状态机（仅 3 生命周期 ACTIVE/ARCHIVED/TERMINATED + 护栏计数器），Python 4 个 scene 收敛为 **decide/generate 两端点**（decide 出动作元数据 + Java 动作出口审批）。「LLM 无自主决策权、决策靠 Java 计数器」的结论仍成立，但"Java 决定调哪个 scene"改为"Java 审批 type 闭集"。Java 的 TutoringSession 状态机像"总控器"，它决定该调哪个 scene（intent / socratic / eval / kp_extract），每个 scene 就是一次"单发 prompt + 结构化 JSON 输出"。LLM 没有任何自主决策权——它不决定"下一步是问提示还是给答案"，这个决定是 answer_request_count、round_count 这些 Java 计数器做的。
 
 ```
 Java 状态机（总控，决定流程）               Python scene（执行单步认知，不决定流程）
@@ -40,7 +42,9 @@ Java 状态机（总控，决定流程）               Python scene（执行单
 2. **业务规则必须确定**：20 轮上限、2 次答案出口、掌握度单调不减、图谱点亮——这些是产品规则，agent 不可控。
 3. **成本与可测性**：每次调用边界清晰、单步可测；agent 循环的调用次数和路径不可预测，难测也难控预算。
 
-> 换个视角：你可以把 4 个 scene 理解成 4 个"工具"，Java 状态机是一个带固定策略的控制循环——它像 agent 控制器，但决策策略是写死的代码，不是模型推理。这就是 workflow 和 agent 的本质区别。
+> 换个视角：你可以把 4 个 scene 理解成 4 个
+
+> ⚠️ **最新逻辑（2026-08 代码）**：「4 个 scene = 4 个工具」的落地形态 = **ActionMeta type 闭集 + Java 护栏**——decide 一次输出 type，Java `TutoringGuardrailService` 校验放行（答案/轮次/安全），非 agent 自由调工具。"工具"，Java 状态机是一个带固定策略的控制循环——它像 agent 控制器，但决策策略是写死的代码，不是模型推理。这就是 workflow 和 agent 的本质区别。
 
 ## 什么情况下才值得引入真正的 agent 编排
 
@@ -50,6 +54,8 @@ Java 状态机（总控，决定流程）               Python scene（执行单
 + **跨工具动作**：比如"学生卡住时自动拉取一条相关微课并推送"。
 
 这些目前都不在 MVP 里。而且即便到了阶段 2，仍建议把 agent 的决策面控制在单个 scene 内部，而不是把整个答疑循环交给 agent——确定性边界保住，灵活性在边界内放开。
+
+> ✅ **最新逻辑（2026-08 代码）**：方向一致——MVP = **L0 单次调用**（decide/generate），阶段2 升级 L1/L2 LangGraph 多步 agent 时，ActionMeta 契约已预留、工具 API 形状早定，迁移成本低（`design-python-ai-tutoring` 决策12）。
 
 **一个伏笔**：现有 llm-gateway 的 AiEduChatRequest / 响应里已经有 tool_calls 字段——说明网关层支持工具调用，将来真要上 agent 模式，管道是现成的，不用改网关。
 
