@@ -129,7 +129,7 @@
 - [x] 检索代码按 1.6B 接口纪律分层（意图钩子 / 独立召回单元 / 编排器）——为未来 agent 化(熔断/自适应/意图判断)留缝 — 2026-08-24 完成, core/rag/query.py: classify/retrieve_vector/retrieve_bm25/orchestrate/generate
 - [x] 语料副本：jsonl 留本地 `scripts/rag/data/rag_slices.jsonl`（BM25/反查运行时读）— 2026-08-24 完成；**不传 COS 普通对象**（向量桶 role mode 拒 put_object, AccessDenied 实测）
 - [x] **查询 API 端点**：`POST /api/tutoring/rag/query`（契约见 1.6C；后端/前端页面并行开工的前置条件）— 2026-08-24 完成, api/rag.py, 实测200 + 降级语义
-- [x] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序、API 契约返回结构）— 2026-08-24 完成, tests/rag/test_rag_query.py 13 passed
+- [x] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序、API 契约返回结构）— 2026-08-24 完成, tests/rag/test_rag_query.py 15 passed（1.7 加 LLM 意图映射/降级回退测试）
 
 #### 1.6A 向量桶数据结构设计（2026-08-24 定稿）
 
@@ -188,7 +188,7 @@ metadata = {
 
 > 当前是技术验证阶段（不做熔断/重试/监控），但检索代码必须**长得出来** agent 化。
 > 生产级 RAG agent = 意图判断(先分类再答) + 异常熔断降级(每路能挂整体不挂) + 可观测/评测。
-> 现有 `ANCHOR_RULES`(问题关键词→锁节) 已是最朴素意图分类器——未来换 LLM 判断, 接口不变。
+> 意图钩子已落地：**LLM 语义判断(闭集6类→锁节) + ANCHOR_RULES 关键词降级保底**(1.7 完成)。
 > 接口纪律 = **分层是免费的, 拆函数是贵的**。写成单元, 未来熔断就是包一层; 写成大函数, 未来要拆。
 
 **检索编排架构**（rag_query.py 按此分层, 禁止一路到底）：
