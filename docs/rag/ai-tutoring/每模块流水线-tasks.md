@@ -68,13 +68,13 @@
 
 ### 1.5 切片（认真设计，非"按标题切一刀"）
 - [x] **切片清单**（2026-08-24）：`切片清单.md` 定稿——**四层全进 + 权威度分层**（完善文档1.0 / 语雀+OpenSpec 0.7 / 代码分析+坑档案 0.8）；OpenSpec 22 文件精选（**design 11 全进，proposal 11 全不进**——design 的 Context 已 100% 覆盖 proposal 的 Why，proposal 无增量信息）；坑档案实际路径 `5.难点/坑档案.md`
-- [ ] **切片方案（六个文件夹逐个设计，见下）**
-- [ ] 确定切片对象：**完善文档 8 节 + 三类语料中"策展白名单"（保留进索引的）**——过时/规划内容只留"演进故事"表达，不进正文切片
-- [ ] 切分规则：按 markdown 标题层级切，**保留 `页面(模块) + 章节` 两层锚点**；代码块/表格作为整体不切开；每块长度设上下限（防过短碎片/过长语义混杂）
-- [ ] **代码业务分析不进正文切片**——完善文档内的介绍是正文（"为什么/怎么设计/落地真相"口径），代码只作 `文件:行号` 证据引用，供"顺着代码追问"时指路
-- [ ] 每块打标签：`模块=ai-tutoring`、`节=1~8`、`来源=语雀/方案/代码`、`权威度(section)`——供页面锚定过滤 + 打分加权
-- [ ] 切片测试（块数量/长度分布/锚点完整/无重复无遗漏）
-- [ ] **切片数据 md 落盘**（2026-08-24 新增）：切好的块按 **md 格式**输出到 `docs/rag/ai-tutoring/切片数据/`——每块一个 md 文件（按来源/文件夹组织：完善文档/语雀/OpenSpec/代码/坑档案），文件头带 `summary` + 标签（权威度/来源/锚点），正文随块；供**人可读审查切片质量** + 向量入库前校验
+- [x] **切片方案（六个文件夹逐个设计，见下）**（1.5A 表定稿：语雀按`##`/OpenSpec按决策/代码按`##`/完善文档整块/坑档案按坑/缺失补充回填后不进）
+- [x] 确定切片对象：**完善文档 8 节 + 三类语料中"策展白名单"（保留进索引的）**——过时/规划内容只留"演进故事"表达，不进正文切片
+- [x] 切分规则：按 markdown 标题层级切，**保留 `页面(模块) + 章节` 两层锚点**；代码块/表格作为整体不切开；每块长度设上下限（防过短碎片/过长语义混杂）——**超长块按段落拆块不截断**（完善文档整文件块 12000 上限，标题切块超 6000 段落拆块）
+- [x] **代码业务分析不进正文切片**——完善文档内的介绍是正文（"为什么/怎么设计/落地真相"口径），代码只作 `文件:行号` 证据引用，供"顺着代码追问"时指路
+- [x] 每块打标签：`模块=ai-tutoring`、`节=1~8`、`来源=语雀/方案/代码`、`权威度(section)`——供页面锚定过滤 + 打分加权
+- [x] 切片测试（块数量/长度分布/锚点完整/无重复无遗漏）——**234 块、无重复文本、summary 全齐、无截断、md 与 jsonl 对齐校验通过**
+- [x] **切片数据 md 落盘**（2026-08-24 新增）：切好的块按 **md 格式**输出到 `docs/rag/ai-tutoring/切片数据/`——每块一个 md 文件（按来源/文件夹组织：完善文档/语雀/OpenSpec/代码/坑档案），文件头带 `summary` + 标签（权威度/来源/锚点），正文随块；供**人可读审查切片质量** + 向量入库前校验——**已落盘 234 块 + README**
 
 #### 1.5A 六个文件夹切片方案（2026-08-24 初稿，待审）
 
@@ -117,13 +117,68 @@
 
 **锚定过滤规则**：问题命中"项目介绍"→ 锁 01/03；"操作"→ 锁 02/06；"难点"→ 锁 04/07；"数据关联"→ 锁 05；"最危险问题"→ 锁 08。
 
-### 1.6 索引（多路召回 + 打分，非单一向量）
-- [ ] 嵌入：dashscope 768d / bge 本地（可切换，同一接口）
-- [ ] 索引抽象层：生产 COS 向量桶 / demo 本地 FAISS，**同一接口**（面试现场不依赖网络）
-- [ ] **多路召回**：向量 + BM25 + 页面锚定过滤（问题提到哪页锁哪页）
-- [ ] **打分**：相似度 × section 权威度 × 页面锚定加权
-- [ ] 语料版本标识（变更回退 → 待重索引）
-- [ ] 索引测试（召回命中、锚定过滤正确、打分排序合理）
+### 1.6 索引（向量入 COS 桶 + 多路召回 + 打分）
+> 2026-08-24 重设计：**纯 COS**（本地 npz 不再用于查询）；独立向量桶 `rag-1318177119`；结构见 1.6A。
+- [ ] **嵌入**：dashscope `text-embedding-v3` 768d（`vector_store.embed`，维度校验；embed 接口抽象保留，实际只 dashscope）
+- [ ] **向量入桶**：build_index.py 纯 COS——`embed(summary+text)` → 分批 `put_vectors` → `rag-1318177119/rag-index`（独立桶，topic 在 question-bank 不受影响）
+- [ ] **索引路由**：`vector_store` 按 vector_type 路由桶（rag → `rag-1318177119`；topic → `question-bank-1318177119`）
+- [ ] **版本与幂等**：version 走 metadata（`YYYY-MM-DD-<sha1[:6]>`）；`--clear` = `list_vectors` → `delete_vectors` 清空 → 重写；查询按 version 过滤
+- [ ] **多路召回**：向量（COS `query_vectors`）+ BM25（本地 jsonl jieba）+ 页面锚定过滤（问题提到哪页锁哪页）
+- [ ] **打分**：RRF 融合 × authority 权威度 × 页面锚定加权（向量/BM25 两路 rank 融合）
+- [ ] **text 反查**：命中块 text 按 key 从 jsonl 反查（metadata 不含 text，20KB 限制）
+- [ ] 语料副本：jsonl 上传 COS 普通对象 `rag/{version}/rag_slices.jsonl`（BM25/反查运行时拉取）
+- [ ] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序）
+
+#### 1.6A 向量桶数据结构设计（2026-08-24 定稿）
+
+**物理结构**（COS 向量桶 + 普通对象存储双用）：
+
+| 项 | 值 |
+|---|---|
+| RAG 向量桶 | `rag-1318177119`（独立；topic 在 `question-bank-1318177119`，互不影响） |
+| 物理索引 | `rag-index`（float32 / 768 维 / cosine，控制台建，同 topic-index 先例） |
+| 逻辑→物理路由 | `vector_type="rag"` → `(rag-1318177119, rag-index)`；`"topic"` → `(question-bank-1318177119, topic-index)` |
+| 配置 | `COS_VECTORS_RAG_BUCKET`（新）+ `COS_VECTORS_INDEXES={"topic": "topic-index", "rag": "rag-index"}` |
+
+**一条块记录（写入单元）**：
+
+```
+key      = ai-tutoring/{file}/{anchor}#{chunk_idx}      # 文件+锚点+组内块序号, 不带版本
+data     = {"float32": [768 维向量]}                     # embed(summary + "\n" + text)
+metadata = {
+  version:   "2026-08-24-a1b2c3"    # 语料 sha1[:6] 派生, 语料变 → 版本变 → 可回退
+  doc_type:  "ai-tutoring"          # 多模块预留(知识图谱/组织中心将来同写 rag-index 区分)
+  source:    "完善文档|语雀|OpenSpec|代码|坑档案"
+  authority: 1.0                    # 权威度(打分用: 相似度 × 权威 × 锚定)
+  section:   "05"                   # 完善文档节号(锚定过滤锁页用)
+  file:      "05-数据落库与掌握度"
+  anchor:    "05-数据落库与掌握度"    # 页面锚点
+  summary:   "..."                  # 一句话"解决什么问题"(检索引导)
+}
+# text 全文【不进 metadata】——COS 向量索引 metadata ~20KB/条限制, 块最大~6000字超限
+# text 留在 rag_slices.jsonl, 检索命中后按 key 反查
+```
+
+**版本与幂等**（对齐 project-intro-rag）：
+- 索引名固定 `rag-index`（**版本不走索引名**，走 metadata.version）
+- 重建：`--clear` = `list_vectors` 枚举全部 key → `delete_vectors` 清空 → 重写（幂等，同 key upsert）
+- 查询：按 `metadata.version` 过滤（多数版本），旧残留不污染新版本
+
+**语料副本**（BM25/反查用，非向量）：
+- COS 普通对象：`rag/{version}/rag_slices.jsonl`（build 时随索引一起上传）
+- 运行时缺本地 jsonl → 从 COS 拉取缓存
+
+**查询数据流**：
+
+```
+问题
+ → 向量路: query_vectors(rag-1318177119/rag-index, TopK) → {key, metadata, distance}
+ → BM25路: 本地 jsonl 全文(jieba 分词)
+ → 融合: RRF × authority × 锚定加权 → top-K
+ → text 按 key 反查 jsonl → doubao 生成(面试口述 + 引用)
+```
+
+**对齐**：`openspec/changes/project-intro-rag/`（rag-index / `--clear` 幂等 / doc_type / 版本走 metadata 约定）；topic-index 同桶先例（spike 实测 768 cosine、put 后 ~10s 异步生效、cosine distance 越小越相似）。
 
 ### 1.7 完整性检查
 - [ ] 每块可溯源（引到语雀/方案/代码文件+行号）；8 节覆盖问题表全部提问
