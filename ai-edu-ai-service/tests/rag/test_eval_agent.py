@@ -147,7 +147,7 @@ class TestRunEvalCase:
         # 生成 mock 掉(doubao 不碰); 判分 mock 掉
         monkeypatch.setattr(rag_core, "generate", lambda hits, q: "mock 答案")
         monkeypatch.setattr(eval_agent, "judge_quality",
-                            lambda q, a, pts: {"score": 4, "rationale": "ok", "judged": True})
+                            lambda q, a, pts, corpus_texts=None: {"score": 4, "rationale": "ok", "judged": True})
 
     def test_case_output_complete(self, mock_core):
         trace = eval_agent.run_eval_case(CASE)

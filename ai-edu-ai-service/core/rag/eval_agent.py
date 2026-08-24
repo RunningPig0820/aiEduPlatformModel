@@ -62,18 +62,27 @@ def _ref_section(ref: str) -> str:
 
 _JUDGE_SYSTEM = """你是 RAG 检索质量评审。给定"面试问题 + 检索到的语料块 + 生成答案 + 预期要点"，给答案质量打分。
 
-评分维度(0~5 整数):
-- 准确性: 答案与语料一致, 不编造
-- 引用正确性: 引用的块确实支撑了对应说法
-- 覆盖要点: 覆盖了预期要点中的大多数
+评分规则(0~5 整数, 按以下锚定):
+- 5: 答案覆盖全部预期要点(允许同义表述), 且全部基于语料, 无编造
+- 4: 覆盖大部分要点, 无编造
+- 3: 覆盖部分要点, 或有一处编造
+- 2: 覆盖少部分要点, 或有明显编造
+- 1: 基本未覆盖要点
+- 0: 答案严重偏离语料 / 编造主导 / 空答案
 
-严格输出 JSON: {"score": 0~5 整数, "rationale": "一句话理由"}。不要任何其他文字。"""
+判定要点:
+- 预期要点**以同义表述覆盖即算覆盖**——不要求字面出现。例如要点"ScoreMapper 累计"被"题型掌握度累计/按题型聚合"表述覆盖即计覆盖
+- 判断"编造"时以**检索到的语料块**为准: 答案的表述只要在语料块中有支撑, 就不算编造; 只有语料块完全没提到才算编造
+- 答案引用了语料块、且表述有支撑 → 引用正确
+
+严格输出 JSON: {"score": 0~5 整数, "rationale": "一句话理由(要点覆盖+是否有编造)"}。不要任何其他文字。"""
 
 
 def judge_quality(question: str, answer: str, expected_points: List[str],
-                  llm=None) -> dict:
+                  corpus_texts: Optional[List[str]] = None, llm=None) -> dict:
     """LLM 判分 → {score, rationale}; 解析失败重试1次, 仍失败记 0 并标记。
 
+    corpus_texts: 检索到的语料块文本(供"编造"判定——答案表述在语料有支撑即非编造)。
     llm 可注入(测试 mock); 默认 doubao(与生成同模型, 能力一致)。
     """
     llm = llm or _make_judge_llm()
@@ -81,6 +90,9 @@ def judge_quality(question: str, answer: str, expected_points: List[str],
         f"面试问题：{question}\n\n生成答案：\n{answer}\n\n"
         f"预期要点：\n" + "\n".join(f"- {p}" for p in expected_points) + "\n"
     )
+    if corpus_texts:
+        prompt += ("\n检索到的语料块(判断'编造'的依据, 答案表述在其中有支撑即不算编造)：\n"
+                   + "\n---\n".join(t[:600] for t in corpus_texts[:4]) + "\n")
     for attempt in range(2):
         try:
             text = llm.invoke([
@@ -145,12 +157,13 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     # hit@k
     hit = hit_at_k(recall, case["expected_references"], k=HIT_K)
 
-    # 生成 + 判分
+    # 生成 + 判分(判分带语料块, 供"编造"判定——答案在语料有支撑即非编造)
     answer = ""
     score, rationale, judged = 0, "", False
     if hits:
         answer = rag_core.generate(hits, question)
-        judge = judge_quality(question, answer, case["expected_points"])
+        judge = judge_quality(question, answer, case["expected_points"],
+                              corpus_texts=[h["text"] for h in hits])
         score, rationale, judged = judge["score"], judge["rationale"], judge["judged"]
     t_done = time.time()
 
