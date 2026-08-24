@@ -139,6 +139,19 @@ app.include_router(vector_router)
 app.include_router(rag_router)
 app.include_router(rag_eval_router)
 
+# RAG 语料源文件静态服务: 前端按 file_path 访问源文件内容
+# 前端拼 {/api/rag/source}/{file_path} 即可(如 /api/rag/source/4.完善文档/04-安全与防作弊.md)
+# 缺失时降级: 目录不存在则跳过挂载(不崩启动), 前端点源文件 404
+from fastapi.staticfiles import StaticFiles
+from config.settings import settings
+
+_rag_corpus = os.path.join(_PROJECT_ROOT, settings.RAG_CORPUS_DIR)
+if os.path.isdir(_rag_corpus):
+    app.mount("/api/rag/source", StaticFiles(directory=_rag_corpus), name="rag_source")
+else:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("RAG 语料目录不存在, 跳过源文件服务: %s", _rag_corpus)
+
 # 后续注册其他路由
 # from api import ocr, rag
 # app.include_router(ocr.router, prefix="/api/ocr", tags=["OCR"])

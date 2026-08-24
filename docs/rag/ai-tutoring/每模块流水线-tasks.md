@@ -243,6 +243,7 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 ```
 
 - `references[].file_path` = 前端"点开源文件展示内容"（相对语料根 docs/rag/ai-tutoring/）
+  → **访问方式（2026-08-24 落地）**：`GET /api/rag/source/{file_path}`（静态服务，main.py mount，语料目录缺失自动跳过不崩启动）
 - `intent.locked_sections` = 意图钩子锁定的节（1.6B），前端可展示"命中了哪些页"
 - `version` = 命中的语料版本，前端可标注数据时效
 

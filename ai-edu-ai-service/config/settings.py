@@ -100,6 +100,10 @@ class Settings(BaseSettings):
         "rag": "rag-index",                     # RAG 问答语料(AI答疑/知识图谱/组织中心, 多模块同索引按 doc_type 区分)
     }
 
+    # RAG 语料根目录(前端按 file_path 访问源文件; 相对项目根)
+    # 前端拼 {/api/rag/source}/{file_path} 即可拿到源文件内容
+    RAG_CORPUS_DIR: str = "docs/rag/ai-tutoring"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
