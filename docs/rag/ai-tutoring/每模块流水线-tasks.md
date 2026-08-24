@@ -33,6 +33,15 @@
       主要过时点已标：MongoDB→三层存储 ｜ 三级意图→学科门+两分法 ｜ 知识点确认→低置信澄清卡 ｜ 题库/行为风控/画像→🚫规划 ｜ 换题≠开新会话 ｜ 判定权回 Java ｜ Python=L0 两端点非 LangGraph
 - [ ] 1.3c **对齐 `2.OpenSpec` 30 文件**：逐份（design+proposal）对照代码，标注 `一致 / 有改动点`。
       已知改动点：`design-backend-ai-tutoring` 决策8/9 掌握度已翻转（知识点→题型）｜OCR"反转"实为双通道 ｜"学生确认知识点"实为低置信澄清卡
+> 1. 分析文档价值 
+   我们先梳理客户想要问什么 /Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag/README.md
+
+  我们在看 /Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag/ai-tutoring/2.OpenSpec design
+  决策 并不是所有的设计都是重要的
+
+  可以看一下 这些设计的重要程度 
+  2.  删除不重要的设计
+
 - [ ] 1.3d **对齐 `3.代码` 摘录**：代码即真相，与 OpenSpec 方案逐项核对，产出差异明细（含代码位置）
 
 
