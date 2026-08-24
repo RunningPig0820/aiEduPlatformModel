@@ -56,7 +56,10 @@ htmlcov/
 Thumbs.db
 
 # Data files (large files)
-data/
+data/*
+# 例外: 评测集是固定配置(非运行时产物), 需入库
+!data/eval/
+!data/eval/**
 *.ttl
 *.owl
 *.json.gz

@@ -304,9 +304,9 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 **对齐**：模块清单/状态机见 rag-eval-agent D1；AI答疑 是 `organized → chunked → indexed` 已完成、评测进行中。
 
-- [ ] 2.1 编写评测集（来源 = `ai-tutoring.md` 面试问题表，从「项目介绍 / 操作 / 数据关联 / 难点 / 最危险问题」各抽 1 条）
-- [ ] 2.2 每条含 expected_references / expected_points（指向完善文档对应节）
-- [ ] 2.3 评测集加载器（格式校验）
+- [x] 2.1 编写评测集（来源 = `ai-tutoring.md` 面试问题表，从「项目介绍 / 操作 / 数据关联 / 难点 / 最危险问题」各抽 1 条）— 2026-08-24 完成, `scripts/rag/data/eval/ai-tutoring.jsonl` 5 条
+- [x] 2.2 每条含 expected_references / expected_points（指向完善文档对应节）— 2026-08-24 完成, refs 指向 01/03/02/05/04/07/08, points 取自各节核心
+- [x] 2.3 评测集加载器（格式校验）— 2026-08-24 完成, `scripts/rag/eval_dataset.py`(校验失败 ValueError, 条数下限), tests 11 passed
 
 ## 3. 评测 agent 核心（rag-eval-agent 工具底座，AI答疑 评测依赖）
 
