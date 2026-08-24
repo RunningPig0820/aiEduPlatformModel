@@ -1,0 +1,55 @@
+# 掌握度信号题型化 技术设计
+
+## Context
+
+- **现状**：`decide` 每轮输出 `mastery_signals`（`MasterySignalItem.kp_label` + `signal`），label 语义为「知识点」，接地到 `mastery_snapshot`（旧 `t_student_kp_mastery` 的知识点 label 候选）。后端 `kp-matching-lightup` 已决定把掌握度主体从知识点翻转为题型，`mastery_signals` 需配合输出题型。
+- **链路**：`decide → mastery_signals[].kp_label → Java resolve → 掌握度落库 → 图谱点亮`。当前若继续输出知识点名，后端会把它当题型落进题型掌握度表 → 题型库混入知识点名 → 整条链路脏。
+- **关键约束**：后端 Java 已用 `@JsonAlias("topic_label")` 兼容旧字段名；前端读的是 Java 透传的 `kpLabel`（camelCase），与 Python 字段名无关 → 改名无跨仓库穿透风险。
+
+## Goals / Non-Goals
+
+**Goals:**
+- `mastery_signals` 稳定输出**题型** label，不输出知识点。
+- 字段名 `kp_label` → `topic_label`（语义清晰，Java 已兼容）。
+- 题型名稳定规范（同一题型一致命名）。
+- `mastery_snapshot` 脱钩（题型无法从知识点快照接地）。
+
+**Non-Goals:**
+- 不改 `type` 判定、`eval`、`safety_flag`、降级管线骨架、`generate`。
+- 不改 `signal` 枚举（mastered/practicing/struggling）。
+- 不改 `question_kps`（继续输出知识点）。
+- 不做 student_grade（后端组织系统自查）、LLM 消歧、离线聚合（后端调 llm-gateway）。
+- 不做同义词聚类（后端只做字面归一化）。
+
+## Decisions
+
+### 1. 掌握度信号语义翻转（题型为主体，必改）
+
+`mastery_signals[].topic_label` 输出**题型**（「鸡兔同笼」「相遇问题」「牛吃草」），**不输出**知识点（「二元一次方程组」「假设法」）。
+
+理由：学生掌握的是题型，不是知识点。知识点掌握度由后端「题型掌握度 × 题型→知识点映射」派生。若 Python 仍输出知识点名，会污染后端题型库 → 掌握度/派生覆盖度/图谱点亮全脏。
+
+### 2. 字段改名 kp_label → topic_label（加分项）
+
+`MasterySignalItem.kp_label` → `topic_label`，description 语义改「题型」。Java 已 `@JsonAlias("topic_label")` 兼容旧名，改名无穿透风险。
+
+**关键防回归**：`structured.py` 的 `_schema_instructions` 纠错提示词硬编码了 `"kp_label"`，必须同步改为 `"topic_label"`。否则 function calling schema（绑定 Pydantic 模型，自动变 topic_label）与纠错提示词字段名脱节 → 模型输出旧名 → Pydantic 校验 `topic_label` 缺失 → 反复纠错失败 → 掉进兜底 fallback → mastery_signals 静默丢失。
+
+### 3. mastery_snapshot 脱钩
+
+`mastery_signals` 不再「优先复用快照候选」。理由：题型与知识点快照不同源，快照（旧 `t_student_kp_mastery` 知识点 label）无法为题型提供候选。`mastery_snapshot` 保留在 `DecideRequest` 里（Java 契约不动、字段默认空），prompt 中降级为背景参考或不提；`question_kps` 仍可参考快照（继续知识点）。
+
+### 4. 题型名稳定规范
+
+prompt 加约束：同一题型用**最常见、最短、规范的题型名**，不随意换说法；用 few-shot 锚定常见题型（鸡兔同笼/相遇问题/牛吃草）。理由：Java 只做字面归一化（全角半角/空白/去末尾语气词），不做同义词聚类，「鸡兔同笼」vs「鸡兔同笼问题」会被当两个题型 → 稳定性负担在 prompt 端。
+
+### 5. question_kps 与 signal 不变
+
+`question_kps` 继续输出知识点（读题列知识点，前端知识点分析数据源）；`signal` 枚举不变（mastered/practicing/struggling，Java 映射 75/50/25）。
+
+## Risks / Trade-offs
+
+- [题型名稳定仅靠 prompt 约束] → LLM 天生爱换说法，纯一句「别换说法」不够。缓解：few-shot 锚定 + 「最常见最短命名」约束 + 后端字面归一化兜底（不完美，但本期不做同义词聚类）。
+- [改名漏改纠错提示词 → 掌握度静默丢失] → `_schema_instructions` 与模型字段名脱节。缓解：tasks 3.1 显式列出，测试断言纠错提示词含 topic_label。
+- [mastery_snapshot 脱钩后题型名无候选接地] → 题型名由模型自由生成，冷启动无约束。缓解：few-shot + 规范约束；后续题型库聚合后可由后端回填先验（不在本期）。
+- [历史数据口径变化] → 旧数据知识点粒度、新数据题型粒度。缓解：后端并行过渡（旧表保留），Python 无需处理。
