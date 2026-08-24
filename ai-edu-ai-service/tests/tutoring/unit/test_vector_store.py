@@ -8,7 +8,8 @@
 - 失败冒泡: embedding 失败 → 抛异常 / COS 失败 → 抛异常(端点层转 500)
 
 5.2 覆盖:
-- _resolve_index 路由: topic → topic-index;question/rag 占位不参与路由 → ValueError
+- _resolve_bucket_index 路由: topic → (默认桶, topic-index); rag → (RAG 桶, rag-index);
+  question 占位不参与路由 → ValueError; rag 桶未配置 → RuntimeError
 
 Mock 边界 = embed + CosVectorsClient(_get_cos_client), 不碰真实 COS/dashscope。
 """
@@ -54,27 +55,36 @@ def fake(monkeypatch):
 
 
 class TestResolveIndex:
-    """5.2 索引路由: vector_type → 物理索引映射;占位不参与路由"""
+    """5.2 索引路由: vector_type → (bucket, index) 映射;桶隔离 topic/rag;占位不参与路由"""
 
     def test_topic_maps_to_topic_index(self):
-        from core.tutoring.vector_store import _resolve_index
-        assert _resolve_index("topic") == "topic-index"
+        from core.tutoring.vector_store import _resolve_bucket_index
+        bucket, index = _resolve_bucket_index("topic")
+        assert index == "topic-index"
+        assert bucket == settings.COS_VECTORS_BUCKET  # topic 走默认桶(question-bank)
+
+    def test_rag_maps_to_rag_bucket(self):
+        from core.tutoring.vector_store import _resolve_bucket_index
+        bucket, index = _resolve_bucket_index("rag")
+        assert index == "rag-index"
+        assert bucket == settings.COS_VECTORS_RAG_BUCKET  # rag 走独立 RAG 桶(rag-1318177119)
+
+    def test_rag_bucket_unconfigured_raises(self, monkeypatch):
+        from core.tutoring.vector_store import _resolve_bucket_index
+        monkeypatch.setattr(settings, "COS_VECTORS_RAG_BUCKET", "")
+        with pytest.raises(RuntimeError, match="RAG"):
+            _resolve_bucket_index("rag")
 
     def test_question_placeholder_rejected(self):
-        from core.tutoring.vector_store import _resolve_index
+        from core.tutoring.vector_store import _resolve_bucket_index
         with pytest.raises(ValueError):
-            _resolve_index("question")
-
-    def test_rag_placeholder_rejected(self):
-        from core.tutoring.vector_store import _resolve_index
-        with pytest.raises(ValueError):
-            _resolve_index("rag")
+            _resolve_bucket_index("question")
 
     def test_unknown_and_empty_rejected(self):
-        from core.tutoring.vector_store import _resolve_index
+        from core.tutoring.vector_store import _resolve_bucket_index
         for bad in ["nope", "Topic", ""]:
             with pytest.raises(ValueError):
-                _resolve_index(bad)
+                _resolve_bucket_index(bad)
 
 
 class TestPutVector:
@@ -94,6 +104,18 @@ class TestPutVector:
         assert vec["key"] == "q_5001"
         assert len(vec["data"]["float32"]) == 768  # 维度对齐
         assert vec["metadata"] == {"topic_label": "鸡兔同笼"}  # metadata 透传
+
+    def test_put_rag_routes_to_rag_bucket(self, fake):
+        from core.tutoring.vector_store import put_vector
+
+        put_vector(key="ai-tutoring/01/01-模块定位#0", text="AI答疑是什么", vector_type="rag",
+                   metadata={"doc_type": "ai-tutoring"})
+
+        assert len(fake.put_calls) == 1
+        call = fake.put_calls[0]
+        assert call["Bucket"] == settings.COS_VECTORS_RAG_BUCKET  # rag 走独立 RAG 桶
+        assert call["Index"] == "rag-index"
+        assert call["Vectors"][0]["key"].startswith("ai-tutoring/")
 
     def test_put_same_key_upsert(self, fake):
         from core.tutoring.vector_store import put_vector

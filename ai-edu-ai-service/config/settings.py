@@ -88,14 +88,16 @@ class Settings(BaseSettings):
     COS_VECTORS_SECRET_ID: str = ""
     COS_VECTORS_SECRET_KEY: str = ""
     COS_VECTORS_REGION: str = "ap-guangzhou"
-    COS_VECTORS_BUCKET: str = ""                # "xxx-125xxxxxxx"
+    COS_VECTORS_BUCKET: str = ""                # "xxx-125xxxxxxx" 题型聚集(topic)
+    COS_VECTORS_RAG_BUCKET: str = ""            # RAG 独立向量桶 "rag-1318177119"(topic 不混)
 
     # 逻辑类型 → 物理索引 路由表(多索引)。vector_type 必填, 每次 put/query 由 Java 显式传入。
-    # 本期唯一合法值 "topic"(题型名向量); question/rag 为配置占位, 后续加索引 Python 零代码改动。
+    # topic(题型名向量) 走 COS_VECTORS_BUCKET; rag(AI答疑 RAG) 走 COS_VECTORS_RAG_BUCKET 独立桶。
+    # 桶按 vector_type 路由(vector_store._resolve_bucket_index), 新增桶仅需加配置。
     COS_VECTORS_INDEXES: dict = {
         "topic": "topic-index",
         # "question": "question-index",         # 相似题, 预留不建
-        # "rag": "rag-index",                   # RAG, 预留不建
+        "rag": "rag-index",                     # RAG 问答语料(AI答疑/知识图谱/组织中心, 多模块同索引按 doc_type 区分)
     }
 
     class Config:

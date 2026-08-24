@@ -119,15 +119,17 @@
 
 ### 1.6 索引（向量入 COS 桶 + 多路召回 + 打分）
 > 2026-08-24 重设计：**纯 COS**（本地 npz 不再用于查询）；独立向量桶 `rag-1318177119`；结构见 1.6A。
-- [ ] **嵌入**：dashscope `text-embedding-v3` 768d（`vector_store.embed`，维度校验；embed 接口抽象保留，实际只 dashscope）
-- [ ] **向量入桶**：build_index.py 纯 COS——`embed(summary+text)` → 分批 `put_vectors` → `rag-1318177119/rag-index`（独立桶，topic 在 question-bank 不受影响）
-- [ ] **索引路由**：`vector_store` 按 vector_type 路由桶（rag → `rag-1318177119`；topic → `question-bank-1318177119`）
-- [ ] **版本与幂等**：version 走 metadata（`YYYY-MM-DD-<sha1[:6]>`）；`--clear` = `list_vectors` → `delete_vectors` 清空 → 重写；查询按 version 过滤
-- [ ] **多路召回**：向量（COS `query_vectors`）+ BM25（本地 jsonl jieba）+ 页面锚定过滤（问题提到哪页锁哪页）
-- [ ] **打分**：RRF 融合 × authority 权威度 × 页面锚定加权（向量/BM25 两路 rank 融合）
+- [x] **嵌入**：dashscope `text-embedding-v3` 768d（`vector_store.embed`，维度校验；embed 接口抽象保留，实际只 dashscope）— 2026-08-24 完成
+- [x] **向量入桶**：build_index.py 纯 COS——`embed(summary+text)` → 分批 `put_vectors` → `rag-1318177119/rag-index`（独立桶，topic 在 question-bank 不受影响）— 2026-08-24 完成, 234 块入桶验证
+- [x] **索引路由**：`vector_store` 按 vector_type 路由桶（rag → `rag-1318177119`；topic → `question-bank-1318177119`）— 2026-08-24 完成, `_resolve_bucket_index` 返回 (bucket, index)
+- [x] **版本与幂等**：version 走 metadata（`YYYY-MM-DD-<sha1[:6]>`）；`--clear` = `list_vectors` → `delete_vectors` 清空 → 重写；查询按 version 过滤 — 2026-08-24 完成, version=2026-08-24-e966ac
+- [ ] **多路召回**：向量（COS `query_vectors`）+ BM25（本地 jsonl jieba）+ 页面锚定过滤（问题提到哪页锁哪页）；每路独立单元，返回「命中+置信度」
+- [ ] **打分**：RRF 融合 × authority 权威度 × 页面锚定加权（向量/BM25 两路 rank 融合）；编排器统一决策
 - [ ] **text 反查**：命中块 text 按 key 从 jsonl 反查（metadata 不含 text，20KB 限制）
-- [ ] 语料副本：jsonl 上传 COS 普通对象 `rag/{version}/rag_slices.jsonl`（BM25/反查运行时拉取）
-- [ ] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序）
+- [ ] 检索代码按 1.6B 接口纪律分层（意图钩子 / 独立召回单元 / 编排器）——为未来 agent 化(熔断/自适应/意图判断)留缝
+- [x] 语料副本：jsonl 留本地 `scripts/rag/data/rag_slices.jsonl`（BM25/反查运行时读）— 2026-08-24 完成；**不传 COS 普通对象**（向量桶 role mode 拒 put_object, AccessDenied 实测）
+- [ ] **查询 API 端点**：`POST /api/tutoring/rag/query`（契约见 1.6C；后端/前端页面并行开工的前置条件）
+- [ ] 索引测试（桶路由正确、幂等重建、召回命中、锚定过滤、打分排序、API 契约返回结构）
 
 #### 1.6A 向量桶数据结构设计（2026-08-24 定稿）
 
@@ -151,12 +153,14 @@ metadata = {
   source:    "完善文档|语雀|OpenSpec|代码|坑档案"
   authority: 1.0                    # 权威度(打分用: 相似度 × 权威 × 锚定)
   section:   "05"                   # 完善文档节号(锚定过滤锁页用)
-  file:      "05-数据落库与掌握度"
+  file:      "05-数据落库与掌握度"            # 文件名(引用展示/key 用, 不带路径)
+  file_path: "4.完善文档/05-数据落库与掌握度.md"  # 相对语料根 docs/rag/ai-tutoring/(前端定位源文件展示内容)
   anchor:    "05-数据落库与掌握度"    # 页面锚点
   summary:   "..."                  # 一句话"解决什么问题"(检索引导)
 }
 # text 全文【不进 metadata】——COS 向量索引 metadata ~20KB/条限制, 块最大~6000字超限
 # text 留在 rag_slices.jsonl, 检索命中后按 key 反查
+# file_path 相对基准 = docs/rag/ai-tutoring/; 切片时由源文件实际路径产生(1.5 已保留目录结构)
 ```
 
 **版本与幂等**（对齐 project-intro-rag）：
@@ -165,8 +169,8 @@ metadata = {
 - 查询：按 `metadata.version` 过滤（多数版本），旧残留不污染新版本
 
 **语料副本**（BM25/反查用，非向量）：
-- COS 普通对象：`rag/{version}/rag_slices.jsonl`（build 时随索引一起上传）
-- 运行时缺本地 jsonl → 从 COS 拉取缓存
+- 本地文件：`scripts/rag/data/rag_slices.jsonl`（build 输入即副本，version 由 build 打印对应）
+- 【调整 2026-08-24】不传 COS 普通对象——向量桶 role mode 拒 put_object（AccessDenied 实测）；运行时读本地 jsonl
 
 **查询数据流**：
 
@@ -179,6 +183,77 @@ metadata = {
 ```
 
 **对齐**：`openspec/changes/project-intro-rag/`（rag-index / `--clear` 幂等 / doc_type / 版本走 metadata 约定）；topic-index 同桶先例（spike 实测 768 cosine、put 后 ~10s 异步生效、cosine distance 越小越相似）。
+
+#### 1.6B 代码架构纪律（2026-08-24 定稿）——为未来 agent 化留缝
+
+> 当前是技术验证阶段（不做熔断/重试/监控），但检索代码必须**长得出来** agent 化。
+> 生产级 RAG agent = 意图判断(先分类再答) + 异常熔断降级(每路能挂整体不挂) + 可观测/评测。
+> 现有 `ANCHOR_RULES`(问题关键词→锁节) 已是最朴素意图分类器——未来换 LLM 判断, 接口不变。
+> 接口纪律 = **分层是免费的, 拆函数是贵的**。写成单元, 未来熔断就是包一层; 写成大函数, 未来要拆。
+
+**检索编排架构**（rag_query.py 按此分层, 禁止一路到底）：
+
+```
+问题
+ → [意图钩子]  classify(question) → 锁策略{锚定节, 是否需检索, 阈值}
+        现在:  ANCHOR_RULES 关键词匹配(数据驱动, 每模块一份)
+        未来:  LLM 判断意图类别 —— 换实现, 接口不变
+ → [召回单元]  retrieve_vector(question) → hits + 置信度     # 独立, 可单独熔断/跳过
+ → [召回单元]  retrieve_bm25(question)   → hits + 置信度     # 独立
+ → [编排器]    orchestrate(hits...) → RRF × authority × 锚定 → top-K   # 未来在这插降级/拒答
+ → [生成]      text 按 key 反查 jsonl → doubao 生成
+```
+
+**每路召回单元契约**：入参 `question`，出参 `{hits, confidence}`（hit 含 key/metadata/score）。
+- 单元内异常**自己兜底**（返回低置信度空结果或抛可被编排器捕获的异常），由编排器决定跳过/降级
+- 编排器最终裁决：按 RRF×权威×锚定排序；未来加「最低置信度阈值 → 拒答不编造」
+
+**意图钩子**：`classify(question) → {locked_sections, strategy}` 独立成函数（现在 = ANCHOR_RULES 查表，
+未来 = LLM 判断），检索/生成只消费结果，不关心实现。
+
+#### 1.6C 查询 API 契约（2026-08-24 定稿）——后端/前端页面并行开工的前置条件
+
+> 目的：入库+查询跑通后，后端/前端基于本契约写页面（问答案 + 展示引用/源文件）。
+> 后端/前端设计时会考虑 RAG 健壮性——本契约把「返回结构 / 超时 / 降级 / 鉴权」先定死，两端可并行不阻塞。
+
+**端点**：`POST /api/tutoring/rag/query`（鉴权复用 `x-internal-token`，同 api/vector.py）
+
+**请求**：
+
+```json
+{ "question": "怎么防学生套答案？", "top_k": 6 }
+```
+
+**响应**（稳定返回结构，前端渲染页面全靠它）：
+
+```json
+{
+  "answer": "……面试口述风格答案……",
+  "references": [
+    { "file": "04-安全与防作弊",
+      "file_path": "4.完善文档/04-安全与防作弊.md",
+      "anchor": "04-安全与防作弊",
+      "authority": 1.0,
+      "summary": "……" }
+  ],
+  "intent": { "locked_sections": ["04", "07"], "strategy": "retrieve" },
+  "version": "2026-08-24-e966ac"
+}
+```
+
+- `references[].file_path` = 前端"点开源文件展示内容"（相对语料根 docs/rag/ai-tutoring/）
+- `intent.locked_sections` = 意图钩子锁定的节（1.6B），前端可展示"命中了哪些页"
+- `version` = 命中的语料版本，前端可标注数据时效
+
+**超时**：查询链路长（embed + COS query + doubao 生成），接口定超时（如 30s）→ 超时返回 504/降级结果，前端不无限转圈。
+
+**降级语义**（RAG 健壮性核心，按序降级）：
+1. COS 向量挂了 → 降级纯 BM25（本地 jsonl），references 仍返回
+2. doubao 挂了 → 降级返回召回块清单（references 当答案，answer 置为"生成服务不可用，以下为检索到的语料"）
+3. 检索置信度过低 → 拒答 `answer="该问题语料未覆盖，建议问项目相关话题"`，**不编造**
+4. 所有降级路径 response 结构不变（前端只按同一结构渲染）
+
+**契约对齐**：references 结构 = 1.6A metadata（file/file_path/anchor/authority/summary）；intent = 1.6B 意图钩子输出。
 
 ### 1.7 完整性检查
 - [ ] 每块可溯源（引到语雀/方案/代码文件+行号）；8 节覆盖问题表全部提问

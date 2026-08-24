@@ -65,6 +65,8 @@ def _tags(path: str, authority: float, source: str, anchor: str) -> dict:
         "source": source,
         "authority": authority,
         "file": os.path.basename(path).replace(".md", ""),
+        # 相对语料根 docs/rag/ai-tutoring/ 的路径(前端定位源文件展示内容; 1.6A 新增)
+        "file_path": os.path.relpath(path, CORPUS).replace(os.sep, "/"),
         "anchor": anchor,
     }
 

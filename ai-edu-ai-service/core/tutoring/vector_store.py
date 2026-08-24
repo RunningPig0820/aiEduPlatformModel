@@ -42,7 +42,7 @@ def _get_cos_client() -> Any:
     if _client is not None:
         return _client
 
-    if not (settings.COS_VECTORS_SECRET_ID and settings.COS_VECTORS_SECRET_KEY and settings.COS_VECTORS_BUCKET):
+    if not (settings.COS_VECTORS_SECRET_ID and settings.COS_VECTORS_SECRET_KEY):
         raise RuntimeError("COS_VECTORS_* 未配置完整, 无法初始化 CosVectorsClient")
 
     from qcloud_cos import CosConfig, CosVectorsClient
@@ -76,25 +76,35 @@ def embed(text: str) -> List[float]:
     return vector
 
 
-def _resolve_index(vector_type: str) -> str:
-    """vector_type(逻辑名) → 物理索引名。未知 → ValueError(端点层转 400)。"""
+def _resolve_bucket_index(vector_type: str) -> tuple:
+    """vector_type(逻辑名) → (bucket, index)。rag 走独立 RAG 桶, 其余走默认桶。未知 → ValueError。
+
+    桶隔离: topic(题型聚集) 在 question-bank-1318177119, rag(AI答疑 RAG) 在 rag-1318177119,
+    互不影响(重建 rag-index 不碰 topic 生产查询)。
+    """
     index = settings.COS_VECTORS_INDEXES.get(vector_type)
     if not index:
         raise ValueError(f"unknown vector_type: {vector_type!r}, 合法值: {list(settings.COS_VECTORS_INDEXES.keys())}")
-    return index
+    if vector_type == "rag":
+        bucket = settings.COS_VECTORS_RAG_BUCKET
+        if not bucket:
+            raise RuntimeError("COS_VECTORS_RAG_BUCKET 未配置, 无法路由 rag 向量")
+    else:
+        bucket = settings.COS_VECTORS_BUCKET
+    return bucket, index
 
 
 def put_vector(key: str, text: str, vector_type: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-    """embed → put_vectors 写入对应索引。
+    """embed → put_vectors 写入对应索引(按 vector_type 路由桶)。
 
     key 相同 upsert 覆盖。write 后 ~10s 异步生效(CS 向量索引), 立即 query 可能 miss。
     """
-    index = _resolve_index(vector_type)
+    bucket, index = _resolve_bucket_index(vector_type)
     vector = embed(text)
     client = _get_cos_client()
     try:
         client.put_vectors(
-            Bucket=settings.COS_VECTORS_BUCKET,
+            Bucket=bucket,
             Index=index,
             Vectors=[{
                 "key": key,
@@ -103,22 +113,24 @@ def put_vector(key: str, text: str, vector_type: str, metadata: Optional[Dict[st
             }],
         )
     except Exception as e:
-        logger.error("vector COS put 失败: type=%s index=%s key=%s: %s", vector_type, index, key, e)
+        logger.error("vector COS put 失败: type=%s bucket=%s index=%s key=%s: %s",
+                     vector_type, bucket, index, key, e)
         raise
-    logger.info("vector put: type=%s index=%s key=%s dim=%d", vector_type, index, key, len(vector))
+    logger.info("vector put: type=%s bucket=%s index=%s key=%s dim=%d",
+                vector_type, bucket, index, key, len(vector))
 
 
 def query_vector(text: str, top_k: int, vector_type: str) -> List[Dict[str, Any]]:
-    """embed → query_vectors 查最近邻 Top-K。
+    """embed → query_vectors 查最近邻 Top-K(按 vector_type 路由桶)。
 
     返回命中列表(COS data["vectors"], 每项 {key, metadata, distance}), 按 distance 升序。
     """
-    index = _resolve_index(vector_type)
+    bucket, index = _resolve_bucket_index(vector_type)
     vector = embed(text)
     client = _get_cos_client()
     try:
         _, data = client.query_vectors(
-            Bucket=settings.COS_VECTORS_BUCKET,
+            Bucket=bucket,
             Index=index,
             QueryVector={"float32": vector},
             TopK=top_k,
@@ -126,8 +138,10 @@ def query_vector(text: str, top_k: int, vector_type: str) -> List[Dict[str, Any]
             ReturnDistance=True,
         )
     except Exception as e:
-        logger.error("vector COS query 失败: type=%s index=%s top_k=%d: %s", vector_type, index, top_k, e)
+        logger.error("vector COS query 失败: type=%s bucket=%s index=%s top_k=%d: %s",
+                     vector_type, bucket, index, top_k, e)
         raise
     hits = data.get("vectors", [])
-    logger.info("vector query: type=%s index=%s top_k=%d hits=%d", vector_type, index, top_k, len(hits))
+    logger.info("vector query: type=%s bucket=%s index=%s top_k=%d hits=%d",
+                vector_type, bucket, index, top_k, len(hits))
     return hits
