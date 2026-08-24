@@ -266,6 +266,44 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 ## 2. AI答疑 评测集（5 条）
 
+> **2A 评测设计（2026-08-24 定稿）**——对齐 `openspec/changes/rag-eval-agent/design.md`（D2~D7），
+> 本流水线只跑 AI答疑 一条线（rag-eval-agent 的模块清单里 AI答疑 是首批）。
+
+**评测集格式**（D2，每条）：
+```json
+{ "module": "ai-tutoring", "question": "……", "question_type": "……",
+  "expected_references": ["ai-tutoring/04-安全与防作弊"],   // 预期命中页/节(键前缀)
+  "expected_points": ["reveal 两次出口", "count 计数", "Java 硬拦"] }  // 答案应覆盖要点
+```
+- `question_type`：AI答疑 用**问题表分类**（项目介绍/操作/数据关联/难点/最危险问题，各抽 1 条 = 5 条），
+  对齐 1.5A 的「完善文档 8 节 ↔ 问题表映射」——每类问题指向对应节（01/03, 02/06, 05, 04/07, 08）
+- `expected_references`：指向完善文档节（锚定目标），供 hit@k 判定"检索是否捞得对"
+
+**评测流程**（D3，先测检索再测答案，分层定位）：
+```
+每条: 意图钩子(classify) → 双路召回 → orchestrate 记录 top-K
+ → hit@k: expected_references 是否命中召回集(k=3)
+ → generate(doubao) 记录答案/引用/usage
+ → LLM 判分 answer_quality(答案, 预期要点, 预期引用) → 0~5 + rationale
+聚合: 5 条 → 模块 hit@k / 平均质量分 / 总成本 / 平均耗时
+```
+
+**判分口径**（D4/D5）：
+- `hit@k`：expected_references 命中召回 top-k 的比例，k=3（纯函数，可单测）
+- `answer_quality`：LLM（doubao，复用现有 doubao 链路）按 **准确性 / 引用正确性 / 覆盖要点** 三方面给 0~5 分，
+  严格 JSON `{score, rationale}`；解析失败重试 1 次，仍失败记 0 并标记
+- `cost`：prompt+completion × doubao 单价，复用 usage 真算；无 usage 降级估算
+- `latency`：检索/生成/总耗时（超时按降级计）
+
+**trace 结构**（D6，每轮落 JSONL，可回溯到具体一条）：
+```json
+{ "question", "intent", "recall": [top-K {key,score,authority}], "hit": true/false,
+  "answer", "references", "usage": {prompt_tokens, completion_tokens},
+  "latency": {retrieve_ms, generate_ms, total_ms}, "score", "rationale", "version" }
+```
+
+**对齐**：模块清单/状态机见 rag-eval-agent D1；AI答疑 是 `organized → chunked → indexed` 已完成、评测进行中。
+
 - [ ] 2.1 编写评测集（来源 = `ai-tutoring.md` 面试问题表，从「项目介绍 / 操作 / 数据关联 / 难点 / 最危险问题」各抽 1 条）
 - [ ] 2.2 每条含 expected_references / expected_points（指向完善文档对应节）
 - [ ] 2.3 评测集加载器（格式校验）
