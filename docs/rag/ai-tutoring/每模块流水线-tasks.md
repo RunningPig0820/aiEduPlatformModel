@@ -340,17 +340,18 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 ## 4. 指标与成本
 
-- [ ] 4.1 cost 统计（prompt+completion × doubao 单价，复用 usage 真算；无 usage 降级估算）
-- [ ] 4.2 latency 统计（检索/生成/总耗时，超时按降级计）
-- [ ] 4.3 成本与耗时测试
+- [x] 4.1 cost 统计（prompt+completion × doubao 单价，复用 usage 真算；无 usage 降级估算）— 2026-08-24 完成, `calc_cost` 纯函数, generate/judge 捕获 `usage_metadata`(langchain 1.2.20)
+- [x] 4.2 latency 统计（检索/生成/总耗时，超时按降级计）— 2026-08-24 完成, latency_ms 三段已捕获
+- [x] 4.3 成本与耗时测试 — 2026-08-24 完成, TestCost(calc_cost 已知价/零) + aggregate cost/tokens
 
 ## 5. 可观测评测
 
-- [ ] 5.1 trace 落盘（JSONL：query/召回/得分/hit/答案/引用/usage/耗时/判分）
-- [ ] 5.2 评测报告生成（按模块 + 全量汇总，含语料版本标识）
-- [ ] 5.3 报告版本对比（新旧两次 hit@k/质量分变化）
-- [ ] 5.4 trace 测试（落盘完整性、单条回溯）
-- [ ] 5.5 报告测试（黄金文件对比、版本对比正确）
+- [x] 5.1 trace 落盘（JSONL：query/召回/得分/hit/答案/引用/usage/耗时/判分）— 2026-08-24 完成, `data/eval/trace_latest.jsonl`(含 usage/cost)
+- [x] 5.2 评测报告生成（按模块 + 全量汇总，含语料版本标识）— 2026-08-24 完成, `data/eval/reports/<version>.json`
+- [x] 5.3 报告版本对比（新旧两次 hit@k/质量分变化）— 2026-08-24 完成, `run_eval.py --compare`
+- [x] 5.4 trace 测试（落盘完整性、单条回溯）— 2026-08-24 完成, test_run_eval TestTrace
+- [x] 5.5 报告测试（黄金文件对比、版本对比正确）— 2026-08-24 完成, TestReport(报告落盘/对比/无历史跳过)
+- [x] **实测（2026-08-24）**：5 条评测 → hit@3=0.80 / 质量分均 3.60 / 判分 100% / 均耗时 5.7s / **总成本 ¥0.0803(均 ¥0.0161, 均 4686 tokens)**
 
 ## 6. API 端点
 

@@ -294,8 +294,11 @@ def _make_llm():
     )
 
 
-def generate(hits: list, question: str) -> str:
-    """doubao 生成答案(面试口述风格 + 引用)。hits 为 orchestrate 输出。"""
+def generate(hits: list, question: str, return_usage: bool = False):
+    """doubao 生成答案(面试口述风格 + 引用)。hits 为 orchestrate 输出。
+
+    return_usage=True 时返回 (text, usage_dict)，评测/cost 统计用；默认返回 str(API 轻量)。
+    """
     ctx = []
     for h in hits:
         head = f"〔{h['source']}/{h['file']}/{h['anchor']}｜权威{h['authority']}〕"
@@ -306,6 +309,13 @@ def generate(hits: list, question: str) -> str:
         SystemMessage(content=_GEN_SYSTEM),
         HumanMessage(content=prompt),
     ])
+    if return_usage:
+        usage = getattr(resp, "usage_metadata", None) or {}
+        return resp.content, {
+            "prompt_tokens": usage.get("input_tokens", 0),
+            "completion_tokens": usage.get("output_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+        }
     return resp.content
 
 

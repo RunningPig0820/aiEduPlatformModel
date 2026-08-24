@@ -29,6 +29,24 @@ logger = logging.getLogger(__name__)
 
 HIT_K = 3           # hit@k 的 k(2A 定稿: 源文档池 top-k)
 
+# doubao-seed-2-0-mini 单价(元/千 token; 2026-08 火山方舟价, 精确单价变动时更新)
+DOUBAO_PRICE_PER_1K = {
+    "input": 0.003,      # 输入 prompt 单价(元/千 token)
+    "output": 0.009,     # 输出 completion 单价(元/千 token)
+}
+
+
+# ============ 4.1 cost 计算(纯函数, 可单测) ============
+
+
+def calc_cost(usage: dict) -> float:
+    """token usage → 成本(元)。无 usage → 0(降级估算留给调用方)。"""
+    return round(
+        usage.get("prompt_tokens", 0) / 1000 * DOUBAO_PRICE_PER_1K["input"]
+        + usage.get("completion_tokens", 0) / 1000 * DOUBAO_PRICE_PER_1K["output"],
+        6,
+    )
+
 
 # ============ 3.2 hit@k 计算(纯函数, 可单测) ============
 
@@ -91,17 +109,22 @@ def judge_quality(question: str, answer: str, expected_points: List[str],
                    + "\n---\n".join(t[:600] for t in corpus_texts[:4]) + "\n")
     for attempt in range(2):
         try:
-            text = llm.invoke([
+            resp = llm.invoke([
                 SystemMessage(content=_JUDGE_SYSTEM),
                 HumanMessage(content=prompt),
-            ]).content or ""
+            ])
+            text = resp.content or ""
+            usage = getattr(resp, "usage_metadata", None) or {}
             data = _extract_json(text)
             covered = int(data.get("covered_count", -1))
             fabricated = bool(data.get("fabricated"))
             total = len(expected_points)
             if 0 <= covered <= total:
                 return {"score": _score_from_covered(covered, total, fabricated),
-                        "rationale": str(data.get("rationale", "")), "judged": True}
+                        "rationale": str(data.get("rationale", "")), "judged": True,
+                        "usage": {"prompt_tokens": usage.get("input_tokens", 0),
+                                  "completion_tokens": usage.get("output_tokens", 0),
+                                  "total_tokens": usage.get("total_tokens", 0)}}
             logger.warning("判分 covered_count 越界(%s), 重试", covered)
         except Exception as e:
             logger.warning("判分解析失败(尝试%d): %s", attempt + 1, e)
@@ -181,12 +204,22 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     # 生成 + 判分(判分带语料块, 供"编造"判定——答案在语料有支撑即非编造)
     answer = ""
     score, rationale, judged = 0, "", False
+    gen_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    judge_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     if hits:
-        answer = rag_core.generate(hits, question)
+        answer, gen_usage = rag_core.generate(hits, question, return_usage=True)
         judge = judge_quality(question, answer, case["expected_points"],
                               corpus_texts=[h["text"] for h in hits])
         score, rationale, judged = judge["score"], judge["rationale"], judge["judged"]
+        judge_usage = judge.get("usage", judge_usage)
     t_done = time.time()
+
+    usage = {
+        "generate": gen_usage,
+        "judge": judge_usage,
+        "total_tokens": gen_usage.get("total_tokens", 0) + judge_usage.get("total_tokens", 0),
+        "cost_yuan": round(calc_cost(gen_usage) + calc_cost(judge_usage), 6),
+    }
 
     return {
         "question": question,
@@ -202,6 +235,7 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
         "score": score,
         "rationale": rationale,
         "judged": judged,
+        "usage": usage,
         "latency_ms": {
             "retrieve_ms": round((t_recall - t0) * 1000),
             "generate_ms": round((t_done - t_recall) * 1000),
@@ -217,16 +251,21 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
 def aggregate(results: List[dict]) -> dict:
     """按模块(本期单模块 ai-tutoring)聚合指标。
 
-    {count, hit_at_k_avg, quality_avg, judged_ratio, total_latency_ms, ...}
+    {count, hit_at_k_avg, quality_avg, judged_ratio, avg_latency_ms,
+     total_cost_yuan, avg_cost_yuan, avg_tokens, ...}(4.1 cost / 4.2 latency)
     """
     n = len(results)
+    empty = {"count": 0, "hit_at_k_avg": 0.0, "quality_avg": 0.0, "judged_ratio": 0.0,
+             "avg_latency_ms": 0.0, "total_cost_yuan": 0.0, "avg_cost_yuan": 0.0,
+             "avg_tokens": 0}
     if n == 0:
-        return {"count": 0, "hit_at_k_avg": 0.0, "quality_avg": 0.0,
-                "judged_ratio": 0.0, "avg_latency_ms": 0.0}
+        return empty
     hit_avg = sum(r["hit_score"] for r in results) / n
     quality_avg = sum(r["score"] for r in results) / n
     judged = sum(1 for r in results if r["judged"])
     latency = [r["latency_ms"]["total_ms"] for r in results]
+    cost = [r.get("usage", {}).get("cost_yuan", 0.0) for r in results]
+    tokens = [r.get("usage", {}).get("total_tokens", 0) for r in results]
     return {
         "count": n,
         "hit_at_k_avg": round(hit_avg, 3),
@@ -235,4 +274,7 @@ def aggregate(results: List[dict]) -> dict:
         "avg_latency_ms": round(sum(latency) / n),
         "hit_cases": sum(1 for r in results if r["hit"]),
         "unjudged": n - judged,
+        "total_cost_yuan": round(sum(cost), 4),
+        "avg_cost_yuan": round(sum(cost) / n, 4),
+        "avg_tokens": round(sum(tokens) / n),
     }

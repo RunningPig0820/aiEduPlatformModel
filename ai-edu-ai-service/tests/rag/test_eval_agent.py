@@ -174,22 +174,30 @@ class TestRunEvalCase:
                             lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         # 生成 mock 掉(doubao 不碰); 判分 mock 掉
-        monkeypatch.setattr(rag_core, "generate", lambda hits, q: "mock 答案")
+        monkeypatch.setattr(rag_core, "generate",
+                            lambda hits, q, return_usage=False:
+                                ("mock 答案", {"prompt_tokens": 100, "completion_tokens": 50,
+                                               "total_tokens": 150}) if return_usage else "mock 答案")
         monkeypatch.setattr(eval_agent, "judge_quality",
-                            lambda q, a, pts, corpus_texts=None: {"score": 4, "rationale": "ok", "judged": True})
+                            lambda q, a, pts, corpus_texts=None: {"score": 4, "rationale": "ok", "judged": True,
+                                                                  "usage": {"prompt_tokens": 80, "completion_tokens": 20,
+                                                                            "total_tokens": 100}})
 
     def test_case_output_complete(self, mock_core):
         trace = eval_agent.run_eval_case(CASE)
-        # 输出齐全(3.5: question/recall/hit/answer/score/latency)
+        # 输出齐全(3.5: question/recall/hit/answer/score/latency; 4: usage)
         for field in ("question", "question_type", "intent", "recall", "hit",
                       "hit_score", "answer", "references", "score", "rationale",
-                      "judged", "latency_ms", "version"):
+                      "judged", "usage", "latency_ms", "version"):
             assert field in trace, f"缺字段 {field}"
         assert trace["question"] == CASE["question"]
         assert trace["hit"] is True          # 04 命中
         assert trace["score"] == 4
         assert trace["recall"] and trace["recall"][0]["section"] == "04"
         assert set(trace["latency_ms"]) == {"retrieve_ms", "generate_ms", "total_ms"}
+        # 4.1 usage: generate(150) + judge(100) = 250 tokens, cost > 0
+        assert trace["usage"]["total_tokens"] == 250
+        assert trace["usage"]["cost_yuan"] > 0
 
     def test_case_vector_retrieve_called(self, mock_core, monkeypatch):
         # 评测走真实 retrieve_vector(不降级)—— 验证被调用(而非跳过)
@@ -201,22 +209,39 @@ class TestRunEvalCase:
         assert called, "评测应走真实 retrieve_vector(不降级)"
 
 
-class TestAggregate:
-    """3.4 聚合"""
+class TestCost:
+    """4.1 cost 计算纯函数"""
 
-    def _trace(self, hit_score, score, judged=True, total_ms=100):
+    def test_calc_cost_known(self):
+        # 1000 prompt token × 0.003 + 500 completion × 0.009 = 0.003 + 0.0045 = 0.0075
+        assert eval_agent.calc_cost({"prompt_tokens": 1000, "completion_tokens": 500}) == 0.0075
+
+    def test_calc_cost_zero(self):
+        assert eval_agent.calc_cost({}) == 0.0
+        assert eval_agent.calc_cost({"prompt_tokens": 0, "completion_tokens": 0}) == 0.0
+
+    def test_score_from_covered_full(self):
+        assert eval_agent._score_from_covered(5, 5, False) == 5
+
+
+class TestAggregate:
+    """3.4 聚合 + 4.1/4.2 cost/latency"""
+
+    def _trace(self, hit_score, score, judged=True, total_ms=100, cost=0.01, tokens=100):
         return {"hit_score": hit_score, "score": score, "judged": judged,
-                "hit": hit_score > 0, "latency_ms": {"total_ms": total_ms}}
+                "hit": hit_score > 0, "latency_ms": {"total_ms": total_ms},
+                "usage": {"cost_yuan": cost, "total_tokens": tokens}}
 
     def test_aggregate_empty(self):
         a = eval_agent.aggregate([])
         assert a["count"] == 0
+        assert a["total_cost_yuan"] == 0.0
 
     def test_aggregate_metrics(self):
         results = [
-            self._trace(1.0, 4, True, 100),
-            self._trace(0.5, 3, True, 200),
-            self._trace(0.0, 0, False, 300),
+            self._trace(1.0, 4, True, 100, 0.01, 100),
+            self._trace(0.5, 3, True, 200, 0.02, 200),
+            self._trace(0.0, 0, False, 300, 0.03, 300),
         ]
         a = eval_agent.aggregate(results)
         assert a["count"] == 3
@@ -226,3 +251,7 @@ class TestAggregate:
         assert a["avg_latency_ms"] == 200
         assert a["hit_cases"] == 2
         assert a["unjudged"] == 1
+        # 4.1/4.2 聚合
+        assert a["total_cost_yuan"] == round(0.01 + 0.02 + 0.03, 4)   # 0.06
+        assert a["avg_cost_yuan"] == round(0.06 / 3, 4)               # 0.02
+        assert a["avg_tokens"] == 200
