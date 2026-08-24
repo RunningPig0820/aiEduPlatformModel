@@ -128,7 +128,7 @@ from api.neo4j import router as neo4j_router
 from api.tutoring import router as tutoring_router
 from api.ocr import router as ocr_router
 from api.vector import router as vector_router
-from api.rag import router as rag_router
+from api.rag import router as rag_router, EVAL_ROUTER as rag_eval_router
 
 app.include_router(chat_router)
 app.include_router(kg_router)
@@ -137,6 +137,7 @@ app.include_router(tutoring_router)
 app.include_router(ocr_router)
 app.include_router(vector_router)
 app.include_router(rag_router)
+app.include_router(rag_eval_router)
 
 # 后续注册其他路由
 # from api import ocr, rag

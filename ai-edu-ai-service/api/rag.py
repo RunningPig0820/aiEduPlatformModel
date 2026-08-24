@@ -1,7 +1,10 @@
 """
-RAG 查询 API - 前端/后端调 `POST /api/tutoring/rag/query`
+RAG API - 前端/后端调:
+  - `POST /api/tutoring/rag/query`   RAG 问答(1.6C 契约)
+  - `POST /api/rag/eval/run`         触发评测(6.1, 离线工具, 同步执行 ~30s)
+  - `GET  /api/rag/eval/report`      查询最新报告 + 版本对比(6.2)
 
-对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6C 查询 API 契约
+对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6C + 6
 鉴权: x-internal-token(同 api/vector.py / api/chat.py)
 健壮性(1.6C 降级语义, 按序):
   1. COS 向量挂了   → 降级纯 BM25(references 仍返回)
@@ -10,8 +13,10 @@ RAG 查询 API - 前端/后端调 `POST /api/tutoring/rag/query`
   4. 所有降级路径 response 结构不变(前端只按同一结构渲染)
 """
 import logging
+import os
 
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from api.chat import verify_internal_token
 from core.rag import query as rag_core
@@ -20,11 +25,18 @@ from models.rag import (
     RAGQueryResponse,
     RAGReference,
     RAGIntent,
+    RAGEvalRunResponse,
+    RAGEvalReportResponse,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tutoring/rag", tags=["Tutoring"])
+EVAL_ROUTER = APIRouter(prefix="/api/rag/eval", tags=["RAG Eval"])
+
+# run_eval 在 scripts/rag/(评测执行), API 侧按需延迟导入(避免 import 链过早初始化)
+EVAL_RUN_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "scripts", "rag", "run_eval.py")
 
 
 @router.post("/query", response_model=RAGQueryResponse)
@@ -87,3 +99,49 @@ async def rag_query(
     except Exception as e:
         logger.error("RAG query 端点异常: %s", e)
         raise HTTPException(status_code=500, detail="rag query failed")
+
+
+# ============ 6 评测 API(离线工具上线, 6.1/6.2/6.3) ============
+
+
+@EVAL_ROUTER.post("/run", response_model=RAGEvalRunResponse)
+async def eval_run(x_internal_token: str = Header(None)):
+    """触发评测(6.1): 跑评测集 → 聚合报告 → 落盘。离线工具, 同步执行(~30s)。"""
+    verify_internal_token(x_internal_token)
+    try:
+        from scripts.rag import run_eval  # 延迟导入(run_eval 自处理 sys.path)
+        out = await run_in_threadpool(run_eval.run_evaluation)  # 不阻塞事件循环
+        return RAGEvalRunResponse(
+            ok=True,
+            version=out["version"],
+            aggregate=out["aggregate"],
+            report_path=out["report_path"],
+        )
+    except Exception as e:
+        logger.error("RAG eval run 端点异常: %s", e)
+        raise HTTPException(status_code=500, detail="rag eval run failed")
+
+
+@EVAL_ROUTER.get("/report", response_model=RAGEvalReportResponse)
+async def eval_report(x_internal_token: str = Header(None)):
+    """查询评测报告(6.2): 最新聚合 + 历史版本列表(供版本对比)。"""
+    verify_internal_token(x_internal_token)
+    try:
+        from scripts.rag import run_eval
+        reports = run_eval._list_reports()
+        if not reports:
+            return RAGEvalReportResponse(ok=True, has_report=False, reports=[])
+        latest = reports[-1]
+        import json
+        with open(os.path.join(run_eval.REPORT_DIR, latest), encoding="utf-8") as f:
+            data = json.load(f)
+        return RAGEvalReportResponse(
+            ok=True,
+            version=data.get("version", latest.replace(".json", "")),
+            aggregate=data.get("aggregate", {}),
+            reports=reports,
+            has_report=True,
+        )
+    except Exception as e:
+        logger.error("RAG eval report 端点异常: %s", e)
+        raise HTTPException(status_code=500, detail="rag eval report failed")

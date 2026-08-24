@@ -355,7 +355,7 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 ## 6. API 端点
 
-- [ ] 6.1 `POST /api/rag/eval/run`（触发评测，返回运行 id）
-- [ ] 6.2 `GET /api/rag/eval/report`（查询报告，支持版本对比）
-- [ ] 6.3 鉴权（`x-internal-token`）
-- [ ] 6.4 API 测试（运行、报告、鉴权失败）
+- [x] 6.1 `POST /api/rag/eval/run`（触发评测，返回运行 id）— 2026-08-24 完成, 同步执行(离线工具 ~30s, run_in_threadpool 不阻塞), 返回 {ok, version, aggregate, report_path}
+- [x] 6.2 `GET /api/rag/eval/report`（查询报告，支持版本对比）— 2026-08-24 完成, 最新聚合 + 历史版本列表
+- [x] 6.3 鉴权（`x-internal-token`）— 2026-08-24 完成, verify_internal_token
+- [x] 6.4 API 测试（运行、报告、鉴权失败）— 2026-08-24 完成, test_eval_api 6 passed

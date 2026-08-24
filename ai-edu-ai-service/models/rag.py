@@ -1,10 +1,10 @@
 """
-RAG 查询数据模型 - 1.6C 查询 API 契约(后端/前端页面并行开工的依据)
+RAG 查询数据模型 - 1.6C 查询 API 契约 + 6 评测 API(后端/前端页面并行开工的依据)
 
-对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6C
+对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6C + 6
 纯数据定义, 无业务逻辑; 独立于 models/tutoring.py / models/vector.py。
 """
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -35,3 +35,23 @@ class RAGQueryResponse(BaseModel):
     references: List[RAGReference] = Field(default_factory=list, description="命中引用块(前端来源区块)")
     intent: RAGIntent = Field(default_factory=RAGIntent, description="意图钩子输出")
     version: str = Field(default="", description="命中语料版本(YYYY-MM-DD-<sha1[:6]>, 数据时效标注)")
+
+
+# ============ 6 评测 API ============
+
+
+class RAGEvalRunResponse(BaseModel):
+    """评测触发响应 - POST /api/rag/eval/run"""
+    ok: bool = Field(..., description="是否成功")
+    version: str = Field(..., description="评测的语料版本")
+    aggregate: Dict[str, Any] = Field(default_factory=dict, description="聚合指标(hit@k/质量分/cost/latency)")
+    report_path: str = Field(default="", description="报告落盘路径(相对 eval 目录)")
+
+
+class RAGEvalReportResponse(BaseModel):
+    """评测报告查询响应 - GET /api/rag/eval/report"""
+    ok: bool = Field(..., description="是否成功")
+    version: str = Field(default="", description="最新报告语料版本")
+    aggregate: Dict[str, Any] = Field(default_factory=dict, description="聚合指标")
+    reports: List[str] = Field(default_factory=list, description="历史报告版本列表")
+    has_report: bool = Field(default=False, description="是否存在报告")

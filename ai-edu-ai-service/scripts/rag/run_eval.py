@@ -67,11 +67,11 @@ def _compare(agg: dict, version: str, report_dir: str = REPORT_DIR):
         print(f"  {label:8s} {prev.get(key, 0):>8} → {agg[key]:>8}  {arrow} {delta:+.3f}")
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--compare", action="store_true", help="与上一份报告对比(5.3)")
-    args = ap.parse_args()
+def run_evaluation() -> dict:
+    """执行评测(可复用: CLI/API 共用)。
 
+    返回 {results, aggregate, version, trace_path, report_path}。
+    """
     items = eval_dataset.load_dataset()
     print(f"评测集: {len(items)} 条, 开始评测(真实检索 + doubao 生成/判分)...\n")
 
@@ -89,21 +89,34 @@ def main():
 
     version = results[0]["version"] if results else ""
     agg = eval_agent.aggregate(results)
+    trace_path = _save_trace(results)
+    report_path = _save_report(agg, version)
+    return {"results": results, "aggregate": agg, "version": version,
+            "trace_path": trace_path, "report_path": report_path}
+
+
+def _print_report(out: dict, compare: bool = False):
+    agg = out["aggregate"]
     print("\n" + "=" * 50)
-    print(f"聚合报告(语料版本 {version}):")
+    print(f"聚合报告(语料版本 {out['version']}):")
     print(f"  条数: {agg['count']}")
     print(f"  hit@k 平均: {agg['hit_at_k_avg']:.3f} (命中 {agg['hit_cases']}/{agg['count']} 条)")
     print(f"  质量分平均: {agg['quality_avg']:.2f}/5 (判分 {agg['judged_ratio']:.0%})")
     print(f"  平均耗时: {agg['avg_latency_ms']}ms")
     print(f"  总成本: ¥{agg['total_cost_yuan']:.4f} (均 ¥{agg['avg_cost_yuan']:.4f}, 均 {agg['avg_tokens']} tokens)")
+    print(f"\ntrace 已落盘: {out['trace_path']}")
+    print(f"报告已落盘: {out['report_path']}")
+    if compare:
+        _compare(agg, out["version"])
 
-    trace_path = _save_trace(results)
-    report_path = _save_report(agg, version)
-    print(f"\ntrace 已落盘: {trace_path}")
-    print(f"报告已落盘: {report_path}")
 
-    if args.compare:
-        _compare(agg, version)
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--compare", action="store_true", help="与上一份报告对比(5.3)")
+    args = ap.parse_args()
+
+    out = run_evaluation()
+    _print_report(out, compare=args.compare)
 
 
 if __name__ == "__main__":
