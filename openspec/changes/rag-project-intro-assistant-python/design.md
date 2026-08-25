@@ -27,6 +27,7 @@
 - **C2 anchor 两层**：模块级 anchor（选语料池，新）+ 节级 locked_sections（池内 authority×锚定加权，原样）。orchestrate 入参加 `corpus`，锚定公式不动。anchor 缺失/ambiguous → 维持现状（全池）。
 - **C3 cache_hit**：开发时实测 doubao 是否返回 usage.cache_hit；取不到 → tokenizer 估算 + 标注"估算"。
 - **C4 clarify 候选**：候选 = intent LLM `candidates`（主源）+ 会话历史锚点（兜底）→ 去重 → ≥2 才 clarify；default = current_project > 会话最后锚定。触发后最多一轮，仍模糊直接默认。
+- **C4 点选交互定稿（2026-08-25，前端校准）**：clarify 后前端点选候选 → **重发原问 + `current_project=点选模块`**（非裸功能名）；intent 收到"原问 + current_project"时**以 `current_project` 为权威消歧锚点直接锚定**，**不因问题本身含糊再拉 ambiguous**（intent 实现必须信任该权威信号）；点选模块与会话锚点不同 → `switch` 照常触发。
 - **C5 suggestions**：必含 ≥1 条 RAG 方向（面试展示，RAG 始终带上非并列模块）。
 
 ## 白盒链路（Python 侧事件产出）

@@ -9,50 +9,50 @@
 ## A. 白盒链路引擎（core/rag/assistant.py 新增编排 + 泛化 query.py）
 
 ### A1. intent 结构化输出
-- [ ] 【扩展】`classify` 升级为 `intent(question, history)`：LLM 输出 `{anchor, category, switch_detected, ambiguous, candidates}`（复用 `_llm_category` 的 doubao 连接 + 0 温度关思考）
-- [ ] 【复用】失败/非闭集 → `_fallback_anchor` + `ANCHOR_RULES` 兜底，degraded 标记（现有逻辑保留）
-- [ ] 【新增】schema 校验：anchor 必填模块 id、candidates 闭集去重、switch/ambiguous 布尔
-- [ ] 【新增】**history 截断**：`history[-N:]`（N=3 默认，含 clarify 轮），Java 传入 Python 只消费（联调 ⑦）
+- [x] 【扩展】`classify` 升级为 `intent(question, history)`：LLM 输出 `{anchor, category, switch_detected, ambiguous, candidates}`（复用 `_llm_category` 的 doubao 连接 + 0 温度关思考）
+- [x] 【复用】失败/非闭集 → `_fallback_anchor` + `ANCHOR_RULES` 兜底，degraded 标记（现有逻辑保留）
+- [x] 【新增】schema 校验：anchor 必填模块 id、candidates 闭集去重、switch/ambiguous 布尔
+- [x] 【新增】**history 截断**：`history[-N:]`（N=3 默认，含 clarify 轮），Java 传入 Python 只消费（联调 ⑦）
 
 ### A2. rewrite 改写
-- [ ] 【新增】`rewrite_query(question, anchor, history)`：口语→检索式改写（LLM 短调用），失败返回原问题（history 截断同 A1）
+- [x] 【新增】`rewrite_query(question, anchor, history)`：口语→检索式改写（LLM 短调用），失败返回原问题（history 截断同 A1）
 
 ### A2b. switch 上下文切换（联调 ⑥ 补 spec+任务）
-- [ ] 【新增】**switch 重置上下文**：intent 检测 switch_detected → 重置锚点/召回/轮次计数 → 走新锚点 rewrite→recall→generate
-- [ ] 【新增】switch 事件 `{from_anchor, to_anchor}` + 上下文重置（对齐 Java D3）
-- [ ] 【新增】switch 的 spec 需求：补进 guardrails spec（见 specs/guardrails 增加 Requirement）
+- [x] 【新增】**switch 重置上下文**：intent 检测 switch_detected → 重置锚点/召回/轮次计数 → 走新锚点 rewrite→recall→generate
+- [x] 【新增】switch 事件 `{from_anchor, to_anchor}` + 上下文重置（对齐 Java D3）
+- [x] 【新增】switch 的 spec 需求：补进 guardrails spec（见 specs/guardrails 增加 Requirement）
 
 ### A3. recall 双路 + anchor 选池
-- [ ] 【复用】`retrieve_vector` / `retrieve_bm25`（现有）
-- [ ] 【扩展】orchestrate 入参加 `corpus`：anchor 明确 → 先按 module 过滤语料池，再 RRF×权威×节锚定加权（C2，锚定公式原样）
-- [ ] 【新增】单路 2s 超时包裹（asyncio.wait_for + run_in_threadpool），超时降级空路 + degraded 标记
+- [x] 【复用】`retrieve_vector` / `retrieve_bm25`（现有）
+- [x] 【扩展】orchestrate 入参加 `corpus`：anchor 明确 → 先按 module 过滤语料池，再 RRF×权威×节锚定加权（C2，锚定公式原样）
+- [x] 【新增】单路 2s 超时包裹（asyncio.wait_for + run_in_threadpool），超时降级空路 + degraded 标记
 
 ### A4. rerank 精排 Top-K
-- [ ] 【扩展】orchestrate 只回传精排 Top-K（默认 3），不吐全量召回
-- [ ] 【新增】块结构 `{blockId, title, summary, filePath, score}`（映射现有 block → 前端契约）
+- [x] 【扩展】orchestrate 只回传精排 Top-K（默认 3），不吐全量召回
+- [x] 【新增】块结构 `{blockId, title, summary, filePath, score}`（映射现有 block → 前端契约）
 
 ### A5. generate 流式化
-- [ ] 【新增】`stream_generate(hits, query, request)`：复用 `ark_stream.stream_chat` 流式 yield token 增量
-- [ ] 【新增】8s 超时 → 写死降级话术 + 召回清单
-- [ ] 【新增】`request.is_disconnected()` 检测 → 中止上游 doubao 流
-- [ ] 【新增】`include_usage` 取流结束 usage → tokens_usage
+- [x] 【新增】`stream_generate(hits, query, request)`：复用 `ark_stream.stream_chat` 流式 yield token 增量
+- [x] 【新增】8s 超时 → 写死降级话术 + 召回清单
+- [x] 【新增】`request.is_disconnected()` 检测 → 中止上游 doubao 流
+- [x] 【新增】`include_usage` 取流结束 usage → tokens_usage
 
 ### A6. is_quoted 确定性引用
-- [ ] 【新增】`lcs_quote_match(answer, block_texts) -> quoted_keys`：连续 8 中/12 英字符 LCS 硬匹配，纯函数
-- [ ] 【新增】done 后补发 quotedKeys（chunk 粒度不实时匹配）
+- [x] 【新增】`lcs_quote_match(answer, block_texts) -> quoted_keys`：连续 8 中/12 英字符 LCS 硬匹配，纯函数
+- [x] 【新增】done 后补发 quotedKeys（chunk 粒度不实时匹配）
 
 ### A7. clarify 澄清轮
-- [ ] 【新增】ambiguous & candidates≥2 → clarify 事件（固定话术 + candidates + default），0 token 不计轮次
-- [ ] 【新增】候选判定：LLM candidates 主源 + 会话历史锚点兜底 + <2 不触发（C4）
-- [ ] 【新增】最多一轮，仍模糊直接默认 current_project
+- [x] 【新增】ambiguous & candidates≥2 → clarify 事件（固定话术 + candidates + default），0 token 不计轮次
+- [x] 【新增】候选判定：LLM candidates 主源 + 会话历史锚点兜底 + <2 不触发（C4）
+- [x] 【新增】最多一轮，仍模糊直接默认 current_project
 
 ### A8. suggestions 引导
-- [ ] 【新增】`gen_suggestions(answer, anchor)`：LLM 生成 1~3 条，prompt 约束必含 ≥1 条 RAG 方向（C5）
-- [ ] 【新增】LLM 失败 → 静态池兜底（预写含 RAG 方向文案）
+- [x] 【新增】`gen_suggestions(answer, anchor)`：LLM 生成 1~3 条，prompt 约束必含 ≥1 条 RAG 方向（C5）
+- [x] 【新增】LLM 失败 → 静态池兜底（预写含 RAG 方向文案）
 
 ### A9. 范围门低置信过滤
-- [ ] 【新增】rerank 后综合分 < 0.75/0.5 → boundary(low_confidence) 固定话术，不调 generate
-- [ ] 【新增】唯一拒答路径：无禁区硬拒答，全由低置信触发（C1）
+- [x] 【新增】rerank 后综合分 < 0.75/0.5 → boundary(low_confidence) 固定话术，不调 generate
+- [x] 【新增】唯一拒答路径：无禁区硬拒答，全由低置信触发（C1）
 
 ## B. 白盒 API（api/rag_assistant.py 新增）
 

@@ -41,6 +41,7 @@
 ### E. 护栏（guardrails）
 - [ ] 范围门：综合分<0.75/0.5 → boundary(low_confidence) 固定话术 0 token
 - [ ] clarify：多候选触发 / 澄清一次仍模糊直接默认 / 单候选不触发 / 0 token 不计轮次
+- [ ] clarify 点选候选重发：前端重发原问 + `current_project=点选模块` → intent 以 current_project 权威锚定、不再 ambiguous（不因问题含糊再拉 ambiguous）；点选模块与会话锚点不同 → switch 照常
 - [ ] 四模块放行（无禁区）：问知识图谱 → 召回→低置信（C1）
 
 ### F. API

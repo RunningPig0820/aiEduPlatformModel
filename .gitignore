@@ -81,6 +81,12 @@ service-account.json
 */edukg/data/*
 **/edukg/data/**
 
+# RAG 生成产物(不入库; 手写评测集保留)
+ai-edu-ai-service/scripts/rag/data/rag_slices.jsonl
+ai-edu-ai-service/scripts/rag/data/rag_index.npz
+ai-edu-ai-service/scripts/rag/data/eval/reports/
+ai-edu-ai-service/scripts/rag/data/eval/trace_latest.jsonl
+
 # LLM Task State & Cache
 edukg/state/
 edukg/cache/

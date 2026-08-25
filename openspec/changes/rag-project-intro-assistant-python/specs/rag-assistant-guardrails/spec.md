@@ -52,6 +52,11 @@
 - **WHEN** 学生答"就那个嘛"仍无明确功能名
 - **THEN** 不二次澄清，直接按 default 进入链路
 
+#### Scenario: 点选候选重发（权威锚定）
+- **WHEN** 学生点选候选 chip（如 [RAG项目]），前端**重发原问题 + `current_project=rag-system`**（含 clarify 轮 history）
+- **THEN** intent 以 `current_project` 为**权威消歧锚点**直接锚定 `anchor=rag-system`，**不因问题本身含糊再拉 ambiguous**
+- **AND** 点选模块与会话锚点不同 → `switch` 事件照常触发
+
 ### Requirement: switch 上下文切换（重置上下文）
 
 系统 SHALL 在 intent 判定 `switch_detected=true` 时发出 `switch` 事件（`{from_anchor, to_anchor}`）并**重置上下文**（锚点/召回/轮次计数），随后按新锚点走 rewrite→recall→generate；不掐断任何在途流（在途流完成或被 is_disconnected 取消）。

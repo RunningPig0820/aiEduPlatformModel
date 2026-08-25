@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     # 前端拼 {/api/rag/source}/{file_path} 即可拿到源文件内容
     RAG_CORPUS_DIR: str = "docs/rag/ai-tutoring"
 
+    # ============ RAG 白盒链路超时(A3/C 韧性) ============
+    # 分层超时: 召回单路 2s(向量 COS 网络路), 生成 8s(doubao 流式)。超时写死降级话术 0 token。
+    RAG_RECALL_TIMEOUT: float = 2.0
+    RAG_GEN_TIMEOUT: float = 8.0
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

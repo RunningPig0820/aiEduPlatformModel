@@ -2,7 +2,8 @@
 1.6 检索编排核心 - 按 1.6B 接口纪律分层
 
 架构(1.6B):
-  意图钩子   classify(question) → {locked_sections, strategy}
+  意图钩子   intent(question, history) → {anchor, category, switch_detected, ambiguous, candidates, locked_sections, degraded}
+              classify(question)         → {locked_sections, strategy}  # 兼容层, 委托 intent
   召回单元   retrieve_vector(question) → {hits, confidence}   # 独立, 可单独熔断/跳过
   召回单元   retrieve_bm25(question)   → {hits, confidence}   # 独立
   编排器     orchestrate(...) → RRF × authority × 锚定 → top-K
@@ -10,6 +11,7 @@
   生成       generate(hits, question) → doubao 答案(面试口述 + 引用)
 
 对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6B + 1.6C
+      openspec/changes/rag-project-intro-assistant-python (A1 intent 结构化)
 环境: 用 ai-edu-ai-service/venv 运行(conda 默认环境 langchain 版本冲突, 见 CLAUDE.md)
 """
 import json
@@ -51,6 +53,21 @@ ANCHOR_RULES = [
 ]
 ANCHOR_WEIGHT = 1.5
 
+# 模块锚点闭集(模块级路由, 决定从哪个语料池召回; A1 结构化输出必填 anchor)
+# 对齐后端 guardrails spec 四模块: AI答疑 / RAG项目 / 知识图谱 / 题型分析
+MODULE_ANCHORS = ("ai-tutoring", "rag-project", "knowledge-graph", "question-type")
+
+# 模块级关键词兜底(LLM 意图失败时, 问题关键词 → 模块锚点; 与 ANCHOR_RULES 的节级锚定两层并存)
+MODULE_ANCHOR_RULES = [
+    (("答疑", "ai答疑", "教学", "学生", "题目", "解答", "启发"), "ai-tutoring"),
+    (("rag", "检索", "召回", "重排", "向量", "bm25", "rrf", "多路", "知识库"), "rag-project"),
+    (("知识图谱", "图谱", "neo4j", "知识点", "概念", "关系", "节点"), "knowledge-graph"),
+    (("题型", "考点", "题型分析", "聚集"), "question-type"),
+]
+
+# history 截断窗口(联调⑦): Java 传入最近 N 轮, Python 只消费最近 N 轮(含 clarify 轮)
+HISTORY_LIMIT = 3
+
 _STOP = set("的了是在和与就都以及呢吗啊呀吧么这那我有你要他她它们一个不也没很为对从到往")
 
 
@@ -90,11 +107,156 @@ def _fallback_anchor(question: str) -> set:
     return locked
 
 
+def _fallback_module(question: str) -> str:
+    """模块级关键词兜底 → 模块锚点 id; 未命中 → ""(调用方取默认 current_project)。
+
+    与 _fallback_anchor(节级) 两层并存: 模块决定语料池, 节级池内加权。
+    """
+    q = question.lower()
+    for kws, mod in MODULE_ANCHOR_RULES:
+        if any(k in q for k in kws):
+            return mod
+    return ""
+
+
+# 结构化意图 LLM 提示: 输出闭集 JSON, 供 intent 解析(A1)
+_INTENT_SYSTEM = """你是「AI答疑」RAG 助手的意图识别器。只输出 JSON，不输出解释。
+
+输入：学生问题 + 最近会话历史（每轮带锚定模块）。判断问题属于哪个模块、是否需要澄清/切换。
+
+输出 JSON（必须合法 JSON，闭集枚举）：
+{
+  "anchor": "ai-tutoring",            // 模块锚点, 闭集: ai-tutoring|rag-project|knowledge-graph|question-type
+  "category": "项目介绍",             // 类别闭集: 项目介绍|操作|难点|数据关联|最危险|其他
+  "switch_detected": false,           // 是否从历史锚点切换到新模块
+  "ambiguous": false,                 // 问题指向多个模块、需澄清
+  "candidates": []                    // ambiguous=true 时给 2~4 个候选模块闭集
+}
+
+判断规则：
+- anchor：问题语义指向哪个模块（AI答疑=ai-tutoring / RAG项目=rag-project / 知识图谱=knowledge-graph / 题型分析=question-type）
+- 项目介绍/操作/难点/数据关联/最危险 → AI答疑模块内类别；问系统架构/代码/部署/评测 → RAG 项目模块(rag-project)
+- switch_detected：本问题明显不再谈历史锚点模块、转向另一模块 → true
+- ambiguous：问题含"这个/那个/它"指代不清、可指向多个模块 → true，并给 candidates（模块闭集内，≥2 个）
+只输出 JSON 本身。"""
+
+
+def _sanitize_intent(raw: dict, question: str) -> dict:
+    """schema 校验(A1): anchor 必填模块 id、candidates 闭集去重、switch/ambiguous 强制布尔。
+
+    anchor 非闭集/缺失 → 关键词兜底; candidates 只保留闭集内并去重。返回合法 intent 字典。
+    """
+    anchor = raw.get("anchor", "") if isinstance(raw, dict) else ""
+    if anchor not in MODULE_ANCHORS:
+        anchor = _fallback_module(question)
+    candidates = []
+    if isinstance(raw, dict):
+        for c in raw.get("candidates", []) or []:
+            if c in MODULE_ANCHORS and c not in candidates:
+                candidates.append(c)
+    return {
+        "anchor": anchor,
+        "category": raw.get("category", "") if isinstance(raw, dict) else "",
+        "switch_detected": bool(raw.get("switch_detected", False)) if isinstance(raw, dict) else False,
+        "ambiguous": bool(raw.get("ambiguous", False)) if isinstance(raw, dict) else False,
+        "candidates": candidates,
+    }
+
+
+def _truncate_history(history: list | None) -> list:
+    """history 显式截断到最近 N 轮(联调⑦): history[-HISTORY_LIMIT:], 含 clarify 轮。
+
+    Java 网关传入最近 N 轮 {question, answer, anchor}, Python 只消费不落会话态。
+    """
+    if not history:
+        return []
+    return list(history)[-HISTORY_LIMIT:]
+
+
+def _llm_intent(question: str, history: list) -> dict:
+    """LLM 结构化意图 → 合法 intent 字典; 失败/非闭集/非法 JSON → {}(调用方回退关键词)。
+
+    复用 _llm_category 的 doubao 连接模式: mini 关思考(秒出) + 0 温度 + 20s 超时 + 关重试。
+    历史只作上下文提示, 截断在 _truncate_history 已做。
+    """
+    try:
+        llm = LLMFactory.create(
+            "doubao", settings.TUTORING_DECIDE_MODEL, temperature=0.0,
+            extra_body={"thinking": {"type": "disabled"}},
+            request_timeout=20, max_retries=0,
+        )
+        hist_lines = "\n".join(
+            f"Q{h}: {h.get('question', '')} (anchor={h.get('anchor', '')})"
+            for h in history
+        ) or "（无）"
+        text = llm.invoke([
+            SystemMessage(content=_INTENT_SYSTEM),
+            HumanMessage(content=f"学生问题：{question}\n\n最近会话：\n{hist_lines}\n\n请输出 JSON。"),
+        ]).content or ""
+        raw = _extract_json(text)
+        if not raw:
+            return {}
+        return _sanitize_intent(raw, question)
+    except Exception as e:
+        logger.warning("RAG intent LLM 失败, 回退关键词锚定: %s", e)
+        return {}
+
+
+def _extract_json(text: str) -> dict | None:
+    """从 LLM 文本提取 JSON 对象(容忍前后缀/``` 围栏); 无合法 JSON → None。"""
+    import re
+    if not text:
+        return None
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+def intent(question: str, history: list | None = None,
+           current_project: str = "ai-tutoring") -> dict:
+    """问题 + 会话 → 完整意图 {anchor, category, switch_detected, ambiguous, candidates,
+    locked_sections, degraded}。
+
+    A1 升级 classify: LLM 结构化输出(anchor 模块路由 + category 类别), 失败/非闭集 → 关键词兜底
+    (模块 _fallback_module + 节 _fallback_anchor 两层), degraded 标记走 200。
+    history 显式截断最近 N 轮(Java 传入只消费, 联调⑦)。
+    """
+    history = _truncate_history(history)
+    raw = _llm_intent(question, history)
+    degraded = not raw or not raw.get("anchor")
+
+    if raw and raw.get("anchor"):
+        anchor = raw["anchor"]
+        category = raw["category"]
+        if category in CATEGORY_SECTIONS:
+            locked = list(CATEGORY_SECTIONS[category])
+        else:
+            locked = sorted(_fallback_anchor(question))  # 类别非闭集 → 节级关键词兜底
+    else:
+        anchor = _fallback_module(question) or current_project  # 模块兜底, 缺省当前项目
+        category = ""
+        locked = sorted(_fallback_anchor(question))
+
+    return {
+        "anchor": anchor,
+        "category": category,
+        "switch_detected": bool(raw.get("switch_detected")) if raw else False,
+        "ambiguous": bool(raw.get("ambiguous")) if raw else False,
+        "candidates": list(raw.get("candidates", [])) if raw else [],
+        "locked_sections": locked,
+        "degraded": degraded,
+    }
+
+
 def classify(question: str) -> dict:
-    """问题 → 锁策略{locked_sections, strategy}。
+    """问题 → 锁策略{locked_sections, strategy}（既有契约, 保持原实现不动）。
 
     1.6B 意图钩子: 优先 LLM 语义判断意图类别(闭集映射锁节), 失败/非闭集 → 回退关键词查表。
-    接口不变(返回结构固定), 检索/生成只消费结果, 不关心实现。
+    白盒链路用 intent(完整结构化, A1); 既有 /api/tutoring/rag/query 用 classify 保持契约不变。
     """
     category = _llm_category(question)
     if category in CATEGORY_SECTIONS:
@@ -124,6 +286,50 @@ def _llm_category(question: str) -> str:
     except Exception as e:
         logger.warning("RAG 意图分类 LLM 失败, 回退关键词锚定: %s", e)
         return ""
+
+
+# ============ rewrite 改写 (A2) ============
+
+
+_REWRITE_SYSTEM = """你是「AI答疑」RAG 助手的查询改写器。把学生口语化提问改写成适合检索的关键词查询。
+
+只输出改写后的查询文本，不要解释、不要加引号、不要输出 JSON。
+
+规则：
+1. 保留核心实体词（模块名/功能名/技术术语），去掉口语填充（那个/这个/我想问/你知道/咱们）
+2. 指代（它/这个/那套系统）结合最近会话补全成明确名词
+3. 保持原问题语义，不扩写、不答内容，5~20 字内
+4. 问题本身已明确（无口语、无指代）→ 原样输出
+"""
+
+
+def rewrite_query(question: str, anchor: str, history: list | None = None) -> str:
+    """口语提问 → 检索式改写（LLM 短调用）; 失败/空 → 原问题兜底。
+
+    anchor 提供模块上下文（改写提示约束语义方向）; history 显式截断最近 N 轮(联调⑦)。
+    复用 intent 的 doubao 连接模式: mini 关思考 + 0 温度 + 20s 超时 + 关重试。
+    """
+    history = _truncate_history(history)
+    try:
+        llm = LLMFactory.create(
+            "doubao", settings.TUTORING_DECIDE_MODEL, temperature=0.0,
+            extra_body={"thinking": {"type": "disabled"}},
+            request_timeout=20, max_retries=0,
+        )
+        hist_lines = "\n".join(
+            f"Q{h.get('question', '')} (anchor={h.get('anchor', '')})"
+            for h in history
+        ) or "（无）"
+        prompt = (f"模块锚点：{anchor}\n学生问题：{question}\n"
+                  f"最近会话：\n{hist_lines}\n\n请输出改写后的查询：")
+        text = (llm.invoke([
+            SystemMessage(content=_REWRITE_SYSTEM),
+            HumanMessage(content=prompt),
+        ]).content or "").strip()
+        return text if text else question
+    except Exception as e:
+        logger.warning("RAG rewrite LLM 失败, 回退原问题: %s", e)
+        return question
 
 
 # ============ 语料加载 + text 反查 ============
@@ -225,13 +431,27 @@ def _assign_idx(blocks: list) -> dict:
     return keymap
 
 
+def select_corpus(blocks: list, anchor: str | None) -> list:
+    """C2 选池: 按模块 anchor 过滤语料池(决定从哪个模块池召回)。
+
+    anchor 明确(闭集内) → 只留该模块块; 空/非闭集 → 全池(维持现状, 向后兼容)。
+    该模块无语料 → 返回空池 → 编排层自然走范围门低置信过滤(C1 定稿: 无语料模块拒答正确)。
+    """
+    if not anchor or anchor not in MODULE_ANCHORS:
+        return blocks
+    return [b for b in blocks if b["tags"].get("module") == anchor]
+
+
 def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict,
-                strategy: dict, top_k: int = TOP_K) -> list:
+                strategy: dict, top_k: int = TOP_K, corpus: str | None = None) -> list:
     """编排器: RRF 融合 × authority 权威度 × 页面锚定加权 → top-K 完整命中。
 
+    corpus(可选, A3/C2): 模块 anchor, 给定时先按 module 过滤语料池再融合; None → 全池
+    (向后兼容, /api/tutoring/rag/query 不传)。锚定公式原样: 节级 locked_sections 池内加权。
     top_k 命中项含: key/metadata/authority/source/section/file/file_path/anchor/summary/text。
     """
-    keymap = _assign_idx(blocks)
+    pool = select_corpus(blocks, corpus) if corpus else blocks
+    keymap = _assign_idx(pool)
 
     # 两路 rank: 向量路(COS 返回 key) / BM25 路
     vec_keys = [h["key"] for h in vec_result["hits"]]

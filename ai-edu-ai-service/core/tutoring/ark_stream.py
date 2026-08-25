@@ -33,9 +33,11 @@ def _parse_sse_lines(lines: Iterable[str]) -> Iterator[Dict[str, Any]]:
 
     每行格式: 'data: {json}' 或 'data: [DONE]'。
     yield 结构固定:
-        {"reasoning": str|None, "content": str|None, "tool_calls": list|None}
+        {"reasoning": str|None, "content": str|None, "tool_calls": list|None, "usage": dict|None}
     非 2xx 之外的流内错误(顶层 error / finish_reason=="error")抛 RuntimeError,
     由调用方降级或透传 error 事件。
+    include_usage=True 时, 流末尾的 usage chunk(choices 为空但带 usage)也会 yield,
+    携带 token 统计供 tokens_usage 组装(A5)。
     """
     for line in lines:
         if not line or not line.startswith("data:"):
@@ -51,6 +53,12 @@ def _parse_sse_lines(lines: Iterable[str]) -> Iterator[Dict[str, Any]]:
 
         if "error" in obj:
             raise RuntimeError(f"ark stream error: {json.dumps(obj['error'], ensure_ascii=False)[:200]}")
+
+        usage = obj.get("usage")
+        if usage:
+            # include_usage 的 usage chunk: choices 为空, 仅携带统计
+            yield {"reasoning": None, "content": None, "tool_calls": None, "usage": usage}
+            continue
 
         choices = obj.get("choices") or []
         if not choices:
@@ -74,6 +82,7 @@ def _parse_sse_lines(lines: Iterable[str]) -> Iterator[Dict[str, Any]]:
             "reasoning": delta.get("reasoning_content"),
             "content": delta.get("content"),
             "tool_calls": tool_calls,
+            "usage": None,
         }
 
 
@@ -87,6 +96,7 @@ def stream_chat(
     tools: Optional[List[dict]] = None,
     timeout: float = 120.0,
     enable_thinking: bool = False,
+    include_usage: bool = False,
 ) -> Iterator[Dict[str, Any]]:
     """直连方舟 chat/completions 流式读取(OpenAI 兼容)。
 
@@ -98,9 +108,11 @@ def stream_chat(
         tools: OpenAI 格式工具列表(decide 的 ActionMeta function tool)
         enable_thinking: 是否开思考模式(吐 reasoning_content)。decide 关(意图秒出),
             generate 开(解答段流式展示推理,思考 = AI 版进度条)
+        include_usage: 是否请求 token usage(发 stream_options.include_usage, 流末尾
+            usage chunk 经 _parse_sse_lines yield, 供 tokens_usage 组装)
 
     Yields:
-        _parse_sse_lines 的 delta dict(reasoning/content/tool_calls)
+        _parse_sse_lines 的 delta dict(reasoning/content/tool_calls/usage)
     Raises:
         RuntimeError: HTTP 非 2xx 或流内错误(调用方降级/透传)
     """
@@ -113,6 +125,8 @@ def stream_chat(
         # (mini 开思考要 50~145s,故只给长输出的 generate 开,作为"AI 版进度条")
         "thinking": {"type": "enabled" if enable_thinking else "disabled"},
     }
+    if include_usage:
+        payload["stream_options"] = {"include_usage": True}
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
