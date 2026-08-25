@@ -23,11 +23,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from config.settings import settings
 from core.gateway.factory import LLMFactory
+from core.rag import assistant as rag_assistant  # D3: lcs_quote_match / D1: check_boundary
 from core.rag import query as rag_core
 
 logger = logging.getLogger(__name__)
 
 HIT_K = 3           # hit@k 的 k(2A 定稿: 源文档池 top-k)
+
+# D1: 边界拒答评测类型(与 eval_dataset.VALID_TYPES 闭集一致; 断言=触发固定话术+0 token)
+BOUNDARY_TYPE = "边界拒答"
 
 # doubao-seed-2-0-mini 单价(元/千 token; 2026-08 火山方舟价, 精确单价变动时更新)
 DOUBAO_PRICE_PER_1K = {
@@ -73,6 +77,29 @@ def _ref_section(ref: str) -> str:
     """expected_references "ai-tutoring/04-安全与防作弊" → 节号 "04"。"""
     part = ref.split("/")[-1] if "/" in ref else ref
     return part.split("-")[0].strip()
+
+
+# ============ D2: precision@k 纯函数 ============
+
+
+def precision_at_k(recall: List[dict], expected_references: List[str],
+                   k: int = HIT_K) -> float:
+    """召回 top-k 中相关块占比(D2, 可单测/可聚合)。
+
+    与 hit_at_k 互补:
+      - hit_at_k: 预期引用中有多少被召回(分母 = 预期引用数, 看"该捞的捞到没")
+      - precision_at_k: 召回的 top-k 里有多少是相关的(分母 = k, 看"捞上来的干不干净")
+    相关块判定同 hit_at_k(块的 section 命中预期引用节)。
+    返回 0~1; k<=0 或预期空 → 0。
+    """
+    if k <= 0 or not expected_references:
+        return 0.0
+    top_k = recall[:k]
+    expected_sections = {_ref_section(r) for r in expected_references}
+    if not expected_sections or not top_k:
+        return 0.0
+    relevant = sum(1 for h in top_k if str(h.get("section")) in expected_sections)
+    return relevant / k
 
 
 # ============ 3.3 LLM 判分 ============
@@ -173,13 +200,30 @@ def _extract_json(text: str) -> dict:
 # ============ 3.1 单条评测执行 ============
 
 
+def _quoted_check(answer: str, hits: list) -> tuple:
+    """D3: is_quoted 校验 —— lcs_quote_match 算 quoted_keys, 断言 ⊆ 召回块 key。
+
+    返回 (quoted_keys, valid)。valid = 每个 quoted key 都对应一个精排召回块。
+    空 answer(降级/拒答) → 空列表, valid=True(无引用自然合法)。
+    """
+    if not answer:
+        return [], True
+    hits_k = hits[:HIT_K]
+    quoted_keys = rag_assistant.lcs_quote_match(answer, [
+        {"block_id": h.get("key", ""), "text": h.get("text", "")} for h in hits_k])
+    recall_keys = {h.get("key") for h in hits_k}
+    valid = all(k in recall_keys for k in quoted_keys)
+    return quoted_keys, valid
+
+
 def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     """单条评测: 检索 → hit@k → 生成 → 判分 → trace。
 
     case: 评测集一条(module/question/question_type/expected_references/expected_points)
     返回 trace dict(5.1 落盘结构):
       {question, question_type, intent, recall[], hit, hit_score,
-       answer, references[], usage, latency_ms, score, rationale, judged}
+       answer, references[], usage, latency_ms, score, rationale, judged,
+       quoted_keys, quoted_valid}(D3 新增; 边界拒答类型走 _boundary_trace)
     """
     question = case["question"]
     t0 = time.time()
@@ -198,10 +242,13 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     ]
     t_recall = time.time()
 
-    # hit@k
-    hit = hit_at_k(recall, case["expected_references"], k=HIT_K)
+    # D1: 边界拒答类型 → 断言触发 boundary(固定话术 + 0 token, 不进 generate)
+    if case["question_type"] == BOUNDARY_TYPE:
+        return _boundary_trace(case, recall, vec, bm, strategy, blocks, t0, t_recall)
 
-    # 生成 + 判分(判分带语料块, 供"编造"判定——答案在语料有支撑即非编造)
+    # hit@k + precision@k(D2: top-k 相关块占比, 可聚合)
+    hit = hit_at_k(recall, case["expected_references"], k=HIT_K)
+    precision = precision_at_k(recall, case["expected_references"], k=HIT_K)
     answer = ""
     score, rationale, judged = 0, "", False
     gen_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -213,6 +260,9 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
         score, rationale, judged = judge["score"], judge["rationale"], judge["judged"]
         judge_usage = judge.get("usage", judge_usage)
     t_done = time.time()
+
+    # D3: is_quoted 校验(quotedKeys ⊆ 召回块, 入 trace)
+    quoted_keys, quoted_valid = _quoted_check(answer, hits)
 
     usage = {
         "generate": gen_usage,
@@ -228,6 +278,7 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
         "recall": recall,
         "hit": bool(hit > 0),
         "hit_score": hit,
+        "precision": precision,
         "answer": answer,
         "references": [{"file": h["file"], "file_path": h.get("file_path", ""),
                         "anchor": h["anchor"], "authority": h["authority"],
@@ -235,10 +286,53 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
         "score": score,
         "rationale": rationale,
         "judged": judged,
+        "quoted_keys": quoted_keys,
+        "quoted_valid": quoted_valid,
         "usage": usage,
         "latency_ms": {
             "retrieve_ms": round((t_recall - t0) * 1000),
             "generate_ms": round((t_done - t_recall) * 1000),
+            "total_ms": round((t_done - t0) * 1000),
+        },
+        "version": rag_core._current_version(blocks),
+    }
+
+
+def _boundary_trace(case: dict, recall: list, vec: dict, bm: dict, strategy: dict,
+                    blocks: list, t0: float, t_recall: float) -> dict:
+    """D1: 边界拒答评测 —— 断言触发低置信 boundary, 固定话术 + 0 token, 不进 generate。
+
+    判定: 复用 assistant.check_boundary(空 rerank 或双路置信度低于阈值)。
+    触发 → 拒答正确(score=5); 未触发(意外高置信) → 拒答失败(score=0)。
+    0 token: 不调 generate/判分; quoted 空(无答案自然无引用)。
+    """
+    from core.rag.assistant import check_boundary
+    bd = check_boundary(recall,
+                        vec_conf=vec.get("confidence", 0.0),
+                        bm_conf=bm.get("confidence", 0.0))
+    ok = bd is not None
+    t_done = time.time()
+    zero = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    return {
+        "question": case["question"],
+        "question_type": BOUNDARY_TYPE,
+        "intent": strategy,
+        "recall": recall,
+        "hit": False,
+        "hit_score": 0.0,
+        "precision": 0.0,                               # 边界拒答预期不命中, precision 0
+        "answer": bd["message"] if ok else "",          # 拒答成功=固定话术; 失败=空
+        "references": [],
+        "score": 5 if ok else 0,                        # 拒答正确满分, 失败 0
+        "rationale": "边界拒答正确: 触发低置信固定话术, 0 token" if ok
+                     else "边界拒答失败: 未触发低置信(意外高置信命中)",
+        "judged": True,
+        "quoted_keys": [],
+        "quoted_valid": True,
+        "usage": {"generate": zero, "judge": zero, "total_tokens": 0, "cost_yuan": 0.0},
+        "latency_ms": {
+            "retrieve_ms": round((t_recall - t0) * 1000),
+            "generate_ms": 0,
             "total_ms": round((t_done - t0) * 1000),
         },
         "version": rag_core._current_version(blocks),
@@ -253,11 +347,12 @@ def aggregate(results: List[dict]) -> dict:
 
     {count, hit_at_k_avg, quality_avg, judged_ratio, avg_latency_ms,
      total_cost_yuan, avg_cost_yuan, avg_tokens, ...}(4.1 cost / 4.2 latency)
+    D2/D3 新增: precision_at_k_avg(top-k 相关块占比均值) / quoted_valid_ratio(引用合法率)
     """
     n = len(results)
     empty = {"count": 0, "hit_at_k_avg": 0.0, "quality_avg": 0.0, "judged_ratio": 0.0,
              "avg_latency_ms": 0.0, "total_cost_yuan": 0.0, "avg_cost_yuan": 0.0,
-             "avg_tokens": 0}
+             "avg_tokens": 0, "precision_at_k_avg": 0.0, "quoted_valid_ratio": 0.0}
     if n == 0:
         return empty
     hit_avg = sum(r["hit_score"] for r in results) / n
@@ -266,6 +361,10 @@ def aggregate(results: List[dict]) -> dict:
     latency = [r["latency_ms"]["total_ms"] for r in results]
     cost = [r.get("usage", {}).get("cost_yuan", 0.0) for r in results]
     tokens = [r.get("usage", {}).get("total_tokens", 0) for r in results]
+    # D2: precision@k 均值(边界拒答 hit_score 0, precision 由 _quoted 判定外补充)
+    precision = [r.get("precision", 0.0) for r in results]
+    # D3: quoted_valid 合法率(quoted_keys ⊆ 召回块)
+    quoted_valid = sum(1 for r in results if r.get("quoted_valid", True))
     return {
         "count": n,
         "hit_at_k_avg": round(hit_avg, 3),
@@ -277,4 +376,6 @@ def aggregate(results: List[dict]) -> dict:
         "total_cost_yuan": round(sum(cost), 4),
         "avg_cost_yuan": round(sum(cost) / n, 4),
         "avg_tokens": round(sum(tokens) / n),
+        "precision_at_k_avg": round(sum(precision) / n, 3),
+        "quoted_valid_ratio": round(quoted_valid / n, 3),
     }

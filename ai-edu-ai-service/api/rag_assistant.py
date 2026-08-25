@@ -131,6 +131,8 @@ async def eval_report(x_internal_token: str = Header(None)):
             "avg_latency_ms": agg.get("avg_latency_ms", 0),
             "avg_cost_yuan": agg.get("avg_cost_yuan", 0.0),
             "judged_ratio": agg.get("judged_ratio", 0.0),
+            "precision_at_3": agg.get("precision_at_k_avg", 0.0),
+            "quoted_valid_ratio": agg.get("quoted_valid_ratio", 0.0),
         }
     except HTTPException:
         raise

@@ -51,15 +51,18 @@ def _valid_line():
 class TestLoadDataset:
     """2.3 加载器正常加载"""
 
-    def test_load_5_items_all_types(self):
+    def test_load_6_items_all_types(self):
+        """6 条 6 类(含 D1 边界拒答, 其 expected_references 允许空)"""
         items = eval_dataset.load_dataset()
-        assert len(items) == 5
+        assert len(items) == 6
         types = [i["question_type"] for i in items]
-        # 5 类各 1 条(集合相等, 顺序无关)
-        assert set(types) == {"操作", "数据关联", "最危险", "项目介绍", "难点"}
-        assert len(set(types)) == 5
+        # 6 类各 1 条(集合相等, 顺序无关)
+        assert set(types) == {"操作", "数据关联", "最危险", "项目介绍", "难点", "边界拒答"}
+        assert len(set(types)) == 6
         for i in items:
-            assert i["expected_references"] and i["expected_points"]
+            assert i["expected_points"]
+            if i["question_type"] != "边界拒答":
+                assert i["expected_references"]  # 非边界拒答类 refs 必填
 
     def test_validate_ok(self, tmp_dataset, monkeypatch):
         """单条通过格式校验(条数下限另测; 这里直接用 _validate)"""
@@ -111,6 +114,29 @@ class TestValidation:
         bad = json.dumps({"module": "kg", "question": "q", "question_type": "难点",
                           "expected_references": ["x"], "expected_points": ["y"]}, ensure_ascii=False)
         with pytest.raises(ValueError, match="module"):
+            setup(bad)
+
+    def test_boundary_type_allows_empty_refs(self):
+        """D1: 边界拒答类型允许 expected_references 为空(预期不命中任何节)"""
+        line = json.dumps({"module": "ai-tutoring", "question": "帮我写辞职信。",
+                           "question_type": "边界拒答",
+                           "expected_references": [], "expected_points": ["应拒答"]},
+                          ensure_ascii=False)
+        eval_dataset._validate(json.loads(line), "inline", 1)  # 不抛即过
+
+    def test_boundary_type_invalid_type_rejected(self, setup):
+        """D1: 非边界拒答类型 refs 空仍拒绝"""
+        bad = json.dumps({"module": "ai-tutoring", "question": "q", "question_type": "难点",
+                          "expected_references": [], "expected_points": ["y"]}, ensure_ascii=False)
+        with pytest.raises(ValueError, match="expected_references"):
+            setup(bad)
+
+    def test_boundary_type_refs_must_be_str(self, setup):
+        """D1: 边界拒答提供 refs 时元素仍须字符串"""
+        bad = json.dumps({"module": "ai-tutoring", "question": "q", "question_type": "边界拒答",
+                          "expected_references": [123], "expected_points": ["y"]},
+                         ensure_ascii=False)
+        with pytest.raises(ValueError, match="expected_references"):
             setup(bad)
 
     def test_bad_json_line(self, setup):

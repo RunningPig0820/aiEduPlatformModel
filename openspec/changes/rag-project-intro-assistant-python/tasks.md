@@ -78,10 +78,10 @@
 
 ## D. 评估扩展（eval）
 
-- [ ] 【扩展】`eval_dataset.VALID_TYPES` 加 `边界拒答`；断言 = 触发固定话术且 0 token
-- [ ] 【新增】`precision_at_k` 纯函数（top-k 相关块占比）
-- [ ] 【新增】is_quoted 校验：quotedKeys ⊆ 召回块，入评估
-- [ ] 【新增】baseline 报告经 eval/report 白盒展示（hit@k/质量分/cost/latency）
+- [x] 【扩展】`eval_dataset.VALID_TYPES` 加 `边界拒答`；断言 = 触发固定话术且 0 token
+- [x] 【新增】`precision_at_k` 纯函数（top-k 相关块占比）
+- [x] 【新增】is_quoted 校验：quotedKeys ⊆ 召回块，入评估
+- [x] 【新增】baseline 报告经 eval/report 白盒展示（hit@k/质量分/cost/latency）
 
 ## E. 测试
 

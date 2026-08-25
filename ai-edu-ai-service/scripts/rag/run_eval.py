@@ -101,6 +101,8 @@ def _print_report(out: dict, compare: bool = False):
     print(f"聚合报告(语料版本 {out['version']}):")
     print(f"  条数: {agg['count']}")
     print(f"  hit@k 平均: {agg['hit_at_k_avg']:.3f} (命中 {agg['hit_cases']}/{agg['count']} 条)")
+    print(f"  precision@3 平均: {agg.get('precision_at_k_avg', 0):.3f} (top-3 相关块占比)")
+    print(f"  quoted 合法率: {agg.get('quoted_valid_ratio', 0):.0%} (quotedKeys ⊆ 召回块)")
     print(f"  质量分平均: {agg['quality_avg']:.2f}/5 (判分 {agg['judged_ratio']:.0%})")
     print(f"  平均耗时: {agg['avg_latency_ms']}ms")
     print(f"  总成本: ¥{agg['total_cost_yuan']:.4f} (均 ¥{agg['avg_cost_yuan']:.4f}, 均 {agg['avg_tokens']} tokens)")

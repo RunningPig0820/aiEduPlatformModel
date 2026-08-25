@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "eval")
 
 # 闭集: 问题表分类(与 1.5A「8节↔问题表」映射一致)
-VALID_TYPES = {"项目介绍", "操作", "数据关联", "难点", "最危险"}
+# 边界拒答(D 组新增): 语料范围外问题, 预期触发低置信拒答(固定话术 + 0 token)
+BOUNDARY_TYPE = "边界拒答"
+VALID_TYPES = {"项目介绍", "操作", "数据关联", "难点", "最危险", BOUNDARY_TYPE}
 MIN_PER_MODULE = 5
 
 
@@ -56,10 +58,17 @@ def _validate(item: dict, path: str, lineno: int) -> None:
         raise err("question 必填非空字符串")
     if not isinstance(item.get("question_type"), str) or item["question_type"] not in VALID_TYPES:
         raise err(f"question_type 必填且 ∈ {sorted(VALID_TYPES)}, 实际 {item.get('question_type')!r}")
-    if not isinstance(item.get("expected_references"), list) or not item["expected_references"]:
-        raise err("expected_references 必填非空列表")
-    if not all(isinstance(r, str) and r for r in item["expected_references"]):
-        raise err("expected_references 元素必须是非空字符串")
+    if item["question_type"] == BOUNDARY_TYPE:
+        # 边界拒答: 预期不命中任何节 → 允许 expected_references 为空(若提供则校验元素)
+        if not isinstance(item.get("expected_references"), list):
+            raise err("expected_references 必填列表(边界拒答可空)")
+        if not all(isinstance(r, str) and r for r in item["expected_references"]):
+            raise err("expected_references 元素必须是非空字符串")
+    else:
+        if not isinstance(item.get("expected_references"), list) or not item["expected_references"]:
+            raise err("expected_references 必填非空列表")
+        if not all(isinstance(r, str) and r for r in item["expected_references"]):
+            raise err("expected_references 元素必须是非空字符串")
     if not isinstance(item.get("expected_points"), list) or not item["expected_points"]:
         raise err("expected_points 必填非空列表")
     if not all(isinstance(p, str) and p for p in item["expected_points"]):

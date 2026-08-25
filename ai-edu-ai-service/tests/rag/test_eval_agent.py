@@ -209,6 +209,136 @@ class TestRunEvalCase:
         assert called, "评测应走真实 retrieve_vector(不降级)"
 
 
+class TestPrecisionAtK:
+    """D2: precision@k 纯函数(top-k 相关块占比)"""
+
+    def _recall(self, sections):
+        return [{"section": s, "key": f"ai-tutoring/{s}", "score": 1.0 - i * 0.1,
+                 "authority": 1.0, "file": s, "anchor": s} for i, s in enumerate(sections)]
+
+    def test_all_related(self):
+        """top3 全部命中预期节 → precision@3 = 3/3 = 1.0"""
+        r = self._recall(["04", "07", "02"])
+        assert eval_agent.precision_at_k(
+            r, ["ai-tutoring/04-安全", "ai-tutoring/07-流式", "ai-tutoring/02-一次完整答疑"]) == 1.0
+
+    def test_two_of_three_again(self):
+        """top3 含 2 个相关块 → precision@3 = 2/3(spec 场景)"""
+        r = self._recall(["04", "02", "07"])
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全", "ai-tutoring/07-流式"]) == 2 / 3
+
+    def test_none_related(self):
+        r = self._recall(["01", "02", "06"])
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全"]) == 0.0
+
+    def test_respects_k(self):
+        """k=3 只看 top3: 相关块在 top4 不计入; k=4 计入(分母固定为 k)"""
+        r = self._recall(["04", "01", "02", "06"])
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全"], k=3) == 1 / 3
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全"], k=4) == 1 / 4
+
+    def test_empty_expected(self):
+        assert eval_agent.precision_at_k(self._recall(["04"]), []) == 0.0
+
+    def test_auto_fill_k(self):
+        r = self._recall(["04", "02", "06"])
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全"]) == 1 / 3  # 默认 k=3
+
+
+class TestBoundaryRefusal:
+    """D1: 边界拒答类型 —— 断言触发固定话术且 0 token(不进 generate)"""
+
+    @pytest.fixture
+    def boundary_case(self):
+        return {"module": "ai-tutoring", "question": "帮我写辞职信。",
+                "question_type": "边界拒答", "expected_references": [],
+                "expected_points": ["应拒答", "不生成答案"]}
+
+    def _mock_low_conf(self, monkeypatch, hits_empty=True):
+        """低置信检索: 向量/BM25 双路都低 → 触发 boundary"""
+        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
+        monkeypatch.setattr(rag_core, "retrieve_vector",
+                            lambda q: {"hits": [], "confidence": 0.1})
+        monkeypatch.setattr(rag_core, "retrieve_bm25",
+                            lambda q, blocks: {"hits": [], "confidence": 0.1})
+        monkeypatch.setattr(rag_core, "orchestrate", lambda *a, **k: [])
+        # 边界拒答不得进 generate/判分(0 token)
+        monkeypatch.setattr(rag_core, "generate", _forbidden_generate)
+        monkeypatch.setattr(eval_agent, "judge_quality", _forbidden_judge)
+
+    def test_boundary_refusal_ok(self, monkeypatch, boundary_case):
+        """低置信 → 拒答正确: 固定话术, score=5, 0 token"""
+        self._mock_low_conf(monkeypatch)
+        trace = eval_agent.run_eval_case(boundary_case)
+        assert trace["question_type"] == "边界拒答"
+        assert "未找到关联文档" in trace["answer"]          # 固定话术
+        assert trace["score"] == 5                          # 拒答正确满分
+        assert trace["usage"]["total_tokens"] == 0          # 0 token
+        assert trace["usage"]["cost_yuan"] == 0.0
+        assert trace["quoted_valid"] is True
+        assert trace["judged"] is True
+
+    def test_boundary_refusal_fail_high_conf(self, monkeypatch, boundary_case):
+        """意外高置信命中 → 拒答失败 score=0(语义: 该拒答却答了)"""
+        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
+        monkeypatch.setattr(rag_core, "retrieve_vector",
+                            lambda q: {"hits": ["v"], "confidence": 0.9})
+        monkeypatch.setattr(rag_core, "retrieve_bm25",
+                            lambda q, blocks: {"hits": ["b"], "confidence": 0.8})
+        # orchestrate 返回相关块(04)
+        monkeypatch.setattr(rag_core, "orchestrate", lambda *a, **k: [{
+            "key": "ai-tutoring/04-安全与防作弊#0", "score": 0.9, "authority": 1.0,
+            "section": "04", "file": "04-安全与防作弊", "anchor": "04-安全与防作弊",
+            "text": "防套答案", "summary": "s", "file_path": "f"}])
+        trace = eval_agent.run_eval_case(boundary_case)
+        assert trace["score"] == 0
+        assert trace["answer"] == ""                          # 拒答失败, 未产出固定话术
+        assert "拒答失败" in trace["rationale"]
+
+
+def _forbidden_generate(*a, **k):
+    raise AssertionError("边界拒答不得进 generate(0 token 断言)")
+
+
+def _forbidden_judge(*a, **k):
+    raise AssertionError("边界拒答不得调 LLM 判分(0 token 断言)")
+
+
+class TestQuotedCheck:
+    """D3: is_quoted 校验 —— quotedKeys ⊆ 召回块 key"""
+
+    def _hits(self, text):
+        return [{"key": "ai-tutoring/04-安全与防作弊#0", "text": text,
+                 "authority": 1.0, "section": "04", "file": "04-安全与防作弊",
+                 "anchor": "04-安全与防作弊"}]
+
+    def test_quoted_keys_subset_of_recall(self):
+        """答案引用召回块原文 → quoted_keys ∈ 召回块 key 集合"""
+        text = "防套答案: 第1次要答案拦下给思路"
+        hits = self._hits(text)
+        quoted, valid = eval_agent._quoted_check(text, hits)
+        assert quoted == ["ai-tutoring/04-安全与防作弊#0"]
+        assert valid is True
+
+    def test_empty_answer_valid(self):
+        """空 answer(降级/拒答) → 空 quoted_keys, valid=True"""
+        quoted, valid = eval_agent._quoted_check("", self._hits("x"))
+        assert quoted == [] and valid is True
+
+    def test_rewritten_answer_not_quoted(self):
+        """答案改写未命中原文 → 无引用, 仍合法(不要求必引用)"""
+        text = "防套答案: 第1次要答案拦下给思路"
+        quoted, valid = eval_agent._quoted_check("完全是另一段话", self._hits(text))
+        assert quoted == [] and valid is True
+
+    def test_recall_empty_valid(self):
+        """无召回块 → 空引用合法"""
+        quoted, valid = eval_agent._quoted_check("防套答案: 第1次要答案拦下给思路", [])
+        assert quoted == [] and valid is True
+
+
 class TestCost:
     """4.1 cost 计算纯函数"""
 

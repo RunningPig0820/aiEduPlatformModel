@@ -445,13 +445,14 @@ class TestGuideAPI:
 
 class TestEvalReportAPI:
     def test_report_mapping(self, client, tmp_path):
-        """baseline 报告字段映射(version/count/hit_at_3/quality_avg/latency/cost/judged)"""
+        """baseline 报告字段映射(version/count/hit_at_3/quality/latency/cost/judged/precision/quoted)"""
         with open(tmp_path / "2026-08-25-abcd123.json", "w", encoding="utf-8") as f:
             json.dump({"version": "2026-08-25-abcd123", "aggregate": {
                 "count": 15, "hit_at_k_avg": 0.8, "quality_avg": 4.2,
                 "avg_latency_ms": 5599, "avg_cost_yuan": 0.0157, "judged_ratio": 1.0,
                 "total_cost_yuan": 0.2355, "avg_tokens": 4686, "hit_cases": 12,
-                "unjudged": 0}}, f, ensure_ascii=False)
+                "unjudged": 0, "precision_at_k_avg": 0.733, "quoted_valid_ratio": 0.933}},
+                f, ensure_ascii=False)
         sys.modules["scripts.rag.run_eval"]._list_reports = \
             lambda: ["2026-08-25-abcd123.json"]
         r = client.get("/api/rag/assistant/eval/report", headers=AUTH)
@@ -464,6 +465,9 @@ class TestEvalReportAPI:
         assert body["avg_latency_ms"] == 5599
         assert body["avg_cost_yuan"] == 0.0157
         assert body["judged_ratio"] == 1.0
+        # D2/D3: precision@3 均值 + quoted 合法率白盒展示
+        assert body["precision_at_3"] == 0.733
+        assert body["quoted_valid_ratio"] == 0.933
 
     def test_report_no_report_404(self, client):
         """无报告 → 404(暂无评估报告)"""

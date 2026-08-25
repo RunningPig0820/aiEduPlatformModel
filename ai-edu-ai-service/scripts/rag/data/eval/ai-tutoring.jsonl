@@ -3,3 +3,4 @@
 {"module": "ai-tutoring", "question": "答疑和知识图谱怎么联动？", "question_type": "数据关联", "expected_references": ["ai-tutoring/05-数据落库与掌握度"], "expected_points": ["答疑不直接调图谱结构化知识点", "kp-matching-lightup独立模块点亮", "题型掌握度题目记录错误事件回流图谱", "举一反三依赖题库与图谱关联未落地"]}
 {"module": "ai-tutoring", "question": "怎么防学生套答案？", "question_type": "难点", "expected_references": ["ai-tutoring/04-安全与防作弊（护栏）", "ai-tutoring/07-流式与性能"], "expected_points": ["答案护栏reveal两次出口", "answer_request_count计数", "轮次护栏round_count20", "Java确定性硬拦不靠LLM自觉", "类型先行流式内容流入前type已过护栏"]}
 {"module": "ai-tutoring", "question": "没有题库怎么做？", "question_type": "最危险", "expected_references": ["ai-tutoring/08-演进路线", "ai-tutoring/02-一次完整答疑怎么走"], "expected_points": ["通用引导兜底", "题目标记待入库给教研", "无题库不进题库匹配", "MVP L0单次调用decide generate", "刻意不用agent编排"]}
+{"module": "ai-tutoring", "question": "帮我写一封辞职信。", "question_type": "边界拒答", "expected_references": [], "expected_points": ["语料范围外应触发低置信拒答", "不生成答案"]}
