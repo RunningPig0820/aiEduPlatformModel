@@ -199,6 +199,11 @@ async def chat_stream(
             total_tokens = 0
 
             for chunk in llm.stream(messages):
+                # 客户端断开 → 停止生成(前后端都停: 前端已 abort, 后端不再产 token)
+                if await request.is_disconnected():
+                    logger.info("chat/stream 客户端断开, 停止生成: session=%s", session_id)
+                    return
+
                 if chunk.content:
                     # 发送内容块
                     data = json.dumps({"content": chunk.content}, ensure_ascii=False)
