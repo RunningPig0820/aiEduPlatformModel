@@ -44,16 +44,16 @@ class TestIntentNormal:
     def test_intent_parses_structured(self, monkeypatch):
         """完整字段: anchor/category/switch/ambiguous/candidates + 节映射"""
         monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(
-            anchor="rag-project", category="难点",
+            anchor="rag-system", category="难点",
             switch_detected=True, ambiguous=True,
-            candidates=["rag-project", "ai-tutoring"],
+            candidates=["rag-system", "ai-tutoring"],
         ))
         it = rag_core.intent("这套系统的防作弊怎么做的？", history=[])
-        assert it["anchor"] == "rag-project"
+        assert it["anchor"] == "rag-system"
         assert it["category"] == "难点"
         assert it["switch_detected"] is True
         assert it["ambiguous"] is True
-        assert it["candidates"] == ["rag-project", "ai-tutoring"]
+        assert it["candidates"] == ["rag-system", "ai-tutoring"]
         assert it["locked_sections"] == ["04", "07"]  # 难点 → 04/07 节映射
         assert it["degraded"] is False
 
@@ -86,7 +86,7 @@ class TestIntentFallback:
         """LLM 失败但问题含 RAG 关键词 → anchor 路由 rag-project"""
         monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: {})
         it = rag_core.intent("RAG 多路召回是怎么做的？")
-        assert it["anchor"] == "rag-project"
+        assert it["anchor"] == "rag-system"
 
     def test_intent_category_non_closed_set(self, monkeypatch):
         """LLM 给了 anchor 但 category 非闭集 → anchor 保留, 节级关键词兜底"""
@@ -108,20 +108,20 @@ class TestSanitizeIntent:
     """schema 校验: anchor 必填模块 id、candidates 闭集去重、switch/ambiguous 布尔"""
 
     def test_anchor_valid_kept(self):
-        s = rag_core._sanitize_intent({"anchor": "rag-project"}, "问题")
-        assert s["anchor"] == "rag-project"
+        s = rag_core._sanitize_intent({"anchor": "rag-system"}, "问题")
+        assert s["anchor"] == "rag-system"
 
     def test_anchor_invalid_fallback_module(self):
         """anchor 非闭集 → 关键词兜底模块"""
         s = rag_core._sanitize_intent({"anchor": "bad-module"}, "RAG 检索怎么做的")
-        assert s["anchor"] == "rag-project"
+        assert s["anchor"] == "rag-system"
 
     def test_candidates_closed_set_dedup(self):
         """candidates 只保留闭集内 + 去重"""
         s = rag_core._sanitize_intent(
-            {"anchor": "ai-tutoring", "candidates": ["rag-project", "rag-project", "bad", "ai-tutoring"]},
+            {"anchor": "ai-tutoring", "candidates": ["rag-system", "rag-system", "bad", "ai-tutoring"]},
             "问题")
-        assert s["candidates"] == ["rag-project", "ai-tutoring"]
+        assert s["candidates"] == ["rag-system", "ai-tutoring"]
 
     def test_booleans_coerced(self):
         """switch/ambiguous 强制布尔(容忍字符串/数字)"""
@@ -175,8 +175,8 @@ class TestExtractJson:
         assert rag_core._extract_json('{"anchor":"ai-tutoring"}') == {"anchor": "ai-tutoring"}
 
     def test_fenced_json(self):
-        text = '```json\n{"anchor": "rag-project", "ambiguous": true}\n```'
-        assert rag_core._extract_json(text)["anchor"] == "rag-project"
+        text = '```json\n{"anchor": "rag-system", "ambiguous": true}\n```'
+        assert rag_core._extract_json(text)["anchor"] == "rag-system"
 
     def test_with_prefix_suffix(self):
         text = '好的，这是结果：{"anchor": "ai-tutoring"} 以上。'

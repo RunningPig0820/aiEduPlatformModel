@@ -34,7 +34,7 @@ BLOCKS = [
               "anchor": "04-安全与防作弊"}},
     {"text": "RAG 多路召回: 向量 + BM25 双路, RRF 融合 × authority 权威度 × 节锚定加权",
      "summary": "RAG 多路召回机制",
-     "tags": {"module": "rag-project", "section": "", "source": "代码",
+     "tags": {"module": "rag-system", "section": "", "source": "代码",
               "authority": 0.8, "file": "rag-query", "file_path": "3.代码/rag-query.md",
               "anchor": "rag-query"}},
 ]
@@ -48,9 +48,9 @@ class TestSelectCorpus:
         assert len(pool) == 1
         assert pool[0]["tags"]["module"] == "ai-tutoring"
 
-        pool = rag_core.select_corpus(BLOCKS, "rag-project")
+        pool = rag_core.select_corpus(BLOCKS, "rag-system")
         assert len(pool) == 1
-        assert pool[0]["tags"]["module"] == "rag-project"
+        assert pool[0]["tags"]["module"] == "rag-system"
 
     def test_anchor_none_full_corpus(self):
         assert rag_core.select_corpus(BLOCKS, None) == BLOCKS

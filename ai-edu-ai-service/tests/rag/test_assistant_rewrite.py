@@ -53,14 +53,14 @@ def fake_llm(monkeypatch):
 class TestRewrite:
     def test_rewrite_success(self, fake_llm):
         """口语 → 检索式改写"""
-        out = rag_core.rewrite_query("那套多路召回是怎么搞的？", "rag-project")
+        out = rag_core.rewrite_query("那套多路召回是怎么搞的？", "rag-system")
         assert out == "RAG 多路召回 怎么做"
 
     def test_rewrite_empty_fallback(self, monkeypatch):
         """LLM 返回空 → 原问题"""
         monkeypatch.setattr(rag_core.LLMFactory, "create", lambda *a, **k: _FakeLLM(""))
         q = "那套多路召回是怎么搞的？"
-        assert rag_core.rewrite_query(q, "rag-project") == q
+        assert rag_core.rewrite_query(q, "rag-system") == q
 
     def test_rewrite_exception_fallback(self, monkeypatch):
         """LLM 抛异常 → 原问题"""
@@ -87,5 +87,5 @@ class TestRewrite:
 
     def test_rewrite_no_history_prompt_ok(self, fake_llm):
         """无 history → prompt 标注无, 不报错"""
-        rag_core.rewrite_query("问题", "rag-project", history=[])
+        rag_core.rewrite_query("问题", "rag-system", history=[])
         assert "（无）" in fake_llm["llm"].last_human

@@ -3,6 +3,9 @@
 > 对齐后端：`aiEduPlatform/openspec/changes/rag-project-intro-assistant`（design D1~D12 + specs×4 + api.md）
 > 沟通定稿：C1 语料范围(仅AI答疑, 其他模块低置信拒答正确) / C2 anchor两层(模块选池+节加权) / C3 cache_hit实测 / C4 clarify候选(LLM+会话锚点) / C5 suggestions必含RAG
 > 联调审查定稿（2026-08-25）：① ask 请求带 history/trace_id(Java 传) ② permission 仅 Java(Python 生产不产) ③ turns 存 Java Redis ④ close 归 Java(Python 不建端点) ⑤ intent 事件含 candidates ⑥ switch 补 spec+任务 ⑦ history 显式截断 N=3 ⑧ tasks 标 Java 归属
+> 三端契约对齐定稿（2026-08-25）：模块闭集 rag-system(弃 rag-project) / question-analysis(弃 question-type)，
+>   语料选池靠 tags.module 不依赖目录名(slice_corpus module 参数化); clarify candidates 仍字符串 id(前端 pageModuleMap 渲染 label, Python 不产 label);
+>   permission 由 Java 加 trace_id; sessionId 前端 UUID 生成; 查看原文 Java 代理 GET /api/rag/assistant/source?path=(Python /api/rag/source 保留挂载作转发目标)
 > 标注：【复用】改现有 /【新增】新建 /【扩展】现有加能力
 > ↔ **Java 侧里程碑对照**：A 组↔Java M2(引擎) / B 组↔M3(网关) / C 组↔M4(韧性) / D 组↔M5(评估)，联调时对表
 

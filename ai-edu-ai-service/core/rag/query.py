@@ -54,15 +54,16 @@ ANCHOR_RULES = [
 ANCHOR_WEIGHT = 1.5
 
 # 模块锚点闭集(模块级路由, 决定从哪个语料池召回; A1 结构化输出必填 anchor)
-# 对齐后端 guardrails spec 四模块: AI答疑 / RAG项目 / 知识图谱 / 题型分析
-MODULE_ANCHORS = ("ai-tutoring", "rag-project", "knowledge-graph", "question-type")
+# 对齐后端 guardrails spec 四模块: AI答疑 / 知识图谱 / 题型分析 / RAG项目
+# 三端定稿(2026-08-25): rag-system(弃 rag-project) / question-analysis(弃 question-type)
+MODULE_ANCHORS = ("ai-tutoring", "knowledge-graph", "question-analysis", "rag-system")
 
 # 模块级关键词兜底(LLM 意图失败时, 问题关键词 → 模块锚点; 与 ANCHOR_RULES 的节级锚定两层并存)
 MODULE_ANCHOR_RULES = [
     (("答疑", "ai答疑", "教学", "学生", "题目", "解答", "启发"), "ai-tutoring"),
-    (("rag", "检索", "召回", "重排", "向量", "bm25", "rrf", "多路", "知识库"), "rag-project"),
+    (("rag", "检索", "召回", "重排", "向量", "bm25", "rrf", "多路", "知识库"), "rag-system"),
     (("知识图谱", "图谱", "neo4j", "知识点", "概念", "关系", "节点"), "knowledge-graph"),
-    (("题型", "考点", "题型分析", "聚集"), "question-type"),
+    (("题型", "考点", "题型分析", "聚集"), "question-analysis"),
 ]
 
 # history 截断窗口(联调⑦): Java 传入最近 N 轮, Python 只消费最近 N 轮(含 clarify 轮)
@@ -126,7 +127,7 @@ _INTENT_SYSTEM = """你是「AI答疑」RAG 助手的意图识别器。只输出
 
 输出 JSON（必须合法 JSON，闭集枚举）：
 {
-  "anchor": "ai-tutoring",            // 模块锚点, 闭集: ai-tutoring|rag-project|knowledge-graph|question-type
+  "anchor": "ai-tutoring",            // 模块锚点, 闭集: ai-tutoring|knowledge-graph|question-analysis|rag-system
   "category": "项目介绍",             // 类别闭集: 项目介绍|操作|难点|数据关联|最危险|其他
   "switch_detected": false,           // 是否从历史锚点切换到新模块
   "ambiguous": false,                 // 问题指向多个模块、需澄清
@@ -134,8 +135,8 @@ _INTENT_SYSTEM = """你是「AI答疑」RAG 助手的意图识别器。只输出
 }
 
 判断规则：
-- anchor：问题语义指向哪个模块（AI答疑=ai-tutoring / RAG项目=rag-project / 知识图谱=knowledge-graph / 题型分析=question-type）
-- 项目介绍/操作/难点/数据关联/最危险 → AI答疑模块内类别；问系统架构/代码/部署/评测 → RAG 项目模块(rag-project)
+- anchor：问题语义指向哪个模块（AI答疑=ai-tutoring / RAG项目=rag-system / 知识图谱=knowledge-graph / 题型分析=question-analysis）
+- 项目介绍/操作/难点/数据关联/最危险 → AI答疑模块内类别；问系统架构/代码/部署/评测 → RAG 项目模块(rag-system)
 - switch_detected：本问题明显不再谈历史锚点模块、转向另一模块 → true
 - ambiguous：问题含"这个/那个/它"指代不清、可指向多个模块 → true，并给 candidates（模块闭集内，≥2 个）
 只输出 JSON 本身。"""

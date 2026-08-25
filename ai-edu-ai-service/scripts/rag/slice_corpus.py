@@ -58,9 +58,12 @@ def section_of(path: str) -> str:
     return name.replace(".md", "")
 
 
-def _tags(path: str, authority: float, source: str, anchor: str) -> dict:
+def _tags(path: str, authority: float, source: str, anchor: str,
+          module: str = "ai-tutoring") -> dict:
+    """块 metadata; module = 模块锚点闭集 id(三端定稿: ai-tutoring/knowledge-graph/question-analysis/rag-system)。
+    默认 ai-tutoring 向后兼容; 多模块切片时按闭集 id 传(select_corpus 按 tags.module 选池, 不依赖目录名)。"""
     return {
-        "module": "ai-tutoring",
+        "module": module,
         "section": section_of(path),
         "source": source,
         "authority": authority,
@@ -92,7 +95,9 @@ def chunk_paragraphs(text: str, cap: int) -> list:
     return chunks
 
 
-def slice_file(path: str, authority: float, source: str, split_level: int, mode: str) -> list:
+def slice_file(path: str, authority: float, source: str, split_level: int, mode: str,
+               module: str = "ai-tutoring") -> list:
+    """切片单文件 → 块列表; module = 模块闭集 id(默认 ai-tutoring, 多模块切片时传 rag-system 等)。"""
     with open(path, encoding="utf-8") as f:
         lines = f.read().splitlines()
     title = os.path.basename(path).replace(".md", "")
@@ -105,7 +110,7 @@ def slice_file(path: str, authority: float, source: str, split_level: int, mode:
             return []
         if len(text) > MAX_CHARS_FILE:
             text = text[:MAX_CHARS_FILE] + "\n\n[已截断]"
-        return [{"text": text, "summary": "", "tags": _tags(path, authority, source, title)}]
+        return [{"text": text, "summary": "", "tags": _tags(path, authority, source, title, module)}]
 
     # mode="split": 按标题切, 块起点 = level<=split_level; OpenSpec 过滤 discard 段
     blocks, cur_anchor, cur_lines = [], None, []
@@ -143,9 +148,9 @@ def slice_file(path: str, authority: float, source: str, split_level: int, mode:
         if len(text) > MAX_CHARS_SPLIT:
             # 段落拆块(同锚点, md 导出由冲突序号区分文件名; summary 同节共享)
             for chunk in chunk_paragraphs(text, MAX_CHARS_SPLIT):
-                out.append({"text": chunk, "summary": "", "tags": _tags(path, authority, source, anchor)})
+                out.append({"text": chunk, "summary": "", "tags": _tags(path, authority, source, anchor, module)})
         else:
-            out.append({"text": text, "summary": "", "tags": _tags(path, authority, source, anchor)})
+            out.append({"text": text, "summary": "", "tags": _tags(path, authority, source, anchor, module)})
     return out
 
 

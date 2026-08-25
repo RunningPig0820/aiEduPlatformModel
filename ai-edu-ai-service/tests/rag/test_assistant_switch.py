@@ -21,7 +21,7 @@ sys.path.insert(
 from core.rag import assistant
 
 
-def _intent(anchor="rag-project", switch_detected=True):
+def _intent(anchor="rag-system", switch_detected=True):
     return {"anchor": anchor, "switch_detected": switch_detected, "ambiguous": False,
             "candidates": [], "category": "", "locked_sections": [], "degraded": False}
 
@@ -30,10 +30,10 @@ class TestResolveSwitch:
     def test_switch_detected_returns_event(self):
         """switch_detected=true → 返回 {from_anchor, to_anchor, reset}"""
         history = [{"question": "前一轮", "answer": "…", "anchor": "ai-tutoring"}]
-        ev = assistant.resolve_switch(_intent(anchor="rag-project"), history)
+        ev = assistant.resolve_switch(_intent(anchor="rag-system"), history)
         assert ev is not None
         assert ev["from_anchor"] == "ai-tutoring"   # 旧锚点(history 末轮)
-        assert ev["to_anchor"] == "rag-project"      # 新锚点(intent)
+        assert ev["to_anchor"] == "rag-system"      # 新锚点(intent)
         assert ev["reset"] is True                   # 重置上下文标记
 
     def test_switch_not_detected_none(self):
@@ -51,10 +51,10 @@ class TestResolveSwitch:
         """history 多轮 → 取末轮 anchor 作 from_anchor"""
         history = [
             {"question": "q1", "answer": "a1", "anchor": "ai-tutoring"},
-            {"question": "q2", "answer": "a2", "anchor": "rag-project"},
+            {"question": "q2", "answer": "a2", "anchor": "rag-system"},
         ]
         ev = assistant.resolve_switch(_intent(anchor="knowledge-graph"), history)
-        assert ev["from_anchor"] == "rag-project"
+        assert ev["from_anchor"] == "rag-system"
 
     def test_switch_history_last_no_anchor_uses_default(self):
         """history 末轮缺 anchor → 回落 current_project"""
@@ -68,9 +68,9 @@ class TestResolveSwitch:
 
     def test_switch_new_anchor_pipeline(self):
         """新锚点链路: to_anchor 直接来自 intent.anchor(rewrite/recall 用)"""
-        ev = assistant.resolve_switch(_intent(anchor="rag-project"), [])
-        # to_anchor 落 rag-project → 后续 rewrite_query(..., anchor="rag-project") 走新模块语料池
-        assert ev["to_anchor"] == "rag-project"
+        ev = assistant.resolve_switch(_intent(anchor="rag-system"), [])
+        # to_anchor 落 rag-project → 后续 rewrite_query(..., anchor="rag-system") 走新模块语料池
+        assert ev["to_anchor"] == "rag-system"
 
 
 class TestLastAnchor:
@@ -83,4 +83,4 @@ class TestLastAnchor:
 
     def test_last_anchor_empty_history(self):
         assert assistant.last_anchor([], "ai-tutoring") == "ai-tutoring"
-        assert assistant.last_anchor(None, "rag-project") == "rag-project"
+        assert assistant.last_anchor(None, "rag-system") == "rag-system"

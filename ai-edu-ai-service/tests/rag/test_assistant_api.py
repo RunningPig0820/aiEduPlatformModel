@@ -157,14 +157,14 @@ class TestPipelineEvents:
         monkeypatch.setattr(
             assistant.rag_core, "intent",
             lambda q, h=None, cp="ai-tutoring":
-            _intent(ambiguous=True, candidates=["ai-tutoring", "rag-project"]))
+            _intent(ambiguous=True, candidates=["ai-tutoring", "rag-system"]))
         monkeypatch.setattr(assistant, "recall", _forbidden_async())  # clarify 后不得进 recall
         evs = _collect(assistant.pipeline_events(
-            "这个功能的流转", history=[], current_project="rag-project", trace_id="t2"))
+            "这个功能的流转", history=[], current_project="rag-system", trace_id="t2"))
         assert [e["event"] for e in evs] == ["intent", "clarify", "done"]
         clarify = evs[1]["data"]
-        assert clarify["candidates"] == ["ai-tutoring", "rag-project"]
-        assert clarify["default"] == "rag-project"  # current_project 优先
+        assert clarify["candidates"] == ["ai-tutoring", "rag-system"]
+        assert clarify["default"] == "rag-system"  # current_project 优先
         done = evs[2]["data"]
         assert done["answer"] == ""
         assert done["tokens_usage"]["total_tokens"] == 0
@@ -174,7 +174,7 @@ class TestPipelineEvents:
     def test_switch_uses_new_anchor(self, monkeypatch):
         """switch_detected → intent→switch→rewrite(新锚点)→rerank→token→done"""
         def _it(q, h=None, cp="ai-tutoring"):
-            return _intent(anchor="rag-project", switch_detected=True)
+            return _intent(anchor="rag-system", switch_detected=True)
         cap = _patch_base(monkeypatch, intent=_it,
                           stream_evs=[{"type": "token", "text": "RAG 架构"}])
         monkeypatch.setattr(assistant, "gen_suggestions", lambda a, anchor="": [])
@@ -183,8 +183,8 @@ class TestPipelineEvents:
             current_project="ai-tutoring", trace_id="t3"))
         assert [e["event"] for e in evs] == ["intent", "switch", "rewrite", "rerank", "token", "done"]
         sw = evs[1]["data"]
-        assert sw == {"from_anchor": "ai-tutoring", "to_anchor": "rag-project"}  # from=history 末轮锚点
-        assert cap["rewrite_anchors"] == ["rag-project"]  # rewrite 用 to_anchor 走新锚点链路
+        assert sw == {"from_anchor": "ai-tutoring", "to_anchor": "rag-system"}  # from=history 末轮锚点
+        assert cap["rewrite_anchors"] == ["rag-system"]  # rewrite 用 to_anchor 走新锚点链路
 
     def test_boundary_short_circuit_no_generate(self, monkeypatch):
         """边界低置信(空 rerank) → intent→rewrite→rerank→boundary→done, 短路不调 generate"""
