@@ -143,3 +143,36 @@ class TestStreamAPI:
             }
         )
         assert response.status_code == 403
+
+    def test_stream_ok_receives_tokens(self, client, headers):
+        """回归(2026-08-25): chat_stream 参数遮蔽修复——正常流能收到 token, 不再 500
+
+        之前 request: ChatRequest 遮蔽 FastAPI HTTP Request, request.is_disconnected() 崩 → 500。
+        修复后 http_request 为真实 Request, 流式正常产 token。
+        """
+        from unittest.mock import MagicMock, patch
+
+        fake_llm = MagicMock()
+        fake_llm.stream.return_value = iter([
+            MagicMock(content="人工智能是", tool_call_chunks=None),
+            MagicMock(content="研究智能的科学。", tool_call_chunks=None),
+        ])
+        with patch("api.chat.ModelRouter.create_llm",
+                   return_value=(fake_llm, "zhipu/glm-4-flash")), \
+             patch("api.chat.validate_model",
+                   return_value=("zhipu", "glm-4-flash")):
+            response = client.post(
+                "/api/llm/chat/stream",
+                headers=headers,
+                json={
+                    "message": "用一句话介绍人工智能",
+                    "scene": "page_assistant",
+                    "user_id": 123
+                }
+            )
+        assert response.status_code == 200
+        # 流式响应含 token 事件(非 500 error)
+        assert "event: token" in response.text
+        assert "人工智能是" in response.text
+        assert "研究智能的科学。" in response.text
+        assert "event: error" not in response.text

@@ -158,6 +158,7 @@ async def chat(
 @router.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,
+    http_request: Request,
     x_internal_token: str = Header(None)
 ):
     """
@@ -200,7 +201,7 @@ async def chat_stream(
 
             for chunk in llm.stream(messages):
                 # 客户端断开 → 停止生成(前后端都停: 前端已 abort, 后端不再产 token)
-                if await request.is_disconnected():
+                if await http_request.is_disconnected():
                     logger.info("chat/stream 客户端断开, 停止生成: session=%s", session_id)
                     return
 
