@@ -107,7 +107,7 @@ class TestResolveClarify:
         assert "ai-tutoring" not in msg          # 候选 id 不入 message
         assert "rag-system" not in msg           # 英文 id 不出现(用户可读)
         assert "明确" in msg                     # 建议措辞语义保留
-        assert "当前提问包含歧义" in msg
+        assert "无法准确定位" in msg
 
     def test_message_default_fallback_history_zh(self):
         """current_project 非闭集 → default 取历史锚点, 中文化展示"""

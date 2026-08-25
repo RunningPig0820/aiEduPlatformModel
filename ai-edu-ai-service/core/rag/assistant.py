@@ -236,7 +236,7 @@ MODULE_ZH = {
 }
 
 # 文案含 {current}/{default} 两个占位(current=当前页锚点, default=默认模块), 均中文化展示
-CLARIFY_MSG = "当前提问包含歧义。你当前在「{current}」功能页，请明确想了解的具体功能；未选择时默认使用「{default}」功能介绍。"
+CLARIFY_MSG = "当前提问无法准确定位到需要介绍的功能。你当前在「{current}」功能页，请明确想了解的具体功能；未选择时默认使用「{default}」功能介绍。"
 CLARIFY_MIN_CANDIDATES = 2  # candidates <2 不触发 clarify(仍模糊直接走默认)
 
 
