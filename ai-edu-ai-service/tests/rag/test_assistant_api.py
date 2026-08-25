@@ -475,6 +475,22 @@ class TestEvalReportAPI:
         assert body["total_cost_yuan"] == 0.2355
         assert body["running"] is False
 
+    def test_report_selects_latest_by_mtime(self, client, tmp_path, monkeypatch):
+        """多报告时按 mtime 选最新(版本名与生成时间无关, 不能靠文件名排序)"""
+        import os
+        old_f = tmp_path / "2026-08-24-aaa111.json"
+        new_f = tmp_path / "2026-08-25-bbb222.json"
+        for f, ver in ((old_f, "2026-08-24-aaa111"), (new_f, "2026-08-25-bbb222")):
+            with open(f, "w", encoding="utf-8") as fh:
+                json.dump({"version": ver, "aggregate": {"count": 1}}, fh, ensure_ascii=False)
+        # 显式设 mtime: 新文件更新时间较新(文件名字母序 bbb>aaa 不决定选择)
+        os.utime(old_f, (1000000000, 1000000000))          # 2001-09-09
+        os.utime(new_f, (1700000000, 1700000000))          # 2023-11-14
+        sys.modules["scripts.rag.run_eval"]._list_reports = \
+            lambda: ["2026-08-24-aaa111.json", "2026-08-25-bbb222.json"]
+        body = client.get("/api/rag/assistant/eval/report", headers=AUTH).json()
+        assert body["version"] == "2026-08-25-bbb222"      # mtime 新的胜出
+
     def test_report_no_report_404(self, client):
         """无报告 → 404(暂无评估报告)"""
         r = client.get("/api/rag/assistant/eval/report", headers=AUTH)

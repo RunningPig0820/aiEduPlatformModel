@@ -161,7 +161,10 @@ async def eval_report(x_internal_token: str = Header(None)):
         reports = [f for f in run_eval._list_reports() if f.endswith(".json")]
         if not reports:
             raise HTTPException(status_code=404, detail="暂无评估报告")
-        report_path = os.path.join(run_eval.REPORT_DIR, reports[-1])
+        # 最新报告按 mtime 选(版本=语料 sha1 前缀, 与生成时间无关, 不能靠文件名排序取末位)
+        report_name = max(reports, key=lambda f: os.path.getmtime(
+            os.path.join(run_eval.REPORT_DIR, f)))
+        report_path = os.path.join(run_eval.REPORT_DIR, report_name)
         with open(report_path, encoding="utf-8") as f:
             data = json.load(f)
         agg = data.get("aggregate", {})
@@ -170,7 +173,7 @@ async def eval_report(x_internal_token: str = Header(None)):
         evaluated_at = datetime.datetime.fromtimestamp(
             os.path.getmtime(report_path)).isoformat(timespec="seconds")
         return {
-            "version": data.get("version", reports[-1].replace(".json", "")),
+            "version": data.get("version", report_name.replace(".json", "")),
             "count": agg.get("count", 0),
             "hit_at_3": agg.get("hit_at_k_avg", 0.0),
             "quality_avg": agg.get("quality_avg", 0.0),
