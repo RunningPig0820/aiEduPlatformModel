@@ -15,8 +15,8 @@ class RagAssistantAskRequest(BaseModel):
     Python 无状态(D-D 定死): history/trace_id 由 Java 传入只消费, Python 不落会话;
     turns/close/累计 token 归 Java Redis(Python 不建 close/turns 端点)。
     """
-    current_project: str = Field(default="ai-tutoring",
-                                 description="页面锚定模块(ai-tutoring/rag-system 等); 缺省=当前项目")
+    current_project: str = Field(default="rag-system",
+                                 description="页面锚定模块闭集(ai-tutoring/knowledge-graph/question-analysis/rag-system); 缺省=rag-system(对齐后端 api.md, 会话入口默认聊 RAG 项目)")
     question: str = Field(..., min_length=1, max_length=500, description="学生问题")
     session_id: Optional[str] = Field(default=None, description="会话 id(Java 续接锚点/轮次, Python 只读)")
     history: List[Dict[str, Any]] = Field(

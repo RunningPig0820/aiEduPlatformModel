@@ -36,7 +36,7 @@ class TestResolveClarify:
         assert ev is not None
         assert set(("message", "candidates", "default")) <= set(ev)
         assert ev["candidates"] == ["ai-tutoring", "rag-system"]
-        assert "ai-tutoring" in ev["message"]  # 话术含 default
+        assert "rag-system" in ev["message"]  # 话术含 default(缺省 rag-system, 对齐后端契约)
 
     def test_single_candidate_no_trigger(self):
         """candidates<2 → None(不澄清)"""

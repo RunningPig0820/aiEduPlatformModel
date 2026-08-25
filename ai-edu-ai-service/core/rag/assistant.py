@@ -42,7 +42,7 @@ def last_anchor(history: list | None, current_project: str) -> str:
 
 
 def resolve_switch(intent_result: dict, history: list | None,
-                   current_project: str = "ai-tutoring") -> dict | None:
+                   current_project: str = "rag-system") -> dict | None:
     """intent 结果 + 会话 → 是否需上下文切换(A2b, 对齐后端 D3)。
 
     switch_detected=true → 返回 {from_anchor, to_anchor, reset=True}(发起 switch 事件);
@@ -251,7 +251,7 @@ def _last_turn_is_clarify(history: list) -> bool:
 
 
 def resolve_clarify(intent_result: dict, history: list | None,
-                    current_project: str = "ai-tutoring") -> dict | None:
+                    current_project: str = "rag-system") -> dict | None:
     """歧义判定 → clarify 事件或 None(A7, 对齐后端 D5)。
 
     触发条件: intent.ambiguous=true 且候选 ≥2(C4) 且此前未澄清过(最多一轮)。
@@ -492,7 +492,7 @@ def guide() -> dict:
 
 
 async def pipeline_events(question: str, history: list | None = None,
-                          current_project: str = "ai-tutoring", trace_id: str = "",
+                          current_project: str = "rag-system", trace_id: str = "",
                           top_k: int = RERANK_K, request=None,
                           blocks: list | None = None) -> "async generator":
     """白盒链路事件生成器(B 组): yield {event, data} 供 SSE 端点格式化。

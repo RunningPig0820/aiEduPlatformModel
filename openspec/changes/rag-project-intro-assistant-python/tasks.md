@@ -101,6 +101,6 @@
 
 ## F. 交付
 
-- [ ] 【交付】Python 侧自测全过（pytest）
-- [ ] 【交付】对照后端 api.md 逐事件核对契约
-- [ ] 【交付】写 `对接说明.md`（给前端/后端：端点/事件时序/引用面板/停止方式/鉴权）
+- [x] 【交付】Python 侧自测全过（pytest）→ tests/rag 210 / 全量非 real 488
+- [x] 【交付】对照后端 api.md 逐事件核对契约 → 逐事件核对表(assistant.py vs api.md), 修正 current_project 缺省 ai-tutoring→rag-system
+- [x] 【交付】写 `对接说明.md`（给前端/后端：端点/事件时序/引用面板/停止方式/鉴权）→ docs/rag-assistant-integration-2026-08-25.md
