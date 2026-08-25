@@ -14,6 +14,7 @@ Python 无状态(D-D): history/trace_id 由 Java 传入只消费; done 回显 tr
 import json
 import logging
 import os
+import threading
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -25,6 +26,45 @@ from models.rag_assistant import RagAssistantAskRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/rag/assistant", tags=["RAG Assistant"])
+
+# ---- 评测运行状态(线程安全)----
+# 现场演示"重新评测": POST /eval/run 后台线程真实跑一轮, 全局标志防重复触发。
+# 异步模型(立即 200, 前端轮询 GET /eval/report.running), 不阻塞 HTTP。
+_eval_running = False
+_eval_lock = threading.Lock()
+
+
+def _eval_in_progress() -> bool:
+    """线程安全读 running 标志。"""
+    with _eval_lock:
+        return _eval_running
+
+
+def _set_eval_running(flag: bool) -> None:
+    global _eval_running
+    with _eval_lock:
+        _eval_running = flag
+
+
+def _start_eval_async() -> bool:
+    """尝试启动一轮后台评测; 已有一轮在跑 → False(幂等, 不重复触发)。"""
+    with _eval_lock:
+        global _eval_running
+        if _eval_running:
+            return False
+        _eval_running = True
+
+    def _run():
+        try:
+            from scripts.rag import run_eval
+            run_eval.run_evaluation()
+        except Exception as e:
+            logger.error("后台评测异常: %s", e)
+        finally:
+            _set_eval_running(False)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
 
 
 def _sse(event: str, data: dict) -> str:
@@ -110,9 +150,10 @@ async def guide(x_internal_token: str = Header(None)):
 
 @router.get("/eval/report")
 async def eval_report(x_internal_token: str = Header(None)):
-    """baseline 报告白盒: 最新聚合(hit@3/质量分/avg 耗时/avg 成本/条数/版本)。无报告 → 404。
+    """baseline 报告白盒: 最新聚合(hit@3/质量分/avg 耗时/avg 成本/条数/版本) + 运行态。
 
     读 scripts/rag/run_eval 落盘的 data/eval/reports/<version>.json(结构不变)。
+    现场演示字段: evaluated_at(最近运行时间=报告文件 mtime) / running(评测进行中)。
     """
     verify_internal_token(x_internal_token)
     try:
@@ -120,9 +161,14 @@ async def eval_report(x_internal_token: str = Header(None)):
         reports = [f for f in run_eval._list_reports() if f.endswith(".json")]
         if not reports:
             raise HTTPException(status_code=404, detail="暂无评估报告")
-        with open(os.path.join(run_eval.REPORT_DIR, reports[-1]), encoding="utf-8") as f:
+        report_path = os.path.join(run_eval.REPORT_DIR, reports[-1])
+        with open(report_path, encoding="utf-8") as f:
             data = json.load(f)
         agg = data.get("aggregate", {})
+        # evaluated_at: 最近一次运行时间 = 报告文件 mtime(ISO 本地时间)
+        import datetime
+        evaluated_at = datetime.datetime.fromtimestamp(
+            os.path.getmtime(report_path)).isoformat(timespec="seconds")
         return {
             "version": data.get("version", reports[-1].replace(".json", "")),
             "count": agg.get("count", 0),
@@ -133,9 +179,28 @@ async def eval_report(x_internal_token: str = Header(None)):
             "judged_ratio": agg.get("judged_ratio", 0.0),
             "precision_at_3": agg.get("precision_at_k_avg", 0.0),
             "quoted_valid_ratio": agg.get("quoted_valid_ratio", 0.0),
+            # 现场演示字段(Java 代理已就绪映射: evaluatedAt/hitCases/avgTokens/totalCostYuan/running)
+            "evaluated_at": evaluated_at,
+            "hit_cases": agg.get("hit_cases", 0),
+            "avg_tokens": agg.get("avg_tokens", 0),
+            "total_cost_yuan": agg.get("total_cost_yuan", 0.0),
+            "running": _eval_in_progress(),
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("RAG assistant eval report 异常: %s", e)
         raise HTTPException(status_code=500, detail="rag assistant eval report failed")
+
+
+@router.post("/eval/run")
+async def eval_run(x_internal_token: str = Header(None)):
+    """触发重新评测(异步, 现场演示用): 后台线程真实跑一轮, 立即返回 200。
+
+    - 首次触发 → {"running": true, "already_running": false}, 后台跑几分钟
+    - 已有一轮在跑 → {"running": true, "already_running": true}(幂等, 前端当正常状态)
+    - 前端轮询 GET /eval/report 的 running=false 后刷新(Java 代理已就绪)
+    """
+    verify_internal_token(x_internal_token)
+    started = _start_eval_async()
+    return {"running": True, "already_running": not started}

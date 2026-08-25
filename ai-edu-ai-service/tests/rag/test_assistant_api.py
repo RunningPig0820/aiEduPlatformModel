@@ -468,6 +468,12 @@ class TestEvalReportAPI:
         # D2/D3: precision@3 均值 + quoted 合法率白盒展示
         assert body["precision_at_3"] == 0.733
         assert body["quoted_valid_ratio"] == 0.933
+        # 现场演示字段: evaluated_at(报告 mtime) / hit_cases / avg_tokens / total_cost / running
+        assert isinstance(body["evaluated_at"], str) and "T" in body["evaluated_at"]
+        assert body["hit_cases"] == 12
+        assert body["avg_tokens"] == 4686
+        assert body["total_cost_yuan"] == 0.2355
+        assert body["running"] is False
 
     def test_report_no_report_404(self, client):
         """无报告 → 404(暂无评估报告)"""
@@ -477,3 +483,60 @@ class TestEvalReportAPI:
 
     def test_report_missing_token_403(self, client):
         assert client.get("/api/rag/assistant/eval/report").status_code == 403
+
+
+class TestEvalRunAPI:
+    """现场演示: POST /eval/run 异步触发 + 幂等 + running 标志反映"""
+
+    def test_run_ok_async(self, client, monkeypatch):
+        """首次触发 → 200 {"running": true, "already_running": false}, 后台线程跑"""
+        import api.rag_assistant as ra
+        calls = []
+        fake = sys.modules["scripts.rag.run_eval"]
+        fake.run_evaluation = lambda: calls.append("ran")
+        # 确保起始标志为 False
+        ra._set_eval_running(False)
+        r = client.post("/api/rag/assistant/eval/run", headers=AUTH)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["running"] is True
+        assert body["already_running"] is False
+        # 后台线程真实跑(join 短暂等待, run_evaluation 是立即返回的 fake)
+        import time
+        t0 = time.time()
+        while not calls and time.time() - t0 < 5:
+            time.sleep(0.05)
+        assert calls == ["ran"]
+        # 跑完标志复位
+        ra._set_eval_running(False)
+
+    def test_run_idempotent_already_running(self, client, monkeypatch):
+        """已在跑 → 幂等返回 {"running": true, "already_running": true}(不报错)"""
+        import api.rag_assistant as ra
+        ra._set_eval_running(True)  # 模拟已有一轮在跑
+        try:
+            r = client.post("/api/rag/assistant/eval/run", headers=AUTH)
+            assert r.status_code == 200
+            body = r.json()
+            assert body["running"] is True
+            assert body["already_running"] is True
+        finally:
+            ra._set_eval_running(False)
+
+    def test_run_missing_token_403(self, client):
+        assert client.post("/api/rag/assistant/eval/run").status_code == 403
+
+    def test_report_running_reflects_flag(self, client, tmp_path, monkeypatch):
+        """GET /eval/report 的 running 反映全局标志(现场轮询用)"""
+        import api.rag_assistant as ra
+        with open(tmp_path / "r1.json", "w", encoding="utf-8") as f:
+            json.dump({"version": "r1", "aggregate": {"count": 1}}, f, ensure_ascii=False)
+        sys.modules["scripts.rag.run_eval"]._list_reports = lambda: ["r1.json"]
+        ra._set_eval_running(True)
+        try:
+            body = client.get("/api/rag/assistant/eval/report", headers=AUTH).json()
+            assert body["running"] is True
+        finally:
+            ra._set_eval_running(False)
+        body = client.get("/api/rag/assistant/eval/report", headers=AUTH).json()
+        assert body["running"] is False
