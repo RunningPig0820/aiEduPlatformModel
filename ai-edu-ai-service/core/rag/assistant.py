@@ -227,8 +227,22 @@ def lcs_quote_match(answer: str, block_texts: list) -> list:
 
 # ============ A7 clarify 澄清轮 ============
 
-CLARIFY_MSG = "您的问题涉及多个功能，请明确功能名。默认回答当前功能：{default}"
+# 模块 id → 中文名(与 rag_core.MODULE_ANCHORS 同闭集; 前端联调反馈: 展示文案不内嵌英文 id)
+MODULE_ZH = {
+    "ai-tutoring": "AI答疑",
+    "knowledge-graph": "知识图谱",
+    "question-analysis": "题型分析",
+    "rag-system": "RAG 项目",
+}
+
+# 文案含 {current}/{default} 两个占位(current=当前页锚点, default=默认模块), 均中文化展示
+CLARIFY_MSG = "当前提问包含歧义。你当前在「{current}」功能页，请明确想了解的具体功能；未选择时默认使用「{default}」功能介绍。"
 CLARIFY_MIN_CANDIDATES = 2  # candidates <2 不触发 clarify(仍模糊直接走默认)
+
+
+def _module_zh(module_id: str) -> str:
+    """模块 id → 中文展示名; 未知 id 兜底原样(不崩)。"""
+    return MODULE_ZH.get(module_id, module_id)
 
 
 def _history_anchors(history: list) -> list:
@@ -287,7 +301,10 @@ def resolve_clarify(intent_result: dict, history: list | None,
     if default is None:
         default = rag_core.MODULE_ANCHORS[0]  # 最后兜底 ai-tutoring
     logger.info("RAG assistant clarify: candidates=%s default=%s", candidates, default)
-    return {"message": CLARIFY_MSG.format(default=default),
+    # message 为纯展示文案: current=当前页锚点(default 优先, 即 current_project 中文化),
+    # default=默认模块中文化; 结构化字段 candidates/default 仍为 id(前端点选重发用)
+    return {"message": CLARIFY_MSG.format(current=_module_zh(current_project),
+                                          default=_module_zh(default)),
             "candidates": candidates, "default": default}
 
 

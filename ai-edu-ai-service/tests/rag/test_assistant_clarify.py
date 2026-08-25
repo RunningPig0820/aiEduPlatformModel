@@ -36,7 +36,7 @@ class TestResolveClarify:
         assert ev is not None
         assert set(("message", "candidates", "default")) <= set(ev)
         assert ev["candidates"] == ["ai-tutoring", "rag-system"]
-        assert "rag-system" in ev["message"]  # 话术含 default(缺省 rag-system, 对齐后端契约)
+        assert "RAG 项目" in ev["message"]  # 话术中文化(缺省 rag-system → 「RAG 项目」)
 
     def test_single_candidate_no_trigger(self):
         """candidates<2 → None(不澄清)"""
@@ -79,7 +79,7 @@ class TestResolveClarify:
             _intent(candidates=("ai-tutoring", "rag-system")),
             history=None, current_project="rag-system")
         assert ev["default"] == "rag-system"
-        assert "rag-system" in ev["message"]
+        assert "RAG 项目" in ev["message"]  # default 中文化展示
 
     def test_default_history_anchor_fallback(self):
         """current_project 非闭集 → 会话最后锚定兜底"""
@@ -95,6 +95,28 @@ class TestResolveClarify:
             _intent(candidates=("ai-tutoring", "rag-system")),
             history=None, current_project="not-a-module")
         assert ev["default"] == "ai-tutoring"
+
+    def test_message_localized_zh(self):
+        """前端联调反馈: message 中文化展示, 不内嵌英文模块 id"""
+        # current_project=rag-system → current 与 default 均为 RAG 项目
+        ev = assistant.resolve_clarify(
+            _intent(candidates=("ai-tutoring", "rag-system")),
+            history=None, current_project="rag-system")
+        msg = ev["message"]
+        assert "RAG 项目" in msg                 # current + default 中文化
+        assert "ai-tutoring" not in msg          # 候选 id 不入 message
+        assert "rag-system" not in msg           # 英文 id 不出现(用户可读)
+        assert "明确" in msg                     # 建议措辞语义保留
+        assert "当前提问包含歧义" in msg
+
+    def test_message_default_fallback_history_zh(self):
+        """current_project 非闭集 → default 取历史锚点, 中文化展示"""
+        history = [{"question": "q", "answer": "a", "anchor": "rag-system"}]
+        ev = assistant.resolve_clarify(
+            _intent(candidates=("ai-tutoring", "rag-system")),
+            history=history, current_project="not-a-module")
+        assert ev["default"] == "rag-system"        # current_project 非闭集 → 历史锚点兜底
+        assert "RAG 项目" in ev["message"]          # default 中文化(历史锚点兜底)
 
     def test_candidates_dedup(self):
         """candidates 去重保序"""
