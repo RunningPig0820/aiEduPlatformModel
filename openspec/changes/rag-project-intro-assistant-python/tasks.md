@@ -85,19 +85,19 @@
 
 ## E. 测试
 
-- [ ] 【新增】intent 测试（正常/失败兜底/非闭集）
-- [ ] 【新增】rewrite 测试（口语改写/失败回退）
-- [ ] 【新增】anchor 选池测试（orchestrate corpus 参数、锚定公式不变）
-- [ ] 【新增】双路超时降级测试
-- [ ] 【新增】SSE 事件时序测试（mock 各阶段，断言事件顺序）
-- [ ] 【新增】is_quoted 纯函数测试（命中/改写未命中/8字窗口）
-- [ ] 【新增】clarify 测试（多候选/澄清一次仍模糊/单候选不触发）
-- [ ] 【新增】boundary 低置信测试（无语料模块拒答）
-- [ ] 【新增】switch 测试（检测/重置上下文/新锚点链路）
-- [ ] 【新增】history 截断测试（N=3 只取最近 3 轮）
-- [ ] 【新增】断连取消测试
-- [ ] 【新增】precision_at_k / 边界拒答评测测试
-- [ ] 【回归】`/api/tutoring/rag/query` 现有测试全过（corpus 参数向后兼容）
+- [x] 【新增】intent 测试（正常/失败兜底/非闭集）→ tests/rag/test_assistant_intent.py
+- [x] 【新增】rewrite 测试（口语改写/失败回退）→ test_assistant_rewrite.py
+- [x] 【新增】anchor 选池测试（orchestrate corpus 参数、锚定公式不变）→ test_assistant_recall.py
+- [x] 【新增】双路超时降级测试 → test_assistant_recall.py + test_assistant_stream_gen.py
+- [x] 【新增】SSE 事件时序测试（mock 各阶段，断言事件顺序）→ test_assistant_api.py
+- [x] 【新增】is_quoted 纯函数测试（命中/改写未命中/8字窗口）→ test_assistant_quoted.py
+- [x] 【新增】clarify 测试（多候选/澄清一次仍模糊/单候选不触发）→ test_assistant_clarify.py
+- [x] 【新增】boundary 低置信测试（无语料模块拒答）→ test_assistant_boundary.py
+- [x] 【新增】switch 测试（检测/重置上下文/新锚点链路）→ test_assistant_switch.py
+- [x] 【新增】history 截断测试（N=3 只取最近 3 轮）→ test_assistant_intent.py TestHistoryTruncation
+- [x] 【新增】断连取消测试 → test_assistant_stream_gen.py + test_assistant_api.py
+- [x] 【新增】precision_at_k / 边界拒答评测测试 → test_eval_agent.py
+- [x] 【回归】`/api/tutoring/rag/query` 现有测试全过（corpus 参数向后兼容）→ test_rag_query.py 15 用例, tests/rag 210 passed
 
 ## F. 交付
 
