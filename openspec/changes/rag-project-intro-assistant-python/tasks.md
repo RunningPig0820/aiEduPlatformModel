@@ -58,13 +58,13 @@
 
 > **boundary 短路纪律（冒烟定稿 2026-08-25）**：boundary 触发 → 发 boundary 事件后**立即 done，不调 generate**（0 token）。真链路冒烟确认：rerank 空时 doubao 会自生成"未覆盖"话术（32 token）——编排器必须短路防无谓生成成本。
 
-- [ ] 【新增】`POST /api/rag/assistant/ask` SSE 流式：事件时序 intent→(clarify|switch)→rewrite→rerank→(boundary|token)→done（冻结，不重排；**permission 由 Java 产，Python 生产端点不产**）
-- [ ] 【新增】`POST /api/rag/assistant/ask` 非流式：done 结构 + stages 摘要（intent/rewrite/rerank）
-- [ ] 【新增】请求消费 `history` + `trace_id`（Java 传入，Python 只用；done 回显 trace_id）
-- [ ] 【新增】`GET /api/rag/assistant/eval/report`：baseline 报告白盒
-- [ ] 【新增】`GET /api/rag/assistant/guide`：开始引导（静态池 RAG 定向）
-- [ ] 【复用】鉴权 `verify_internal_token`（同现有 API）
-- [ ] 【新增】`is_disconnected()` 中止在途流（close 由 Java 关中继触发，Python 不建 close 端点）
+- [x] 【新增】`POST /api/rag/assistant/ask` SSE 流式：事件时序 intent→(clarify|switch)→rewrite→rerank→(boundary|token)→done（冻结，不重排；**permission 由 Java 产，Python 生产端点不产**）
+- [x] 【新增】`POST /api/rag/assistant/ask` 非流式：done 结构 + stages 摘要（intent/rewrite/rerank）
+- [x] 【新增】请求消费 `history` + `trace_id`（Java 传入，Python 只用；done 回显 trace_id）
+- [x] 【新增】`GET /api/rag/assistant/eval/report`：baseline 报告白盒
+- [x] 【新增】`GET /api/rag/assistant/guide`：开始引导（静态池 RAG 定向）
+- [x] 【复用】鉴权 `verify_internal_token`（同现有 API）
+- [x] 【新增】`is_disconnected()` 中止在途流（close 由 Java 关中继触发，Python 不建 close 端点）
 
 ## C. 健壮性（resilience）
 

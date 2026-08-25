@@ -432,3 +432,150 @@ async def stream_generate(hits: list, question: str, request=None,
             yield {"type": "token", "text": item["content"]}
         if item.get("usage"):
             yield {"type": "usage", "usage": item["usage"]}
+
+
+# ============ B 白盒链路编排主体(供 api/rag_assistant.py SSE 消费) ============
+
+# 生成降级 reason(后端 api.md): 超时/生成异常统一 "timeout"; boundary="low_confidence"
+GEN_DEGRADE_REASON = "timeout"
+
+
+def assemble_usage(usage: dict | None) -> dict:
+    """tokens_usage 组装(prompt/completion/cache_hit/total)(B 组 done 需要, C 组再补估算)。
+
+    usage = 流末尾 usage chunk({prompt_tokens, completion_tokens, prompt_tokens_details, ...})。
+    cache_hit 从 prompt_tokens_details.cached_tokens 取; 取不到 → 0(C3 取不到时 tokenizer 估算标注)。
+    """
+    usage = usage or {}
+    prompt = usage.get("prompt_tokens", 0) or 0
+    completion = usage.get("completion_tokens", 0) or 0
+    details = usage.get("prompt_tokens_details") or {}
+    cache_hit = details.get("cached_tokens", 0) or 0
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "cache_hit_tokens": cache_hit,
+        "total_tokens": prompt + completion,
+    }
+
+
+def assemble_done(answer: str, quoted_keys: list, usage: dict | None, trace_id: str,
+                  suggestions: list, reason: str | None) -> dict:
+    """done 事件 data(白盒契约, snake_case 产出, Java 中继 camel 化)。
+
+    reason: boundary=low_confidence / 生成降级=timeout / 正常 null。
+    """
+    return {
+        "answer": answer,
+        "quoted_keys": quoted_keys,
+        "tokens_usage": assemble_usage(usage),
+        "trace_id": trace_id,
+        "suggestions": suggestions,
+        "reason": reason,
+    }
+
+
+# 开始引导静态池(RAG 定向, 0 token; 对齐后端 api.md guide direction: 架构/数据流/评测/坑)
+GUIDE_SUGGESTIONS = [
+    {"title": "想了解 RAG 的整体架构吗？", "direction": "architecture"},
+    {"title": "想知道知识库语料是如何流转入库的吗？", "direction": "data_flow"},
+    {"title": "想看看评测体系是怎么设计的吗？", "direction": "evaluation"},
+]
+
+
+def guide() -> dict:
+    """GET /api/rag/assistant/guide: 开始引导(RAG 定向静态池, 非 SSE, 0 token)。"""
+    return {"suggestions": list(GUIDE_SUGGESTIONS)}
+
+
+async def pipeline_events(question: str, history: list | None = None,
+                          current_project: str = "ai-tutoring", trace_id: str = "",
+                          top_k: int = RERANK_K, request=None,
+                          blocks: list | None = None) -> "async generator":
+    """白盒链路事件生成器(B 组): yield {event, data} 供 SSE 端点格式化。
+
+    事件时序(冻结, 无 permission——Python 生产端点不产, Java 网关从 intent 转发):
+        intent → (clarify|switch) → rewrite → rerank → (boundary|token*) → done
+
+    分支语义:
+      - clarify(ambiguous & 候选≥2 & 未澄清过) → 直接 done(0 token, 无 rewrite/rerank/token)
+      - switch(switch_detected) → 发 switch 事件 + 按 to_anchor 走新锚点链路
+      - boundary(low_confidence) → 发 boundary 事件后**立即 done, 不调 generate**(短路纪律,
+        冒烟定稿: rerank 空时 doubao 会自生成"未覆盖"话术 32 token, 编排器必须防无谓成本)
+      - 正常 → rewrite → rerank → token* → done(answer + quoted_keys + tokens_usage + suggestions)
+
+    request.is_disconnected() 在 generate 前/中检测 → 中止(断连取消, close 由 Java 关中继触发)。
+    history/trace_id 由 Java 传入只消费; done 回显 trace_id。Python 无状态(D-D)。
+    """
+    # ---- 1. intent(LLM 结构化输出) ----
+    it = rag_core.intent(question, history, current_project)
+    yield {"event": "intent", "data": {
+        "anchor": it["anchor"], "category": it["category"],
+        "switch_detected": it["switch_detected"], "ambiguous": it["ambiguous"],
+        "candidates": it["candidates"], "locked_sections": it["locked_sections"],
+        "degraded": it["degraded"],
+    }}
+
+    # ---- 2. clarify 分支(澄清轮: 无 rewrite/rerank/token, 0 token) ----
+    clarify = resolve_clarify(it, history, current_project)
+    if clarify:
+        yield {"event": "clarify", "data": clarify}
+        yield {"event": "done", "data": assemble_done(
+            answer="", quoted_keys=[], usage=None, trace_id=trace_id,
+            suggestions=[], reason=None)}
+        return
+
+    # ---- 3. switch 分支(上下文切换: 发事件 + 按新锚点 continue) ----
+    anchor = it["anchor"]
+    switch = resolve_switch(it, history, current_project)
+    if switch:
+        yield {"event": "switch", "data": {
+            "from_anchor": switch["from_anchor"], "to_anchor": switch["to_anchor"]}}
+        anchor = switch["to_anchor"]
+
+    # ---- 4. rewrite(口语 → 检索式, 只用于召回; 生成仍用原问题) ----
+    rewritten = rag_core.rewrite_query(question, anchor, history)
+    yield {"event": "rewrite", "data": {
+        "original_question": question, "rewritten_query": rewritten}}
+
+    # ---- 5. recall 双路 + rerank 精排(anchor 选池 + 2s 超时降级) ----
+    rec = await recall(rewritten, anchor=anchor, blocks=blocks, top_k=top_k)
+    yield {"event": "rerank", "data": {"blocks": rec["rerank"]}}
+
+    # ---- 6. boundary 范围门(短路纪律: 触发 → 立即 done, 不调 generate) ----
+    bd = check_boundary(rec["rerank"],
+                        vec_conf=rec["vec"]["confidence"],
+                        bm_conf=rec["bm25"]["confidence"])
+    if bd:
+        yield {"event": "boundary", "data": bd}
+        yield {"event": "done", "data": assemble_done(
+            answer=bd["message"], quoted_keys=[], usage=None, trace_id=trace_id,
+            suggestions=[], reason=bd["reason"])}
+        return
+
+    # ---- 7. 流式生成 token* → done ----
+    if request is not None and await request.is_disconnected():
+        logger.info("RAG assistant 链路: generate 前检测到客户端断开, 中止")
+        return
+    answer_parts: list = []
+    usage: dict | None = None
+    reason: str | None = None
+    async for ev in stream_generate(rec["hits"], question, request=request):
+        if ev["type"] == "token":
+            answer_parts.append(ev["text"])
+            yield {"event": "token", "data": {"text": ev["text"]}}
+        elif ev["type"] == "usage":
+            usage = ev["usage"]
+        elif ev["type"] == "error":
+            # 降级话术(超时/生成异常) → 当 token 出, reason=timeout, 不生成引导
+            reason = GEN_DEGRADE_REASON
+            answer_parts.append(ev["text"])
+            yield {"event": "token", "data": {"text": ev["text"]}}
+    answer = "".join(answer_parts)
+    quoted = lcs_quote_match(answer, [
+        {"block_id": h.get("key", ""), "text": h.get("text", "")}
+        for h in rec["hits"][:RERANK_K]])
+    suggestions = gen_suggestions(answer, anchor) if not reason else []
+    yield {"event": "done", "data": assemble_done(
+        answer=answer, quoted_keys=quoted, usage=usage, trace_id=trace_id,
+        suggestions=suggestions, reason=reason)}

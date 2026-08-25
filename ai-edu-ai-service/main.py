@@ -129,6 +129,7 @@ from api.tutoring import router as tutoring_router
 from api.ocr import router as ocr_router
 from api.vector import router as vector_router
 from api.rag import router as rag_router, EVAL_ROUTER as rag_eval_router
+from api.rag_assistant import router as rag_assistant_router
 
 app.include_router(chat_router)
 app.include_router(kg_router)
@@ -138,6 +139,7 @@ app.include_router(ocr_router)
 app.include_router(vector_router)
 app.include_router(rag_router)
 app.include_router(rag_eval_router)
+app.include_router(rag_assistant_router)
 
 # RAG 语料源文件静态服务: 前端按 file_path 访问源文件内容
 # 前端拼 {/api/rag/source}/{file_path} 即可(如 /api/rag/source/4.完善文档/04-安全与防作弊.md)
