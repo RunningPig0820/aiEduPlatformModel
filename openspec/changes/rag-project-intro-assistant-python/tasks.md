@@ -51,10 +51,12 @@
 - [x] 【新增】LLM 失败 → 静态池兜底（预写含 RAG 方向文案）
 
 ### A9. 范围门低置信过滤
-- [x] 【新增】rerank 后综合分 < 0.75/0.5 → boundary(low_confidence) 固定话术，不调 generate
+- [x] 【新增】rerank 空 → boundary；非空但双路召回置信度都低于阈值（vec<0.75 且 bm<0.5）→ boundary(low_confidence) 固定话术，不调 generate（**阈值用召回置信度 0-1，非 RRF 相对分**——真链路冒烟发现初版量级错位全误拒）
 - [x] 【新增】唯一拒答路径：无禁区硬拒答，全由低置信触发（C1）
 
 ## B. 白盒 API（api/rag_assistant.py 新增）
+
+> **boundary 短路纪律（冒烟定稿 2026-08-25）**：boundary 触发 → 发 boundary 事件后**立即 done，不调 generate**（0 token）。真链路冒烟确认：rerank 空时 doubao 会自生成"未覆盖"话术（32 token）——编排器必须短路防无谓生成成本。
 
 - [ ] 【新增】`POST /api/rag/assistant/ask` SSE 流式：事件时序 intent→(clarify|switch)→rewrite→rerank→(boundary|token)→done（冻结，不重排；**permission 由 Java 产，Python 生产端点不产**）
 - [ ] 【新增】`POST /api/rag/assistant/ask` 非流式：done 结构 + stages 摘要（intent/rewrite/rerank）

@@ -339,28 +339,28 @@ def gen_suggestions(answer: str, anchor: str = "", llm=None) -> list:
 
 # ============ A9 范围门低置信过滤(唯一拒答路径) ============
 
-# 低置信阈值(guardrails spec): 索引层 0.75 / 源(权威文档)0.5。综合分低于 → boundary 拒答。
-BOUNDARY_SCORE_INDEX = 0.75
-BOUNDARY_SCORE_AUTHORITATIVE = 0.5
+# 低置信阈值(guardrails spec): 向量(索引层)0.75 / BM25(源)0.5。
+# 用召回置信度(0-1)而非 rerank 的 RRF 相对分(量级 0.01~0.05, 天花板也够不到阈值)。
+# 双路都低于各自阈值 → 低置信拒答; 单路高即过(双路召回互补, 一路够用)。
+BOUNDARY_VEC_CONF = 0.75
+BOUNDARY_BM_CONF = 0.5
 BOUNDARY_MSG = "未找到关联文档，我尚未掌握。"
 BOUNDARY_REASON = "low_confidence"
 
 
-def check_boundary(rerank: list) -> dict | None:
-    """范围门低置信判定(A9): rerank 最高分低于阈值 → boundary 事件(固定话术, 不调 generate)。
+def check_boundary(rerank: list, vec_conf: float = 0.0, bm_conf: float = 0.0) -> dict | None:
+    """范围门低置信判定(A9): 双路召回置信度都低于阈值 → boundary(固定话术, 不调 generate)。
 
-    rerank: recall 输出(前端契约块, 含 score)。无命中(空) → 直接拒答。
-    阈值分层: 最高分块来源权威文档(完善文档) → 0.5; 其余 → 0.75。
-    返回 {message, reason} 供 boundary 事件; None → 通过范围门, 继续 generate。
-    唯一拒答路径(C1): 无禁区硬拒答, 全由低置信触发——无语料模块(空 rerank)也走这里。
+    rerank: recall 输出(前端契约块)。vec_conf/bm_conf: 召回单元置信度(0-1)。
+    判定:
+      1. rerank 空(无语料模块/无命中) → 拒答(C1 唯一拒答路径)
+      2. 非空但 vec_conf < 0.75 且 bm_conf < 0.5 → 拒答(双路都低才算低置信)
+      3. 否则通过 → generate
+    返回 {message, reason} 供 boundary 事件; None → 通过范围门。
     """
     if not rerank:
         return {"message": BOUNDARY_MSG, "reason": BOUNDARY_REASON}
-    top = rerank[0]
-    score = top.get("score", 0.0)
-    threshold = BOUNDARY_SCORE_AUTHORITATIVE if top.get("file_path", "").startswith("4.完善文档") \
-        else BOUNDARY_SCORE_INDEX
-    if score < threshold:
+    if vec_conf < BOUNDARY_VEC_CONF and bm_conf < BOUNDARY_BM_CONF:
         return {"message": BOUNDARY_MSG, "reason": BOUNDARY_REASON}
     return None
 
