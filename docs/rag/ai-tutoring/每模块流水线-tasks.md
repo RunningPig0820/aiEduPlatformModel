@@ -3,9 +3,107 @@
 > **来源**：`openspec/changes/rag-eval-agent/tasks.md`（流水线流程模板，本项目只跑 AI答疑 一条线）
 > **语料三类，各自独立对齐**：`1.语雀`（产品意图）｜`2.OpenSpec design 决策`（设计决策）｜`3.代码`（落地真相，**对账的真值源**——从代码分析出的**业务情况**，非源码摘录）
 > **流程**：`① 语料下载整理 → ② 文档对齐（三类逐份判断正确性/改动点）→ ③ 完善文档（8节）→ ④ 切片 → ⑤ 索引 → ⑥ 评测`
-> **当前进度（2026-08-24）**：
+> **当前进度（2026-08-25）**：
 > - ✅ ① 语料下载：`1.语雀`（5篇）+ `2.OpenSpec design 决策`（**22 文件**，已删 8 个低价值前端 UI）+ `3.代码` 业务分析（**10 份，2026-08-24**）
-> - ✅ ② 文档对齐（`1.语雀` 33处 + `3.代码` 10 分析 + `坑档案` 26 坑 + `OpenSpec-代码对账` 22 份）→ ✅ ③ 完善文档 8 节（`4.完善文档/01~08`，2026-08-24）→ ⬜ ④ 切片 → ⑤ 索引 → ⑥ 评测
+> - ✅ ② 文档对齐（`1.语雀` 33处 + `3.代码` 10 分析 + `坑档案` 26 坑 + `OpenSpec-代码对账` 22 份）→ ✅ ③ 完善文档 8 节（`4.完善文档/01~08`，2026-08-24）→ ✅ ④ 切片（234 块）→ ✅ ⑤ 索引（COS rag-index 234 块）→ ✅ ⑥ 评测（2026-08-25 首跑 hit@3=0.667 / 质量分 3.83，含边界拒答 6 条）
+
+---
+
+## 0. 流水线总览（流程图 + 怎么用）
+
+### 0.1 流程图
+
+```
+                     ┌────────────────────────────────────────────────────────────┐
+                     │                    AI答疑 RAG 流水线                        │
+                     └────────────────────────────────────────────────────────────┘
+                                                                                  
+ ┌─────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+ │ ① 语料下载整理 │──▶│ ② 文档对齐    │──▶│ ③ 完善文档    │──▶│ ④ 切片        │──▶│ ⑤ 索引入 COS  │
+ └─────────────┘   └──────────────┘   └──────────────┘   └──────────────┘   └──────┬───────┘
+   语雀 5 篇          三类逐份判断        8 节三层口径      slice_corpus.py     │  234 块
+   OpenSpec 22 份     → 对账汇总         为什么/怎么设计/   → 234 块 jsonl      build_index.py
+   代码分析 10 份     → 坑档案 26 坑     落地真相            + summary(LLM)     │  纯 COS 向量桶
+   (前端/后端/Python)                    + 追问与防御         + md 审查视图       │  rag-1318177119
+                                                                                  ▼
+                                                                           ┌──────────────┐
+ ╔══════════════════════════════════════╗                                   │ ⑥ 评测         │
+ ║   运行时只走：④→⑤→⑥ + 查询           ║                                   └──────┬───────┘
+ ║   1.6 索引 1.6B/C (已建成, 不再重跑)    ║                                    run_eval.py
+ ║   查询: rag_query.py / API            ║                                    → 报告(hit@3/质量分/
+ ║   评测: run_eval.py                   ║                                      成本/耗时)
+ ╚══════════════════════════════════════╝                                    → trace 落盘
+```
+
+**运行时链路**（语料已建成后，日常只碰这几条）：
+
+```
+面试官问题
+  → POST /api/tutoring/rag/query        (页面 / 测试用)
+  → [意图钩子] classify → 锁节
+  → [召回] 向量(COS rag-index) + BM25(本地 jsonl)
+  → [编排] RRF × 权威 × 锚定 → top-K
+  → [生成] doubao 面试口述 + 引用
+```
+
+### 0.2 怎么用（端到端命令）
+
+> 全部命令在 `ai-edu-ai-service/` 下执行；**统一用 `venv/bin/python`**（不要用系统 python，见 CLAUDE.md 环境警告）。
+
+**前置**：COS 向量桶 `rag-1318177119/rag-index` 需在**控制台先建好**（768 float32 cosine，与 topic-index 一致）。`.env` 配好 `COS_VECTORS_*`。
+
+#### A. 首次建链（一次性，①~⑤）
+```bash
+cd ai-edu-ai-service
+
+# ④ 切片：语料 → 234 块 jsonl（每块 {text, summary, tags}）
+venv/bin/python scripts/rag/slice_corpus.py
+# ④b 生成 summary：LLM 为每块写"解决什么问题"一句话（写入 rag_slices.jsonl）
+venv/bin/python scripts/rag/gen_summaries.py
+# ④c 切片审查视图：md 格式落盘 docs/rag/ai-tutoring/切片数据/（人可读审查）
+venv/bin/python scripts/rag/export_slices_md.py
+# ⑤ 索引入 COS：embed(summary+text) → 批量 put_vectors → rag-index（--clear 幂等重建）
+venv/bin/python scripts/rag/build_index.py --clear
+```
+
+#### B. 日常查询（⑤ 之后随时可查）
+```bash
+cd ai-edu-ai-service
+# CLI 查一条（--no-gen 只看检索不打生成，省 token）
+venv/bin/python scripts/rag/rag_query.py "怎么防学生套答案？" --no-gen
+venv/bin/python scripts/rag/rag_query.py "怎么防学生套答案？"
+# 或起服务走 HTTP API
+venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+#   POST /api/tutoring/rag/query   { "question": "...", "top_k": 6 }
+```
+
+#### C. 评测（⑥）
+```bash
+cd ai-edu-ai-service
+# 评测集校验（加载 6 条 + 格式检查）
+venv/bin/python scripts/rag/eval_dataset.py
+# 跑评测：真实检索 + doubao 生成/判分 → 报告 + trace（消耗真实 token）
+venv/bin/python scripts/rag/run_eval.py
+# 与上一份报告对比
+venv/bin/python scripts/rag/run_eval.py --compare
+# 报告白盒 API（需服务运行）
+#   GET /api/rag/assistant/eval/report
+```
+
+#### D. 数据恢复（data/ 被删后无损重建，不重跑 LLM summary）
+```bash
+cd ai-edu-ai-service
+venv/bin/python scripts/rag/recover_slices.py   # 切片 md 审查视图 → 合并回 rag_slices.jsonl
+```
+
+#### E. 测试
+```bash
+cd ai-edu-ai-service
+venv/bin/python -m pytest tests/rag/ -q                          # 212 passed
+venv/bin/python -m pytest tests/ --ignore=tests/llm/real --ignore=tests/tutoring/real -q   # 490 passed
+```
+
+> **建议执行顺序**：先 `A(建链)` → 起服务验证 `B(查询)` → `C(评测)` 定基线 → 迭代时改语料重跑 `A-④⑤` → 再 `C` 对比。
 
 ---
 
