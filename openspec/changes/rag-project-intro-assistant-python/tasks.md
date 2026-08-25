@@ -71,10 +71,10 @@
 
 ## C. 健壮性（resilience）
 
-- [ ] 【新增】分层超时参数化：`RAG_RECALL_TIMEOUT=2` / `RAG_GEN_TIMEOUT=8`（settings）
-- [ ] 【新增】写死降级话术常量（low_confidence / gen_timeout / closed）
-- [ ] 【新增】tokens_usage 组装（prompt/completion/cache_hit/total；cache_hit 取不到 → tokenizer 估算标注，C3）
-- [ ] 【新增】断连取消测试：SSE 生成中 is_disconnected → 中止
+- [x] 【新增】分层超时参数化：`RAG_RECALL_TIMEOUT=2` / `RAG_GEN_TIMEOUT=8`（settings）
+- [x] 【新增】写死降级话术常量（low_confidence / gen_timeout / closed）
+- [x] 【新增】tokens_usage 组装（prompt/completion/cache_hit/total；cache_hit 取不到 → tokenizer 估算标注，C3）
+- [x] 【新增】断连取消测试：SSE 生成中 is_disconnected → 中止
 
 ## D. 评估扩展（eval）
 

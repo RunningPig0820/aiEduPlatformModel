@@ -230,6 +230,28 @@ class TestPipelineEvents:
         evs = _collect(assistant.pipeline_events("问题", request=_Req()))
         assert [e["event"] for e in evs] == ["intent", "rewrite", "rerank"]  # 无 token/done
 
+    def test_disconnect_aborts_mid_generate(self):
+        """生成中 is_disconnected → 中止(已产 token 后不再产后续 token/usage, C4)"""
+        def _fake_streamer(**kwargs):
+            yield {"content": "第一段"}
+            yield {"content": "第二段"}  # 不应被消费
+
+        class _Req:
+            def __init__(self):
+                self.calls = 0
+
+            async def is_disconnected(self):
+                self.calls += 1
+                return self.calls >= 2  # 第 2 轮 while 检测时断连(生成中)
+
+        evs = _collect(assistant.stream_generate(
+            [HIT], "问题", request=_Req(), streamer=_fake_streamer))
+        tokens = [e["text"] for e in evs if e["type"] == "token"]
+        assert tokens == ["第一段"]                                   # 第二段被中止
+        assert not any(e["type"] == "usage" for e in evs)            # 未到流尾, 无 usage
+        assert not any(e["type"] == "error" for e in evs)            # 断连≠异常, 无降级话术
+        assert evs[-1]["type"] == "token"                            # 流在 token 后直接停
+
     def test_history_passed_to_intent(self, monkeypatch):
         """history 传给 intent 消费(只读透传; 截断在 query.intent 内部, A1 已测 _truncate_history)"""
         seen = {}
@@ -245,6 +267,30 @@ class TestPipelineEvents:
         _collect(assistant.pipeline_events("问题", history=hist, trace_id="t6"))
         # pipeline 透传完整 history(Java 传最近 N 轮); 真实 intent 内部 _truncate_history(3) 截断
         assert seen["hist_len"] == 5
+
+
+# ============ C 组韧性: 降级话术常量 ============
+
+
+class TestDegradeConstants:
+    def test_low_confidence_msg(self):
+        """C2: low_confidence 固定话术(0 token, boundary 事件用)"""
+        assert assistant.BOUNDARY_MSG == "未找到关联文档，我尚未掌握。"
+        assert assistant.BOUNDARY_REASON == "low_confidence"
+
+    def test_gen_timeout_msg(self):
+        """C2: gen_timeout 固定话术 + 召回清单前缀"""
+        assert assistant.GEN_TIMEOUT_MSG.startswith("生成服务超时")
+        assert assistant.GEN_FAIL_MSG.startswith("生成服务异常")
+
+    def test_closed_msg(self):
+        """C2: 会话关闭后再提问话术(对齐后端 api.md:509; Python 无状态不产, 常量供契约)"""
+        assert assistant.CLOSED_MSG == "本轮对话已结束，可开启新对话。"
+
+    def test_boundary_vs_gen_distinct(self):
+        """boundary / gen_timeout / closed 三者互不相同(语义区分)"""
+        msgs = {assistant.BOUNDARY_MSG, assistant.GEN_TIMEOUT_MSG, assistant.CLOSED_MSG}
+        assert len(msgs) == 3
 
 
 # ============ assemble_usage / guide ============

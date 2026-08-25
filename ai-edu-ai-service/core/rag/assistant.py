@@ -147,6 +147,9 @@ def rerank_blocks(hits: list, top_k: int = RERANK_K) -> list:
 # 写死降级话术(0 token, 严禁调 LLM 生成; C 组韧性常量在此, A5 先落 generate 侧)
 GEN_TIMEOUT_MSG = "生成服务超时，未能生成完整答案。以下为检索到的参考资料："
 GEN_FAIL_MSG = "生成服务异常，未能生成完整答案。以下为检索到的参考资料："
+# 会话关闭后同 session_id 再提问 → 固定话术(对齐后端 api.md:509; Python 无状态不产,
+# 由 Java 网关在会话已 closed 时返回, 常量写死供契约对齐)
+CLOSED_MSG = "本轮对话已结束，可开启新对话。"
 
 
 def _gen_prompt(hits: list, question: str) -> str:
