@@ -109,7 +109,10 @@ def main():
         text = (b["summary"] + "\n" + b["text"])
         metadata = {
             "version": version,
-            "doc_type": "ai-tutoring",
+            # 模块标识(多模块同索引区分, 与 slice_corpus._tags 闭集一致: ai-tutoring/knowledge-graph/...)
+            "doc_type": t.get("module", "ai-tutoring"),
+            "module": t.get("module", "ai-tutoring"),
+            "category": t.get("category", ""),   # 9类闭集标签(项目介绍/操作流程/...); 1.11 T1 检索按类别筛选
             "source": t["source"],
             "authority": t["authority"],
             "section": t["section"],
