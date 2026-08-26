@@ -145,7 +145,7 @@ class TestRagAPI:
     @pytest.fixture(autouse=True)
     def mock_intent_llm(self, monkeypatch):
         """API 全链路 mock 掉 LLM 意图(避免真实 doubao), 统一判 ai-tutoring + 难点/开发难点"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: {
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": {
             "anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
             "switch_detected": False, "ambiguous": False, "candidates": []})
 
@@ -236,7 +236,7 @@ class TestMultiModule:
         base = {"anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
                 "switch_detected": False, "ambiguous": False, "candidates": []}
         base.update(over)
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: base)
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": base)
 
     def test_intent_uses_llm_categories(self, monkeypatch):
         """LLM 输出 categories(9类) → locked_categories 直接用, 不走 6→9 映射"""
@@ -245,11 +245,16 @@ class TestMultiModule:
         assert it["anchor"] == "rag-system"
         assert it["locked_categories"] == ["架构设计"]
 
-    def test_intent_empty_categories_fallback(self, monkeypatch):
-        """LLM categories 空 → 6→9 映射兜底(难点→开发难点)"""
+    def test_intent_empty_categories_no_filter(self, monkeypatch):
+        """LLM categories 空 → 全局查询不筛(去掉 6→9 映射兜底)"""
         self._fake_intent(monkeypatch, categories=[])
+        assert rag_core.intent("怎么防学生套答案")["locked_categories"] == []
+
+    def test_intent_missing_categories_field_no_filter(self, monkeypatch):
+        """LLM 未给 categories 字段 → 同样全局查询不筛"""
+        self._fake_intent(monkeypatch, categories=None)
         it = rag_core.intent("怎么防学生套答案")
-        assert it["locked_categories"] == ["开发难点"]
+        assert it["locked_categories"] == []
 
     def test_intent_sanitize_non_closed_categories(self):
         """_sanitize_intent: LLM categories 含非 9 类闭集值 → 过滤只留闭集"""

@@ -573,7 +573,19 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 - [x] `assistant.recall`/`_recall_vector`：同步传 module/categories
 - [x] 实测 Filter 语法（2026-08-26）：`{"module":{"$eq":...}}` / `{"category":{"$in":[...]}}` / `{"$and":[...]}` 均被 COS 接受；数组 `[...]` 不接受
 
-**默认值**：`module=rag-system`（项目介绍 RAG 上下文）、切片池 `category=架构设计`——intent 判出模块/类别时显式传入覆盖默认。
+**默认值**：`module=rag-system`（项目介绍 RAG 上下文）——intent 判出模块/类别时显式传入覆盖默认。
+
+### 1.13.3 current_project 倾向约束 + RAGQueryRequest 加字段（2026-08-26 完成）
+
+> **动机**：`项目开发遇到过哪些坑` 被判成 rag-system → 拒答（rag-system 语料未建）。根因：调用方知道当前在哪个模块（前端/Java 传 current_project），但 `/api/tutoring/rag/query` 之前没接收，且 intent 的 current_project 只作 LLM 失败兜底、不约束正常判定。
+
+**已完成（2026-08-26）**：
+- [x] `RAGQueryRequest` 加 `current_project` 字段（默认 ai-tutoring），调用方显式传当前模块
+- [x] `_llm_intent(question, history, current_project)`：prompt 加"当前上下文模块：X（除非问题明确属于其他模块, 否则 anchor 保持该模块）"——LLM 倾向保持当前模块，明确切换才换
+- [x] `api/rag.py`：`intent(request.question, current_project=request.current_project)`
+- [x] 实测：`项目开发遇到过哪些坑` → 模块 ai-tutoring（不再跳 rag-system）→ 命中坑档案/完善文档；`RAG系统怎么做多路召回` 仍判 rag-system（明确提到 RAG）→ 拒答
+
+**历史传递**：intent/rewrite 带最近 3 轮（question+anchor）给 LLM；`/api/tutoring/rag/query` 请求无 history 字段（空历史）；assistant 白盒端点带 history + current_project。
 
 ---
 

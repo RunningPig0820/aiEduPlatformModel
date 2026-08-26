@@ -50,7 +50,7 @@ async def rag_query(
     # --- 1.6C 降级语义: COS 向量挂了 → 降级纯 BM25(需绕开 rag_query 的整链路) ---
     try:
         blocks = rag_core._load_all_blocks()
-        it = rag_core.intent(request.question)   # 1.13 多模块: LLM 判模块 anchor + 9类 categories
+        it = rag_core.intent(request.question, current_project=request.current_project)  # 多模块: 判模块+9类, 倾向当前模块
         corpus = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None
 
         # 双池向量路失败冒泡 → 捕获降级纯 BM25(构造空向量结果)

@@ -91,41 +91,9 @@ CATEGORY_SECTIONS = {
 }
 
 # 9 类切片闭集(切片数据/ 每块 category 标签; intent LLM 输出 categories 供切片池过滤)。
+# 1.13.2 定稿: 无 6→9 映射兜底——LLM 未给 categories 字段 → 全局查询不筛(兜底不一定比全查询好)。
 SLICE_CATEGORIES = ("项目介绍", "操作流程", "数据关联", "开发难点", "业务流程",
                     "架构设计", "业务视角", "数据存储", "未来演进")
-
-# 意图 6 类(LLM) → 9 类切片闭集兜底映射(1.13 Q5/Q6, 切片池 category 过滤用)。
-# 注意 6 类≠9 类: 项目介绍 6 类含架构/分工, 故映射补 架构设计; 全量池不过滤, 该映射只管切片池。
-# 仅当 intent LLM 未给 categories 时兜底(主路已是 LLM 直接判 9 类)。
-INTENT_TO_CATEGORIES = {
-    "项目介绍": ["项目介绍", "架构设计"],
-    "操作": ["操作流程"],
-    "难点": ["开发难点"],
-    "数据关联": ["数据关联", "数据存储"],
-    "最危险": ["开发难点", "未来演进"],
-    "其他": [],
-}
-
-# T4 初稿: 意图 6 类给不出类别(其他/空)时的关键词兜底 → 9 类闭集
-CATEGORY_KEYWORDS = [
-    (("踩坑", "最危险", "报错", "卡死", "性能慢", "防", "护栏", "幻觉", "慢", "卡", "线上"), "开发难点"),
-    (("怎么用", "怎么走", "怎么处理", "步骤", "操作", "流程", "一次完整"), "操作流程"),
-    (("为什么做", "定位", "价值", "是什么", "介绍", "区别"), "项目介绍"),
-    (("架构", "分工", "协议", "微服务", "选型", "设计"), "架构设计"),
-    (("存储", "落库", "怎么存", "Redis", "MySQL", "COS", "表"), "数据存储"),
-    (("掌握度", "题型", "知识点", "关联", "联动", "数据"), "数据关联"),
-    (("演进", "未来", "升级", "下一步"), "未来演进"),
-]
-
-
-def _category_to_locked(category: str, question: str) -> list:
-    """意图 6 类 → 切片池锁定 9 类闭集列表; 6 类给不出(其他/空) → 关键词兜底; 都无 → [] 不筛。"""
-    if category in INTENT_TO_CATEGORIES and INTENT_TO_CATEGORIES[category]:
-        return INTENT_TO_CATEGORIES[category]
-    for kws, cat in CATEGORY_KEYWORDS:
-        if any(k in question for k in kws):
-            return [cat]
-    return []
 
 _CLASSIFY_SYSTEM = """你是「AI答疑」项目的意图分类器。只判断面试官在问哪类问题，不回答内容。
 
@@ -163,26 +131,52 @@ def _fallback_module(question: str) -> str:
 
 
 # 结构化意图 LLM 提示: 输出闭集 JSON, 供 intent 解析(A1)
-_INTENT_SYSTEM = """你是「AI答疑」RAG 助手的意图识别器。只输出 JSON，不输出解释。
+_INTENT_SYSTEM = """你是「AI答疑」RAG助手的意图识别器。**只输出合法JSON，禁止任何解释、markdown、额外文字。**
 
-输入：学生问题 + 最近会话历史（每轮带锚定模块）。判断问题属于哪个模块、是否需要澄清/切换。
+# 输入
+输入包含两部分：
+1. 当前用户问题
+2. 最近会话历史：每轮携带已识别的anchor模块；取**上一轮的最终anchor作为历史基准锚点**；会话历史为空则无历史锚点。
 
-输出 JSON（必须合法 JSON，闭集枚举）：
+# 输出字段 & 闭集枚举（只允许下面列出的值，禁止生成其他值）
 {
-  "anchor": "ai-tutoring",            // 模块锚点, 闭集: ai-tutoring|knowledge-graph|question-analysis|rag-system
-  "category": "项目介绍",             // 锁完善文档页的类别闭集: 项目介绍|操作|难点|数据关联|最危险|其他
-  "categories": ["项目介绍"],         // 切片池 9 类过滤标签(可空数组=不筛), 闭集: 项目介绍|操作流程|数据关联|开发难点|业务流程|架构设计|业务视角|数据存储|未来演进
-  "switch_detected": false,           // 是否从历史锚点切换到新模块
-  "ambiguous": false,                 // 问题指向多个模块、需澄清
-  "candidates": []                    // ambiguous=true 时给 2~4 个候选模块闭集
+  "anchor": "ai-tutoring",
+  "category": "项目介绍",
+  "categories": ["项目介绍"],
+  "switch_detected": false,
+  "ambiguous": false,
+  "candidates": []
 }
 
-判断规则：
-- anchor：问题语义指向哪个模块（AI答疑=ai-tutoring / RAG项目=rag-system / 知识图谱=knowledge-graph / 题型分析=question-analysis）
-- categories：问题问到哪些"内容类型"就填对应 9 类标签(可多个, 例如"遇到哪些坑/怎么防/性能卡"→["开发难点"]；"为什么做/定位/是什么"→["项目介绍"]；"架构怎么分工"→["架构设计"]；拿不准 → 空数组不筛)
-- 项目介绍/操作/难点/数据关联/最危险 → AI答疑模块内锁页类别；问系统架构/代码/部署/评测 → RAG 项目模块(rag-system)
-- switch_detected：本问题明显不再谈历史锚点模块、转向另一模块 → true
-- ambiguous：问题含"这个/那个/它"指代不清、可指向多个模块 → true，并给 candidates（模块闭集内，≥2 个）
+1. anchor（模块锚点，单选）
+可选枚举：ai-tutoring | knowledge-graph | question-analysis | rag-system
+- ai-tutoring：AI答疑业务产品、学生答疑业务逻辑、业务使用场景
+- rag-system：底层RAG实现、代码、向量库、召回排序算法、部署、系统架构、评测
+- knowledge-graph：知识图谱相关
+- question-analysis：题型分析、题目解析业务
+
+> 优先级规则：同一个问题同时涉及业务产品与底层RAG实现，看用户提问重心：问业务效果/业务流程选 ai-tutoring；问工程实现、底层技术选 rag-system。
+
+2. category（文档页路由，单选，页面跳转使用）
+枚举：项目介绍 | 操作 | 难点 | 数据关联 | 最危险 | 其他
+示例：为什么做/定位/是什么 → 项目介绍；怎么走/步骤/流程 → 操作；防作弊/安全/护栏/性能卡/踩坑 → 难点；掌握度/落库/知识点 → 数据关联；没题库/答错/兜底 → 最危险
+
+3. categories（切片池过滤标签，数组，可空数组代表不做过滤，允许多选）
+枚举：项目介绍 | 操作流程 | 数据关联 | 开发难点 | 业务流程 | 架构设计 | 业务视角 | 数据存储 | 未来演进
+示例：遇到哪些坑/怎么防/性能卡 → ["开发难点"]；为什么做/是什么 → ["项目介绍"]；架构分工/微服务 → ["架构设计"]；怎么存/落库 → ["数据存储"]
+
+4. switch_detected：布尔值
+- true：存在历史基准锚点，当前问题语义明确切换到另一个不同anchor模块
+- false：无历史锚点 / 仍然是同一个anchor模块（哪怕category/categories变化，不算切换）
+
+5. ambiguous：布尔值，是否问题需要澄清
+- true：代词（这个/那个/它）结合历史上下文仍无法确定指代；或者问题语义天然同时指向≥2个模块；此时candidates必须填充2-4个anchor候选。
+- false：指代可被上下文还原，问题语义归属单一模块；此时candidates必须为空数组。
+
+# 兜底规则
+1. 输入问题语义无法识别：anchor按重心就近选择，category="其他"，categories=[]，ambiguous=false。
+2. ambiguous=false 时 candidates 必须是[]；ambiguous=true时candidates不能为空。
+3. 所有字段严格使用给定枚举，禁止自定义值。
 只输出 JSON 本身。"""
 
 
@@ -223,11 +217,12 @@ def _truncate_history(history: list | None) -> list:
     return list(history)[-HISTORY_LIMIT:]
 
 
-def _llm_intent(question: str, history: list) -> dict:
+def _llm_intent(question: str, history: list, current_project: str = "ai-tutoring") -> dict:
     """LLM 结构化意图 → 合法 intent 字典; 失败/非闭集/非法 JSON → {}(调用方回退关键词)。
 
     复用 _llm_category 的 doubao 连接模式: mini 关思考(秒出) + 0 温度 + 20s 超时 + 关重试。
     历史只作上下文提示, 截断在 _truncate_history 已做。
+    current_project(1.13.2): 当前上下文模块, 作为 LLM 倾向约束(除非问题明确属其他模块, 否则保持)。
     """
     try:
         llm = LLMFactory.create(
@@ -239,9 +234,11 @@ def _llm_intent(question: str, history: list) -> dict:
             f"Q{h}: {h.get('question', '')} (anchor={h.get('anchor', '')})"
             for h in history
         ) or "（无）"
+        ctx_line = (f"当前上下文模块：{current_project}（除非问题明确属于其他模块, "
+                    f"否则 anchor 保持该模块）")
         text = llm.invoke([
             SystemMessage(content=_INTENT_SYSTEM),
-            HumanMessage(content=f"学生问题：{question}\n\n最近会话：\n{hist_lines}\n\n请输出 JSON。"),
+            HumanMessage(content=f"学生问题：{question}\n{ctx_line}\n最近会话：\n{hist_lines}\n\n请输出 JSON。"),
         ]).content or ""
         raw = _extract_json(text)
         if not raw:
@@ -276,7 +273,7 @@ def intent(question: str, history: list | None = None,
     history 显式截断最近 N 轮(Java 传入只消费, 联调⑦)。
     """
     history = _truncate_history(history)
-    raw = _llm_intent(question, history)
+    raw = _llm_intent(question, history, current_project)
     degraded = not raw or not raw.get("anchor")
 
     if raw and raw.get("anchor"):
@@ -291,10 +288,12 @@ def intent(question: str, history: list | None = None,
         category = ""
         locked = sorted(_fallback_anchor(question))
 
-    # 1.13 多模块: 切片池类别过滤主路取 LLM 9 类 categories; 空 → 6→9 映射兜底(不空召回)
-    locked_categories = list(raw.get("categories", [])) if raw else []
-    if not locked_categories:
-        locked_categories = _category_to_locked(category, question)
+    # 1.13.2 定稿: 切片池类别过滤只取 LLM 9 类 categories(空数组=不筛);
+    # LLM 未给 categories 字段/给空 → 全局查询不筛(去掉 6→9 映射兜底)。
+    if raw and "categories" in raw:
+        locked_categories = [c for c in (raw["categories"] or []) if c in SLICE_CATEGORIES]
+    else:
+        locked_categories = []
 
     return {
         "anchor": anchor,
@@ -317,9 +316,9 @@ def classify(question: str) -> dict:
     category = _llm_category(question)
     if category in CATEGORY_SECTIONS:
         return {"locked_sections": list(CATEGORY_SECTIONS[category]), "strategy": "retrieve",
-                "locked_categories": _category_to_locked(category, question)}
+                "locked_categories": []}   # 1.13.2: classify 不做切片池类别过滤(全局查询)
     return {"locked_sections": sorted(_fallback_anchor(question)), "strategy": "retrieve",
-            "locked_categories": _category_to_locked("", question)}
+            "locked_categories": []}
 
 
 def _llm_category(question: str) -> str:
@@ -412,7 +411,7 @@ def _load_all_blocks() -> list:
 
 
 DEFAULT_MODULE = "rag-system"        # 1.13: 未传 module 时的默认(项目介绍 RAG 上下文)
-DEFAULT_CATEGORIES = ["架构设计"]    # 1.13: 切片池未传 category 时的默认
+# 1.13.2: categories 不做默认——未给/空 → 全局查询不筛(去掉"默认架构设计")
 
 
 def build_filter(module: str | None = None, categories: list | None = None) -> dict:
@@ -458,8 +457,7 @@ def retrieve_dual(question: str, corpus: str | None = None,
     """
     full = retrieve_vector(question, vector_type="rag-full", module=corpus)   # 全量池: 只筛 module
     slice_ = retrieve_vector(question, vector_type="rag-slice", module=corpus,
-                             categories=locked_categories if locked_categories is not None
-                             else DEFAULT_CATEGORIES)                         # 切片池: module+category
+                             categories=locked_categories)   # 切片池: module+category(空=全局查询)
     blocks = _load_all_blocks()
     pool = select_corpus(blocks, corpus) if corpus else blocks
     if locked_categories:

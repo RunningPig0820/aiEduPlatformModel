@@ -43,7 +43,7 @@ class TestIntentNormal:
 
     def test_intent_parses_structured(self, monkeypatch):
         """完整字段: anchor/category/switch/ambiguous/candidates + 节映射"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": _intent_dict(
             anchor="rag-system", category="难点",
             switch_detected=True, ambiguous=True,
             candidates=["rag-system", "ai-tutoring"],
@@ -59,15 +59,15 @@ class TestIntentNormal:
 
     def test_intent_category_maps_sections(self, monkeypatch):
         """闭集类别 → 节映射(项目介绍→01/03, 数据关联→05)"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(category="项目介绍"))
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": _intent_dict(category="项目介绍"))
         assert rag_core.intent("AI答疑是什么", [])["locked_sections"] == ["01", "03"]
 
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(category="数据关联"))
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": _intent_dict(category="数据关联"))
         assert rag_core.intent("掌握度怎么落库", [])["locked_sections"] == ["05"]
 
     def test_intent_category_other_empty_locked(self, monkeypatch):
         """类别'其他' → 不锁任何节"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(category="其他"))
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": _intent_dict(category="其他"))
         assert rag_core.intent("讲讲天气", [])["locked_sections"] == []
 
 
@@ -76,7 +76,7 @@ class TestIntentFallback:
 
     def test_intent_llm_fail_fallback(self, monkeypatch):
         """LLM 失败(返回 {}) → 模块+节关键词兜底, degraded=True"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: {})
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": {})
         it = rag_core.intent("怎么防学生套答案？")
         assert it["anchor"] == "ai-tutoring"      # "学生/套答案" 无模块词→默认当前项目 ai-tutoring
         assert "04" in it["locked_sections"]       # 节级关键词命中 04/07
@@ -84,13 +84,13 @@ class TestIntentFallback:
 
     def test_intent_llm_fail_module_keyword(self, monkeypatch):
         """LLM 失败但问题含 RAG 关键词 → anchor 路由 rag-project"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: {})
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": {})
         it = rag_core.intent("RAG 多路召回是怎么做的？")
         assert it["anchor"] == "rag-system"
 
     def test_intent_category_non_closed_set(self, monkeypatch):
         """LLM 给了 anchor 但 category 非闭集 → anchor 保留, 节级关键词兜底"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": _intent_dict(
             anchor="ai-tutoring", category="非闭集垃圾"))
         it = rag_core.intent("怎么防学生套答案？")
         assert it["anchor"] == "ai-tutoring"  # anchor 闭集内保留
@@ -98,7 +98,7 @@ class TestIntentFallback:
 
     def test_intent_anchor_missing_default_project(self, monkeypatch):
         """LLM 返回空 anchor → 默认当前项目(全池), degraded"""
-        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: _intent_dict(anchor=""))
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h, current_project="ai-tutoring": _intent_dict(anchor=""))
         it = rag_core.intent("随便聊聊", current_project="ai-tutoring")
         assert it["anchor"] == "ai-tutoring"
         assert it["degraded"] is True
@@ -157,7 +157,7 @@ class TestHistoryTruncation:
         """intent 传给 _llm_intent 的 history 已截断到最近 N 轮"""
         captured = {}
 
-        def fake_llm_intent(q, h):
+        def fake_llm_intent(q, h, current_project="ai-tutoring"):
             captured["h"] = h
             return _intent_dict()
 
