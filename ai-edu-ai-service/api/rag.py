@@ -1,10 +1,11 @@
 """
 RAG API - 前端/后端调:
   - `POST /api/tutoring/rag/query`   RAG 问答(1.6C 契约)
+  - `GET  /api/rag/source/{key}`     "查看原文"(U4: 按 COS key 从普通桶读文件)
   - `POST /api/rag/eval/run`         触发评测(6.1, 离线工具, 同步执行 ~30s)
   - `GET  /api/rag/eval/report`      查询最新报告 + 版本对比(6.2)
 
-对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6C + 6
+对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6C + 6 + 1.13
 鉴权: x-internal-token(同 api/vector.py / api/chat.py)
 健壮性(1.6C 降级语义, 按序):
   1. COS 向量挂了   → 降级纯 BM25(references 仍返回)
@@ -17,9 +18,12 @@ import os
 
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 
 from api.chat import verify_internal_token
+from config.settings import settings
 from core.rag import query as rag_core
+from core.tutoring.vector_store import get_normal_cos_client
 from models.rag import (
     RAGQueryRequest,
     RAGQueryResponse,
@@ -32,11 +36,40 @@ from models.rag import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tutoring/rag", tags=["Tutoring"])
+SOURCE_ROUTER = APIRouter(prefix="/api/rag", tags=["RAG Source"])
 EVAL_ROUTER = APIRouter(prefix="/api/rag/eval", tags=["RAG Eval"])
 
 # run_eval 在 scripts/rag/(评测执行), API 侧按需延迟导入(避免 import 链过早初始化)
 EVAL_RUN_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              "scripts", "rag", "run_eval.py")
+
+
+# ============ U4: "查看原文" 读 COS 普通桶 ============
+
+
+def _read_cos_file(file_path: str) -> bytes:
+    """同步读 COS 普通桶文件(线程池包裹, 不阻塞事件循环)。"""
+    client = get_normal_cos_client()
+    obj = client.get_object(Bucket=settings.COS_OBJ_BUCKET, Key=file_path)
+    return obj["Body"].get_raw_stream().read()
+
+
+@SOURCE_ROUTER.get("/source/{file_path:path}")
+async def rag_source(file_path: str, x_internal_token: str = Header(None)):
+    """查看原文(U4): 按 COS key 从普通桶 ai-edu-1318177119 读文件, 替代本地 StaticFiles。
+
+    file_path = 引用块里的 COS key(`rag-source|rag-slices/<模块>/...`, 见向量桶入桶清单 7.2)。
+    安全: 只允许 rag-source/rag-slices 前缀(防任意 COS key 读取); 读取失败 → 404。
+    """
+    verify_internal_token(x_internal_token)
+    if not file_path.startswith(("rag-source/", "rag-slices/")):
+        raise HTTPException(404, "文件不存在")
+    try:
+        body = await run_in_threadpool(_read_cos_file, file_path)
+    except Exception as e:
+        logger.warning("RAG source 读取失败: %s: %s", file_path, e)
+        raise HTTPException(404, "文件不存在")
+    return Response(content=body, media_type="text/markdown; charset=utf-8")
 
 
 @router.post("/query", response_model=RAGQueryResponse)

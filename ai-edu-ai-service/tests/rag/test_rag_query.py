@@ -288,3 +288,66 @@ class TestMultiModule:
         assert bm_keys, "BM25 应有命中"
         assert all("f1" not in k for k in bm_keys)  # ai-tutoring 块被模块筛掉
         assert any("rag-slice/f2" in k for k in bm_keys) or any("rag-full/f3" in k for k in bm_keys)
+
+
+class TestRagSource:
+    """U4: /api/rag/source 读 COS 普通桶("查看原文")"""
+
+    def setup_method(self):
+        from api.rag import SOURCE_ROUTER
+        app = FastAPI()
+        app.include_router(SOURCE_ROUTER)
+        self.client = TestClient(app)
+        from config.settings import settings
+        self.auth = {"x-internal-token": settings.INTERNAL_TOKEN}
+
+    def _fake_client(self, monkeypatch, body=b"# md"):
+        """mock get_normal_cos_client → 返回记录调用 key 的假 client"""
+        class _Stream:
+            def __init__(self, b):
+                self._b = b
+            def get_raw_stream(self):
+                return self
+            def read(self):
+                return self._b
+        class FakeClient:
+            def __init__(self, b):
+                self.calls = []
+                self._b = b
+            def get_object(self, Bucket, Key):
+                self.calls.append(Key)
+                return {"Body": _Stream(self._b)}
+        fc = FakeClient(body)
+        monkeypatch.setattr("api.rag.get_normal_cos_client", lambda: fc)
+        return fc
+
+    def test_source_returns_md(self, monkeypatch):
+        """按 COS key 取回 md 内容(路径中文需 URL 编码, 与前端一致)"""
+        from urllib.parse import quote
+        body = "# 坑档案".encode("utf-8")
+        fc = self._fake_client(monkeypatch, body=body)
+        key = "rag-slices/ai-tutoring/坑档案/坑档案-J1.md"
+        url = "/api/rag/source/" + "/".join(quote(seg) for seg in key.split("/"))
+        r = self.client.get(url, headers=self.auth)
+        assert r.status_code == 200
+        assert r.text == "# 坑档案"
+        assert fc.calls == [key]
+
+    def test_source_403_no_token(self):
+        r = self.client.get("/api/rag/source/rag-slices/x.md")
+        assert r.status_code == 403
+
+    def test_source_404_invalid_prefix(self, monkeypatch):
+        """非 rag-source/rag-slices 前缀 → 404(防任意 COS key)"""
+        self._fake_client(monkeypatch)
+        r = self.client.get("/api/rag/source/foo/bar.md", headers=self.auth)
+        assert r.status_code == 404
+
+    def test_source_404_cos_missing(self, monkeypatch):
+        """COS 读不到 → 404"""
+        class Failing:
+            def get_object(self, **kw):
+                raise Exception("no such key")
+        monkeypatch.setattr("api.rag.get_normal_cos_client", lambda: Failing())
+        r = self.client.get("/api/rag/source/rag-slices/x.md", headers=self.auth)
+        assert r.status_code == 404

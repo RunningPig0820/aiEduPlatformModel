@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     # 前端拼 {/api/rag/source}/{file_path} 即可拿到源文件内容
     RAG_CORPUS_DIR: str = "docs/rag/ai-tutoring"
 
+    # ============ COS 普通桶 (RAG 源文件, "查看原文"用, 阶段 2 定稿) ============
+    # 切片数据 + 源语料上传 ai-edu-1318177119; file_path 记录 COS key。
+    # /api/rag/source 从该桶读文件(U4, 替代本地 StaticFiles)。凭据复用 COS_VECTORS_*。
+    COS_OBJ_BUCKET: str = "ai-edu-1318177119"
+    COS_OBJ_REGION: str = "ap-guangzhou"
+
     # ============ RAG 白盒链路超时(A3/C 韧性) ============
     # 分层超时: 召回单路 2s(向量 COS 网络路), 生成 8s(doubao 流式)。超时写死降级话术 0 token。
     RAG_RECALL_TIMEOUT: float = 2.0

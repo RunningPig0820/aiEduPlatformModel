@@ -128,7 +128,7 @@ from api.neo4j import router as neo4j_router
 from api.tutoring import router as tutoring_router
 from api.ocr import router as ocr_router
 from api.vector import router as vector_router
-from api.rag import router as rag_router, EVAL_ROUTER as rag_eval_router
+from api.rag import router as rag_router, SOURCE_ROUTER as rag_source_router, EVAL_ROUTER as rag_eval_router
 from api.rag_assistant import router as rag_assistant_router
 
 app.include_router(chat_router)
@@ -138,21 +138,12 @@ app.include_router(tutoring_router)
 app.include_router(ocr_router)
 app.include_router(vector_router)
 app.include_router(rag_router)
+app.include_router(rag_source_router)
 app.include_router(rag_eval_router)
 app.include_router(rag_assistant_router)
 
-# RAG 语料源文件静态服务: 前端按 file_path 访问源文件内容
-# 前端拼 {/api/rag/source}/{file_path} 即可(如 /api/rag/source/4.完善文档/04-安全与防作弊.md)
-# 缺失时降级: 目录不存在则跳过挂载(不崩启动), 前端点源文件 404
-from fastapi.staticfiles import StaticFiles
-from config.settings import settings
-
-_rag_corpus = os.path.join(_PROJECT_ROOT, settings.RAG_CORPUS_DIR)
-if os.path.isdir(_rag_corpus):
-    app.mount("/api/rag/source", StaticFiles(directory=_rag_corpus), name="rag_source")
-else:
-    import logging as _logging
-    _logging.getLogger(__name__).warning("RAG 语料目录不存在, 跳过源文件服务: %s", _rag_corpus)
+# U4(2026-08-26): "查看原文"已从本地 StaticFiles 改为读 COS 普通桶(api/rag.py SOURCE_ROUTER),
+# 去掉本地语料目录依赖——前端拿 references[].file_path(COS key) 直接调 /api/rag/source/{key}。
 
 # 后续注册其他路由
 # from api import ocr, rag

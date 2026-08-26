@@ -31,6 +31,9 @@ _DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 # CosVectorsClient 单例懒加载: 避免导入即初始化, 未配齐 COS_* 时 endpoints 仍可加载
 _client: Optional[Any] = None
 
+# CosS3Client(普通桶) 单例懒加载: "查看原文"/源文件读写(U4 + upload_cos.py)
+_s3_client: Optional[Any] = None
+
 
 def _get_cos_client() -> Any:
     """CosVectorsClient 单例懒加载。
@@ -55,6 +58,30 @@ def _get_cos_client() -> Any:
     logger.info("CosVectorsClient 初始化: region=%s bucket=%s indexes=%s",
                 settings.COS_VECTORS_REGION, settings.COS_VECTORS_BUCKET, settings.COS_VECTORS_INDEXES)
     return _client
+
+
+def get_normal_cos_client() -> Any:
+    """COS 普通桶(ai-edu-1318177119) CosS3Client 单例懒加载——"查看原文"读源文件(U4)。
+
+    与 CosVectorsClient(向量桶, role mode 不收普通对象)不同: 普通桶支持 get_object/put_object
+    (put 由 upload_cos.py 上传, get 由 /api/rag/source 读取)。凭据复用 COS_VECTORS_*。
+    """
+    global _s3_client
+    if _s3_client is not None:
+        return _s3_client
+    if not (settings.COS_VECTORS_SECRET_ID and settings.COS_VECTORS_SECRET_KEY):
+        raise RuntimeError("COS_VECTORS_* 未配置完整, 无法初始化 CosS3Client")
+
+    from qcloud_cos import CosConfig, CosS3Client
+
+    _s3_client = CosS3Client(CosConfig(
+        Region=settings.COS_OBJ_REGION,
+        SecretId=settings.COS_VECTORS_SECRET_ID,
+        SecretKey=settings.COS_VECTORS_SECRET_KEY,
+    ))
+    logger.info("CosS3Client(普通桶) 初始化: region=%s bucket=%s",
+                settings.COS_OBJ_REGION, settings.COS_OBJ_BUCKET)
+    return _s3_client
 
 
 def embed(text: str) -> List[float]:
