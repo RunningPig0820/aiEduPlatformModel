@@ -3,6 +3,7 @@
 > summary: 解决COS transcript签名URL泄露及CORS依赖问题
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: J10. COS transcript 签名 URL 泄露 / CORS
 > 模块: ai-tutoring ｜ 节: 坑档案
+> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-J10-COS-transcript-签名-URL-泄露-CORS.md
 > 类别：开发难点
 
 ---

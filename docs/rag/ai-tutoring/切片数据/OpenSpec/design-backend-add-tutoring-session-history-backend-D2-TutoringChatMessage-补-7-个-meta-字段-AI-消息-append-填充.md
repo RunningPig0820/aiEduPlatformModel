@@ -3,6 +3,7 @@
 > summary: 面试问答：答疑会话历史后端需补TutoringChatMessage的7个meta字段
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D2. `TutoringChatMessage` 补 7 个 meta 字段 + AI 消息 append 填充
 > 模块: ai-tutoring ｜ 节: design-backend-add-tutoring-session-history-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-add-tutoring-session-history-backend-D2-TutoringChatMessage-补-7-个-meta-字段-AI-消息-append-填充.md
 > 类别：数据存储
 
 ---

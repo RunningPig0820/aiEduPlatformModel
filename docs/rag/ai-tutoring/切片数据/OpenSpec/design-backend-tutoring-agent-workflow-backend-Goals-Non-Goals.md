@@ -3,6 +3,7 @@
 > summary: 明确后端需实现的目标与不做的非目标事项
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-Goals-Non-Goals.md
 > 类别：项目介绍
 
 ---

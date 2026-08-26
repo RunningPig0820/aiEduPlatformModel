@@ -3,6 +3,7 @@
 > summary: 解决图像优先答疑的模型切换与双通道适配问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 14. 图像优先答疑:模型切豆包 doubao-seed-2-0-lite + 图片双通道(2026-08 待预演)
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-14-图像优先答疑-模型切豆包-doubao-seed-2-0-lite-图片双通道2026-08-待预演.md
 > 类别：架构设计
 
 ---

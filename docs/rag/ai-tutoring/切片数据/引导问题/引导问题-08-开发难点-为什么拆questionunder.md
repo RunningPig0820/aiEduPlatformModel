@@ -3,6 +3,7 @@
 > summary: 三个子任务职责不同，拆开才能独立可控、可单测、可换模型，也让护栏有地方插入。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 为什么拆 question_understand / decide / generate？
 > 模块: ai-tutoring ｜ 节: 开发难点
+> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-08-开发难点-为什么拆questionunder.md
 > 类别：开发难点
 
 ## 回答

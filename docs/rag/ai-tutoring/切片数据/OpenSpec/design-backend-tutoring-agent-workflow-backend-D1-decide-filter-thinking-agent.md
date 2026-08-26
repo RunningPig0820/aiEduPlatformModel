@@ -3,6 +3,7 @@
 > summary: 面试问答：后端工作流中D1阶段事件过滤逻辑调整
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D1. decide filter: thinking + agent
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-D1-decide-filter-thinking-agent.md
 > 类别：架构设计
 
 ---

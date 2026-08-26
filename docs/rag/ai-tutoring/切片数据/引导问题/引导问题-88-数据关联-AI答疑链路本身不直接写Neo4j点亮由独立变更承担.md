@@ -3,6 +3,7 @@
 > summary: 是——这是一个刻意的架构边界：答疑链路只产出 label（题型/知识点），写 Neo4j 点亮由独立变更（kp-matching-lightup）承担，答疑与图谱解耦。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: AI答疑链路本身不直接写 Neo4j，点亮由独立变更承担?
 > 模块: ai-tutoring ｜ 节: 数据关联
+> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-88-数据关联-AI答疑链路本身不直接写Neo4j点亮由独立变更承担.md
 > 类别：数据关联
 
 ## 回答

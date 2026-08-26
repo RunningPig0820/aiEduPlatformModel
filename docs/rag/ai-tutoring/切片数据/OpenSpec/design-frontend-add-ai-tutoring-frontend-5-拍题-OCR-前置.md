@@ -3,6 +3,7 @@
 > summary: 讲AI答疑的拍题OCR前置交互流程
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 5. 拍题 OCR 前置
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-5-拍题-OCR-前置.md
 > 类别：操作流程
 
 ---

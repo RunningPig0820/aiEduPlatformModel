@@ -3,6 +3,7 @@
 > summary: 说明subject-classify端点的契约、入参出参与模型配置
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 2. subject-classify 端点契约（文本 + 图片）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-subject-gate
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-subject-gate-2-subject-classify-端点契约文本-图片.md
 > 类别：架构设计
 
 ---

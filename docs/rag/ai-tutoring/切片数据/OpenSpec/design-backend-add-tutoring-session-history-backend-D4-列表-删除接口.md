@@ -3,6 +3,7 @@
 > summary: 面试问答：答疑会话历史后端需实现列表查询与删除接口
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D4. 列表 / 删除接口
 > 模块: ai-tutoring ｜ 节: design-backend-add-tutoring-session-history-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-add-tutoring-session-history-backend-D4-列表-删除接口.md
 > 类别：数据存储
 
 ---

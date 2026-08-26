@@ -3,6 +3,7 @@
 > summary: 解决答对信号丢失，收紧noRealAnswer判定规则
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: J4. 答对信号丢失（score=0 / 直接答对不落库）
 > 模块: ai-tutoring ｜ 节: 坑档案
+> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-J4-答对信号丢失score0-直接答对不落库.md
 > 类别：开发难点
 
 ---

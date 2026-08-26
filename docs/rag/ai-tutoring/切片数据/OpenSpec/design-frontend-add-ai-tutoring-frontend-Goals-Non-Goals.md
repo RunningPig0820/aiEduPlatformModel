@@ -3,6 +3,7 @@
 > summary: 明确AI答疑前端页面的目标与非目标范围
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-Goals-Non-Goals.md
 > 类别：项目介绍
 
 ---

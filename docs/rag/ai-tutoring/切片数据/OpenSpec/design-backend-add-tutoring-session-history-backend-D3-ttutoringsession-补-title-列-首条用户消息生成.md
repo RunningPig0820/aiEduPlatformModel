@@ -3,6 +3,7 @@
 > summary: 面试问答：答疑会话历史后端需补t_tutoring_session的title列
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D3. `t_tutoring_session` 补 `title` 列 + 首条用户消息生成
 > 模块: ai-tutoring ｜ 节: design-backend-add-tutoring-session-history-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-add-tutoring-session-history-backend-D3-ttutoringsession-补-title-列-首条用户消息生成.md
 > 类别：数据存储
 
 ---

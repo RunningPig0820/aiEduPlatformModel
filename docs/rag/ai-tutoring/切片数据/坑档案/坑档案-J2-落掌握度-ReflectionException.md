@@ -3,6 +3,7 @@
 > summary: 解决落掌握度反射异常，删除SQL残留列
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: J2. 落掌握度 ReflectionException
 > 模块: ai-tutoring ｜ 节: 坑档案
+> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-J2-落掌握度-ReflectionException.md
 > 类别：开发难点
 
 ---

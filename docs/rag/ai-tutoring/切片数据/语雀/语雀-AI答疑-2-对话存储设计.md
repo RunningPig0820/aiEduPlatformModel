@@ -3,6 +3,7 @@
 > summary: 讲AI答疑模块的对话存储设计及技术选型
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 2. 对话存储设计
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-2-对话存储设计.md
 > 类别：数据存储
 
 ---

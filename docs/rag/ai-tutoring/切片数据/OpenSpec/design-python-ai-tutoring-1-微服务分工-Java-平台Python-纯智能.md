@@ -3,6 +3,7 @@
 > summary: Java与Python在AI答疑中的微服务分工规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 1. 微服务分工:Java = 平台,Python = 纯智能
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-1-微服务分工-Java-平台Python-纯智能.md
 > 类别：架构设计
 
 ---

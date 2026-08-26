@@ -3,6 +3,7 @@
 > summary: 解决OCR粘贴死代码的冗余流程问题
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: F8. OCR 粘贴死代码
 > 模块: ai-tutoring ｜ 节: 坑档案
+> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-F8-OCR-粘贴死代码.md
 > 类别：开发难点
 
 ---

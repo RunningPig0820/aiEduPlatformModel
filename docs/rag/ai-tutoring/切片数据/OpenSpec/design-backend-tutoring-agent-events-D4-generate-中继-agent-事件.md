@@ -3,6 +3,7 @@
 > summary: 说明generate阶段agent事件的中继实现方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D4. generate 中继 agent 事件
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-events-D4-generate-中继-agent-事件.md
 > 类别：架构设计
 
 ---

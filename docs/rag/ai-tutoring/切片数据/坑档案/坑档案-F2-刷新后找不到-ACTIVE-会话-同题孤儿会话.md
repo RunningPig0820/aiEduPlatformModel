@@ -3,6 +3,7 @@
 > summary: 解决刷新后找不到ACTIVE会话的问题
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: F2. 刷新后找不到 ACTIVE 会话 / 同题孤儿会话
 > 模块: ai-tutoring ｜ 节: 坑档案
+> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-F2-刷新后找不到-ACTIVE-会话-同题孤儿会话.md
 > 类别：开发难点
 
 ---

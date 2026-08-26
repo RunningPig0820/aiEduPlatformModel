@@ -3,6 +3,7 @@
 > summary: 解决agent流程控制混乱的三个代价及兜法
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 三个诚实的代价（都能兜）
 > 模块: ai-tutoring ｜ 节: 语雀-流程控制会让agent混乱
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-流程控制会让agent混乱-三个诚实的代价都能兜.md
 > 类别：架构设计
 
 ---

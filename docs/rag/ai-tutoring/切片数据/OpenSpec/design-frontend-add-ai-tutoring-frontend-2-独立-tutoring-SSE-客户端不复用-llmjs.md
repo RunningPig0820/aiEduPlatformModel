@@ -3,6 +3,7 @@
 > summary: 介绍独立的AI答疑SSE客户端实现方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 2. 独立 tutoring SSE 客户端,不复用 llm.js
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-2-独立-tutoring-SSE-客户端不复用-llmjs.md
 > 类别：架构设计
 
 ---

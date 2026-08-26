@@ -3,6 +3,7 @@
 > summary: 压缩是"喂给模型前的 prompt 优化"，属于 Python 的提示词知识，就近渲染最合理——Java 管"组装原始数据"，Python 管"喂模型前的裁剪"。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: Python侧无状态，那复杂会话快照、上下文压缩逻辑为什么不放到Java侧统一处理？
 > 模块: ai-tutoring ｜ 节: 架构权衡
+> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-82-架构权衡-Python侧无状态那复杂会话快照上.md
 > 类别：架构设计
 
 ## 回答

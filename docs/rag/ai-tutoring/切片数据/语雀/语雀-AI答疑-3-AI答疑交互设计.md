@@ -3,6 +3,7 @@
 > summary: 讲AI答疑模块的交互设计及提问引导等策略
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 3. AI答疑交互设计
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-3-AI答疑交互设计.md
 > 类别：业务流程
 
 ---

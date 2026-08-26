@@ -3,6 +3,7 @@
 > summary: 新增 tutoring agent 流式展示思考过程的方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 8. 保留思考模式,新增 `thinking` 事件(2026-08)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-8-保留思考模式新增-thinking-事件2026-08.md
 > 类别：架构设计
 
 ---

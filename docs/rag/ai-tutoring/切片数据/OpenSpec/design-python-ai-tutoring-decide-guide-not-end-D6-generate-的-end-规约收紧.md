@@ -3,6 +3,7 @@
 > summary: 收紧generate的end规约，禁止在end回复中写入完整解答
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D6. `generate` 的 `end` 规约收紧
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-decide-guide-not-end-D6-generate-的-end-规约收紧.md
 > 类别：开发难点
 
 ---

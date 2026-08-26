@@ -3,6 +3,7 @@
 > summary: 解决AI辅导后端答案出口的Java硬拦机制问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 5. 答案出口机制（Java 硬拦）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-5-答案出口机制Java-硬拦.md
 > 类别：开发难点
 
 ---

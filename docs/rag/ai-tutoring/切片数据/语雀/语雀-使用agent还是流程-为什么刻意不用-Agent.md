@@ -3,6 +3,7 @@
 > summary: 面试问答检索：AI答疑刻意不用Agent的三大核心原因
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 为什么刻意不用 Agent
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-使用agent还是流程-为什么刻意不用-Agent.md
 > 类别：架构设计
 
 ---

@@ -1,6 +1,7 @@
 # 语雀原文：使用agent 还是流程
 
 > 来源: 语雀 业务实施→AI答疑→方案设计→使用agent还是流程 (doc 279938375, 3976字)
+> COS路径: ai-tutoring/rag-source/语雀/语雀-使用agent还是流程.md
 > 核心结论: AI答疑是 Workflow（确定性编排），不是 LLM Agent。自适应学习才是 agent 的主场。
 
 ---

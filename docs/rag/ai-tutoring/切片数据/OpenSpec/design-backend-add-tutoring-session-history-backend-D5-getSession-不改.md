@@ -3,6 +3,7 @@
 > summary: 面试问答：答疑会话历史后端的getSession接口无需改动
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D5. `getSession` 不改
 > 模块: ai-tutoring ｜ 节: design-backend-add-tutoring-session-history-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-add-tutoring-session-history-backend-D5-getSession-不改.md
 > 类别：数据存储
 
 ---

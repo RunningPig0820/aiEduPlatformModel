@@ -3,6 +3,7 @@
 > summary: 面试问答检索：区分LLM Agent与Workflow的两种核心形态
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 先区分两种"agent"
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-使用agent还是流程-先区分两种-agent.md
 > 类别：架构设计
 
 ---

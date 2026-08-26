@@ -3,6 +3,7 @@
 > summary: 面试问语雀AI答疑的技术选型，答混合演进方案
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 建议：混合演进
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-使用agent还是流程-建议混合演进.md
 > 类别：架构设计
 
 ---

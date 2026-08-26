@@ -3,6 +3,7 @@
 > summary: 讲AI答疑的请求答案、轮次计数及结束逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 6. 请求答案 + 轮次 + 结束
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-6-请求答案-轮次-结束.md
 > 类别：业务流程
 
 ---

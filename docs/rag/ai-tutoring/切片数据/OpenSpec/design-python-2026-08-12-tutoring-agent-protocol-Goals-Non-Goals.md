@@ -3,6 +3,7 @@
 > summary: 明确AI答疑agent协议改造的目标与非目标
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-Goals-Non-Goals.md
 > 类别：项目介绍
 
 ---

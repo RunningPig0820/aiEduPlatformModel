@@ -3,6 +3,7 @@
 > summary: 解决知识图谱慢SQL问题，改造下钻接口逻辑
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: J9. 知识图谱慢 SQL（7 表 JOIN）
 > 模块: ai-tutoring ｜ 节: 坑档案
+> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-J9-知识图谱慢-SQL7-表-JOIN.md
 > 类别：开发难点
 
 ---

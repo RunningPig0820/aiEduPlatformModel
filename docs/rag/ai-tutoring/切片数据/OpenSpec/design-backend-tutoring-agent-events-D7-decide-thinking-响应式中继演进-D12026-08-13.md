@@ -3,6 +3,7 @@
 > summary: 解决decide响应式中继问题，优化流式事件返回逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D7. decide thinking 响应式中继（演进 D1，2026-08-13）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-events-D7-decide-thinking-响应式中继演进-D12026-08-13.md
 > 类别：架构设计
 
 ---

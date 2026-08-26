@@ -3,6 +3,7 @@
 > summary: 对比AI智能分析与传统BI报表的方案差异
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 2. 分析方案对比（AI智能分析 vs 传统BI报表）
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-2-分析方案对比AI智能分析-vs-传统BI报表.md
 > 类别：架构设计
 
 ---

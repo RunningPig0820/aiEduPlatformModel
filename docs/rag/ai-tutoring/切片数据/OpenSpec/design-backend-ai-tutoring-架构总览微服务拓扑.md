@@ -3,6 +3,7 @@
 > summary: 答疑AI后端微服务拓扑架构总览
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 架构总览（微服务拓扑）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-架构总览微服务拓扑.md
 > 类别：架构设计
 
 ---

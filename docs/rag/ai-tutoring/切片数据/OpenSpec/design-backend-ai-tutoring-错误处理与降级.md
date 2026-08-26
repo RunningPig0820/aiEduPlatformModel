@@ -3,6 +3,7 @@
 > summary: 讲AI答疑的错误处理与降级策略
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 错误处理与降级
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-错误处理与降级.md
 > 类别：开发难点
 
 ---

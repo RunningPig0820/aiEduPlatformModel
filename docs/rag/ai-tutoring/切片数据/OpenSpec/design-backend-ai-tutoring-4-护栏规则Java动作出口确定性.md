@@ -3,6 +3,7 @@
 > summary: 解决AI辅导后端护栏规则的设计与实现问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 护栏规则（Java，动作出口，确定性）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-4-护栏规则Java动作出口确定性.md
 > 类别：开发难点
 
 ---

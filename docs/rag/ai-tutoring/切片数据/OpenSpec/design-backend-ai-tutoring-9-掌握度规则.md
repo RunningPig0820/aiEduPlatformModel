@@ -3,6 +3,7 @@
 > summary: AI辅导掌握度规则的定义、计算与校正逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 9. 掌握度规则
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-9-掌握度规则.md
 > 类别：数据关联
 
 ---

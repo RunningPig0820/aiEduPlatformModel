@@ -3,6 +3,7 @@
 > summary: 讲AI答疑模块关联知识图谱、家长报表等模块的设计
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 二、关联模块
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
+> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-二关联模块.md
 > 类别：数据关联
 
 ---

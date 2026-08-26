@@ -3,6 +3,7 @@
 > summary: 新增前端阶段二依赖的decide事件时序稳定契约
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 新增硬性契约（前端阶段二依赖）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-新增硬性契约前端阶段二依赖.md
 > 类别：架构设计
 
 ---

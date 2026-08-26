@@ -3,6 +3,7 @@
 > summary: 介绍Java在decide前的分流规则与失败降级处理
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 3. Java 分流（decide 之前）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-subject-gate
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-subject-gate-3-Java-分流decide-之前.md
 > 类别：操作流程
 
 ---

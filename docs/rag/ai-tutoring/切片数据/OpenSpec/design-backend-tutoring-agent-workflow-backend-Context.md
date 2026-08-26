@@ -3,6 +3,7 @@
 > summary: 说明后端需补齐的两类契约及当前代码现状问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
+> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-Context.md
 > 类别：架构设计
 
 ---
