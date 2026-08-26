@@ -1,6 +1,6 @@
 # ActionMeta 这个契约字段怎么设计的？为什么说它为将来升级预留了空间？
 
-> summary: ActionMeta 是 Java 护栏审批的依据，字段围绕"动作决策 + 评估 + 掌握度"三层设计，且为阶段 2 升级预留了空间。
+> summary: ActionMeta 这个契约字段怎么设计的？为什么说它为将来升级预留了空间？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: ActionMeta 这个契约字段怎么设计的？为什么说它为将来升级预留了空间？
 > 模块: ai-tutoring ｜ 节: Agent架构
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-57-Agent架构-ActionMeta这个契约字段怎么.md

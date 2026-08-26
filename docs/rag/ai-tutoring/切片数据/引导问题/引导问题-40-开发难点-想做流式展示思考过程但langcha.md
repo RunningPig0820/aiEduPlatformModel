@@ -1,6 +1,6 @@
 # 想做流式展示"思考过程"，但 langchain 会把推理内容丢掉，你们怎么绕过去的？
 
-> summary: 绕开 langchain，直连方舟读原始 SSE——langchain 流式解析会丢弃 reasoning_content。
+> summary: 想做流式展示"思考过程"，但 langchain 会把推理内容丢掉，你们怎么绕过去的？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 想做流式展示"思考过程"，但 langchain 会把推理内容丢掉，你们怎么绕过去的？
 > 模块: ai-tutoring ｜ 节: 开发难点
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-40-开发难点-想做流式展示思考过程但langcha.md

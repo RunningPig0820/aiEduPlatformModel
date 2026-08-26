@@ -1,6 +1,6 @@
 # 为什么拆 question_understand / decide / generate？
 
-> summary: 三个子任务职责不同，拆开才能独立可控、可单测、可换模型，也让护栏有地方插入。
+> summary: 为什么拆 question_understand / decide / generate？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 为什么拆 question_understand / decide / generate？
 > 模块: ai-tutoring ｜ 节: 开发难点
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-08-开发难点-为什么拆questionunder.md

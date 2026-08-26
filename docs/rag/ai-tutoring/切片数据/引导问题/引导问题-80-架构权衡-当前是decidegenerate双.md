@@ -1,6 +1,6 @@
 # 当前是decide+generate双接口确定性Workflow，什么场景下你才会考虑迁移到LangGraph？
 
-> summary: 当答疑需要"根据掌握度/情绪动态决定下一步"时迁移——那时是决策问题，agent 决策循环 + 工具才合适；现在是固定流水线，确定性工作流最优。
+> summary: 当前是decide+generate双接口确定性Workflow，什么场景下你才会考虑迁移到LangGraph？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 当前是decide+generate双接口确定性Workflow，什么场景下你才会考虑迁移到LangGraph？
 > 模块: ai-tutoring ｜ 节: 架构权衡
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-80-架构权衡-当前是decidegenerate双.md

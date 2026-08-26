@@ -1,6 +1,6 @@
 # 一道题目是怎么被拆解成"hint 一步、approach 一步"这种逐步引导任务的？
 
-> summary: decide 每轮只判一步动作，generate 按动作类型渲染对应正文，多轮推进形成"逐步引导"链，直至学生独立解出。
+> summary: 一道题目是怎么被拆解成"hint 一步、approach 一步"这种逐步引导任务的？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 一道题目是怎么被拆解成"hint 一步、approach 一步"这种逐步引导任务的？
 > 模块: ai-tutoring ｜ 节: Agent架构
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-55-Agent架构-一道题目是怎么被拆解成hint一步a.md

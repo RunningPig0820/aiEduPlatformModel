@@ -1,6 +1,6 @@
 # 换题判定为什么放在 Java 而不是 Python？"短路"省了什么？
 
-> summary: Python 无状态，区分不了"本轮刚换 vs 早几轮已换"，只有 Java 知道何时收到新图——判定放 Java，Python 短路省调用。
+> summary: 换题判定为什么放在 Java 而不是 Python？"短路"省了什么？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 换题判定为什么放在 Java 而不是 Python？"短路"省了什么？
 > 模块: ai-tutoring ｜ 节: Agent架构
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-60-Agent架构-换题判定为什么放在Java而不是Py.md

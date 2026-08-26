@@ -1,6 +1,6 @@
 # 你这个答疑 agent 和普通 RAG 问答系统，本质区别在哪？
 
-> summary: 本质区别——RAG 在"答"（检索事实给答案），答疑在"教"（决策循环 + 多轮引导 + 确定性护栏）。
+> summary: 你这个答疑 agent 和普通 RAG 问答系统，本质区别在哪？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 你这个答疑 agent 和普通 RAG 问答系统，本质区别在哪？
 > 模块: ai-tutoring ｜ 节: 面试深挖
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-65-面试深挖-你这个答疑agent和普通RAG问答.md

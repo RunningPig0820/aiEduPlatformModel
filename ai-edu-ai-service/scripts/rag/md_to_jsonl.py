@@ -108,6 +108,14 @@ def parse_md(path: str) -> dict | None:
     if missing:
         logger.warning("[头缺失 %s] %s", ",".join(missing), os.path.relpath(path, SLICES))
 
+    # 引导问题: summary 直接用问题标题(anchor), 不读 LLM 翻译版 `> summary:` 头——
+    # 翻译版语义错位("AI答疑如何使用?"被翻成"学生端拍题/打字...使用闭环"), 导致
+    # embedding/BM25 召不回(query 与翻译措辞语义远, 2026-08-26 实测 sim 0.65)。
+    # 标题即"这段回答解决什么问题", 检索/展示都直观。
+    summary = meta.get("summary", "")
+    if meta.get("source") == "引导问题":
+        summary = meta.get("anchor", base)
+
     tags = {
         "module": meta.get("module", "ai-tutoring"),
         "section": meta.get("section", ""),
@@ -119,7 +127,7 @@ def parse_md(path: str) -> dict | None:
         "category": meta.get("category", ""),
         "pool": "slice",
     }
-    return {"text": text, "summary": meta.get("summary", ""), "tags": tags}
+    return {"text": text, "summary": summary, "tags": tags}
 
 
 def main() -> int:

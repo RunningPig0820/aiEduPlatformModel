@@ -1,6 +1,6 @@
 # decide 决策器的动作闭集是哪六个？提示词里怎么约束模型不乱输出？
 
-> summary: 动作闭集六值——hint / approach / reveal / concept / switch / end，每个动作都有严格的语义边界。
+> summary: decide 决策器的动作闭集是哪六个？提示词里怎么约束模型不乱输出？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: decide 决策器的动作闭集是哪六个？提示词里怎么约束模型不乱输出？
 > 模块: ai-tutoring ｜ 节: Agent架构
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-54-Agent架构-decide决策器的动作闭集是哪六个.md

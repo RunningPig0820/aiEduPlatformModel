@@ -1,6 +1,6 @@
 # Python 侧为什么强调无状态？这对水平扩展意味着什么？
 
-> summary: 无状态 = Python 零题目状态，题目从 history 推断——这是可水平扩展的前提，也是状态归位的前提。
+> summary: Python 侧为什么强调无状态？这对水平扩展意味着什么？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: Python 侧为什么强调无状态？这对水平扩展意味着什么？
 > 模块: ai-tutoring ｜ 节: Agent架构
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-56-Agent架构-Python侧为什么强调无状态这对水.md

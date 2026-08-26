@@ -1,6 +1,6 @@
 # 为什么 MVP 刻意不用 LangGraph 多步 agent，而是用两个确定性端点？
 
-> summary: 因为答疑流程是固定的——判动作 → 护栏审批 → 生成 → 落库，确定性工作流就够；agent 的"灵活性"在这里是风险不是优势。
+> summary: 为什么 MVP 刻意不用 LangGraph 多步 agent，而是用两个确定性端点？
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 为什么 MVP 刻意不用 LangGraph 多步 agent，而是用两个确定性端点？
 > 模块: ai-tutoring ｜ 节: Agent架构
 > COS路径: rag-slices/ai-tutoring/引导问题/引导问题-53-Agent架构-为什么MVP刻意不用LangGrap.md
