@@ -42,11 +42,12 @@
 
 **目标**：把定稿切片文档上传 COS 普通桶，前端"查看原文"走 COS 不依赖本地路径。
 
-- [ ] 2.1 目标桶确认：`ai-edu-1318177119`（region ap-guangzhou）
-- [ ] 2.2 可写凭据：复用 `COS_VECTORS_SECRET_ID/KEY` 或单独子账号，确认 put_object 权限
-- [ ] 2.3 上传脚本：遍历 `切片数据/` 全部 md → `CosS3Client.put_object`，key 保持目录结构，批量幂等
+- [x] 2.1 目标桶确认：`ai-edu-1318177119`（region ap-guangzhou）
+- [x] 2.2 可写凭据：复用 `COS_VECTORS_SECRET_ID/KEY`，探针实测可写普通桶（无需新子账号）
+- [x] 2.3 上传脚本：`scripts/rag/upload_cos.py` 读 `> COS路径:` 头 → `CosS3Client.put_object`，317 文件全量上传成功、幂等（2026-08-26）
+- [x] 2.5 验收（COS 侧）：抽查 12/12 与本地 sha256 一致
 - [ ] 2.4 前端读取：改"查看原文"走 COS URL（或后端代理 COS 透传），去掉 `/api/rag/source` 本地 StaticFiles
-- [ ] 2.5 验收：随机抽查 file_path → COS 取文件可达，前端不再报"原文不存在"
+- [ ] 2.5 验收（前端侧）：随机抽查 file_path → COS 取文件可达，前端不再报"原文不存在"
 
 ## 阶段 3：入向量（双池，两个独立索引）
 

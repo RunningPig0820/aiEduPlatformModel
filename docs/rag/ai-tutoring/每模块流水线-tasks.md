@@ -417,9 +417,10 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 - 现状：切片文件名已干净，但**尚未上传 COS**
 
 **待办**：
-- [ ] **U1 目标桶**：Python 现有向量桶（`rag-1318177119`/`question-bank-1318177119`）是 role-mode 不收普通对象 → 需普通桶（可复用 Java 的 `ai-edu-1318177119` 或新建）
-- [ ] **U2 可写凭据**：复用 `COS_VECTORS_SECRET_ID/KEY` 或单独子账号密钥，确认对普通桶有 put_object 权限
-- [ ] **U3 上传脚本**：遍历 `切片数据/` 全部 md → `CosS3Client.put_object` 上传，key 保持目录结构（如 `rag-slices/坑档案/xxx.md`）；325 文件批量、幂等（同 key 覆盖）
+- [x] **U1 目标桶**：Python 现有向量桶（`rag-1318177119`/`question-bank-1318177119`）是 role-mode 不收普通对象 → 需普通桶（可复用 Java 的 `ai-edu-1318177119` 或新建）— 2026-08-26 确认用 `ai-edu-1318177119`（ap-guangzhou）
+- [x] **U2 可写凭据**：复用 `COS_VECTORS_SECRET_ID/KEY` 或单独子账号密钥，确认对普通桶有 put_object 权限 — 2026-08-26 探针实测**可写**（head/put/get/delete 全通），复用向量子账号凭据，无需新增
+- [x] **U3 上传脚本**：`scripts/rag/upload_cos.py` 遍历语料根 → 读文件头 `> COS路径:` 作 key → `CosS3Client.put_object` 上传；317 文件（rag-source 23 + rag-slices 294），幂等（同 key 覆盖），`--dry-run`/`--skip-existing` 可选 — 2026-08-26 完成
+- [x] **U3.5 执行上传**：全量上传 `ai-edu-1318177119`，成功 317 / 失败 0；验收抽查 12/12 与本地 sha256 一致（覆盖源语料+各切片类别）— 2026-08-26
 - [ ] **U4 前端读取方式**：改前端"查看原文"从 COS URL 取（或后端代理 COS 透传），去掉 `/api/rag/source` 本地 `StaticFiles` 依赖（对齐 1.9 R1-R4）
 - [ ] **U5 验收**：随机抽查 N 个 file_path → COS 取文件 → 全部可达；前端"查看原文"不再报"原文不存在"
 
