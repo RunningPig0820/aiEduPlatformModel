@@ -587,6 +587,8 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 **历史传递**：intent/rewrite 带最近 3 轮（question+anchor）给 LLM；`/api/tutoring/rag/query` 请求无 history 字段（空历史）；assistant 白盒端点带 history + current_project。
 
+> **后端联调**：Java 需适配的点（current_project 请求字段 / intent 响应 anchor+categories / file_path 变 COS key / 模块隔离拒答）记录在 `后端联调对接清单.md`，联调前需先做 U4（`/api/rag/source` 改读 COS）。
+
 ---
 
 ## 2. AI答疑 评测集（5 条）
