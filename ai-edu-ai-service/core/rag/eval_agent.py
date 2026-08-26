@@ -228,12 +228,14 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     question = case["question"]
     t0 = time.time()
 
-    # 检索(真实原语, 不降级)
-    blocks = rag_core._load_blocks()
-    strategy = rag_core.classify(question)
-    vec = rag_core.retrieve_vector(question)
-    bm = rag_core.retrieve_bm25(question, blocks)
-    hits = rag_core.orchestrate(question, blocks, vec, bm, strategy, top_k=top_k)
+    # 检索(真实原语, 不降级; 1.13 双池: intent 判模块/类别 + 双池三路召回)
+    blocks = rag_core._load_all_blocks()
+    it = rag_core.intent(question)
+    corpus = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None
+    dual = rag_core.retrieve_dual(question, corpus=corpus,
+                                  locked_categories=it["locked_categories"])
+    hits = rag_core.orchestrate(question, blocks, dual["full"], dual["bm25"], it,
+                                top_k=top_k, vec2_result=dual["slice"], corpus=corpus)
 
     recall = [
         {"key": h["key"], "score": h["score"], "authority": h["authority"],
@@ -244,7 +246,7 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
 
     # D1: 边界拒答类型 → 断言触发 boundary(固定话术 + 0 token, 不进 generate)
     if case["question_type"] == BOUNDARY_TYPE:
-        return _boundary_trace(case, recall, vec, bm, strategy, blocks, t0, t_recall)
+        return _boundary_trace(case, recall, dual, it, blocks, t0, t_recall)
 
     # hit@k + precision@k(D2: top-k 相关块占比, 可聚合)
     hit = hit_at_k(recall, case["expected_references"], k=HIT_K)
@@ -274,7 +276,7 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     return {
         "question": question,
         "question_type": case["question_type"],
-        "intent": strategy,
+        "intent": it,
         "recall": recall,
         "hit": bool(hit > 0),
         "hit_score": hit,
@@ -298,25 +300,27 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     }
 
 
-def _boundary_trace(case: dict, recall: list, vec: dict, bm: dict, strategy: dict,
+def _boundary_trace(case: dict, recall: list, dual: dict, it: dict,
                     blocks: list, t0: float, t_recall: float) -> dict:
     """D1: 边界拒答评测 —— 断言触发低置信 boundary, 固定话术 + 0 token, 不进 generate。
 
     判定: 复用 assistant.check_boundary(空 rerank 或双路置信度低于阈值)。
     触发 → 拒答正确(score=5); 未触发(意外高置信) → 拒答失败(score=0)。
     0 token: 不调 generate/判分; quoted 空(无答案自然无引用)。
+    1.13 双池: vec_conf = max(全量, 切片) 任一置信即不算低。
     """
     from core.rag.assistant import check_boundary
+    vec_conf = max(dual["full"].get("confidence", 0.0), dual["slice"].get("confidence", 0.0))
     bd = check_boundary(recall,
-                        vec_conf=vec.get("confidence", 0.0),
-                        bm_conf=bm.get("confidence", 0.0))
+                        vec_conf=vec_conf,
+                        bm_conf=dual["bm25"].get("confidence", 0.0))
     ok = bd is not None
     t_done = time.time()
     zero = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     return {
         "question": case["question"],
         "question_type": BOUNDARY_TYPE,
-        "intent": strategy,
+        "intent": it,
         "recall": recall,
         "hit": False,
         "hit_score": 0.0,

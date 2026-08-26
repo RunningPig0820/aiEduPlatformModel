@@ -99,10 +99,9 @@ async def recall(question: str, anchor: str | None = None,
     """
     blocks = blocks if blocks is not None else rag_core._load_all_blocks()
     module = anchor if anchor in rag_core.MODULE_ANCHORS else None
-    # 1.13 向量层条件筛选: 全量池只按 module; 切片池按 module+category(空=全局查询)
+    # 1.13 向量层条件筛选: 全量池/切片池都只按 module(类别不再过滤, 2026-08-26 决策)
     vec = await _recall_vector(question, vector_type="rag-full", module=module)
-    vec2 = await _recall_vector(question, vector_type="rag-slice", module=module,
-                                categories=locked_categories)
+    vec2 = await _recall_vector(question, vector_type="rag-slice", module=module)
 
     corpus = anchor if anchor in rag_core.MODULE_ANCHORS else None
     pool = rag_core.select_corpus(blocks, corpus)

@@ -54,9 +54,6 @@ ANCHOR_RULES = [
     (("题库", "没问", "答错", "乱给", "兜底", "待入库", "防御"), ("08",)),
 ]
 ANCHOR_WEIGHT = 1.5
-# 1.13 Q5: 类别匹配提权——意图锁定 locked_categories 时, 切片池命中该类别的块加权
-# (补强"排除式过滤"不足: 仅过滤时全量池权威 1.0 会压过坑档案 0.8, 提权让具体坑块浮上来)。
-CATEGORY_WEIGHT = 1.5
 
 # 模块锚点闭集(模块级路由, 决定从哪个语料池召回; A1 结构化输出必填 anchor)
 # 对齐后端 guardrails spec 四模块: AI答疑 / 知识图谱 / 题型分析 / RAG项目
@@ -411,31 +408,25 @@ def _load_all_blocks() -> list:
 
 
 DEFAULT_MODULE = "rag-system"        # 1.13: 未传 module 时的默认(项目介绍 RAG 上下文)
-# 1.13.2: categories 不做默认——未给/空 → 全局查询不筛(去掉"默认架构设计")
 
 
 def build_filter(module: str | None = None, categories: list | None = None) -> dict:
-    """module/category → COS Filter($eq/$in + $and)。
+    """module → COS Filter($eq)。仅按模块筛。
 
-    - module 恒筛(未传 → DEFAULT_MODULE rag-system); 单值 $eq
-    - categories: None → 不筛类别(全量池用); 提供 list(含空=不筛) → 单值 $eq / 多值 $in
-    - 两者都筛 → $and。实测: {"module":{"$eq":...}}, {"category":{"$in":[...]}},
-      {"$and":[...]} 均被 COS 向量桶接受(2026-08-26)。
+    2026-08-26 决策: 查询不再按 categories 过滤——评测实测 LLM 判类别不准, 类别过滤
+    会误伤相关块(如"答疑和知识图谱怎么联动"被判项目介绍, 过滤掉数据关联块)。保留
+    categories 参数仅作签名兼容, 不再用于过滤。
     """
-    conds = [{"module": {"$eq": module or DEFAULT_MODULE}}]
-    if categories:
-        conds.append({"category": {"$eq": categories[0]}} if len(categories) == 1
-                     else {"category": {"$in": categories}})
-    return conds[0] if len(conds) == 1 else {"$and": conds}
+    return {"module": {"$eq": module or DEFAULT_MODULE}}
 
 
 def retrieve_vector(question: str, vector_type: str = "rag",
                     module: str | None = None, categories: list | None = None) -> dict:
-    """向量召回单元: COS query_vectors(rag 桶, 带 module/category 条件筛选) → hits + confidence。
+    """向量召回单元: COS query_vectors(rag 桶, 按 module 条件筛选) → hits + confidence。
 
-    独立单元契约: 入参 question + vector_type + module/categories(1.13 多模块, 向量层过滤,
-    防其他模块/类别相似向量挤占 top-k), 出参 {hits, confidence}; 异常由编排器捕获。
-    module 未传 → 默认 rag-system; categories 未传 → 不筛类别(调用方决定: 全量池不筛/切片池给默认)。
+    独立单元契约: 入参 question + vector_type + module(1.13 多模块, 向量层按模块过滤,
+    防其他模块相似向量挤占 top-k), 出参 {hits, confidence}; 异常由编排器捕获。
+    module 未传 → 默认 rag-system。categories 参数保留兼容, 不再过滤(2026-08-26 决策)。
     """
     filt = build_filter(module, categories)
     hits = query_vector(question, top_k=VEC_K, vector_type=vector_type, filter_=filt)
@@ -450,21 +441,15 @@ def retrieve_dual(question: str, corpus: str | None = None,
                   locked_categories: list | None = None) -> dict:
     """双池召回(1.13 Q3 + 多模块): 全量池向量 + 切片池向量 + BM25 → 三路供 RRF。
 
-    向量层条件筛选(1.13 下推): 全量池只按 module; 切片池按 module + category。
-    module 未传 → 默认 rag-system; 切片池 category 未传 → 默认架构设计。
+    向量层条件筛选(1.13 下推): 全量池/切片池都只按 module 过滤。
+    module 未传 → 默认 rag-system。locked_categories 保留参数兼容, 不再过滤
+    (2026-08-26 决策: LLM 判类别不准, 类别过滤误伤相关块)。
     corpus(模块 anchor): 本地 BM25 只打该模块语料池(与编排层 select_corpus 一致)。
-    locked_categories(9 类): 本地 BM25 只打切片池该类别的块(全量池块不过滤, 与编排层一致)。
     """
     full = retrieve_vector(question, vector_type="rag-full", module=corpus)   # 全量池: 只筛 module
-    slice_ = retrieve_vector(question, vector_type="rag-slice", module=corpus,
-                             categories=locked_categories)   # 切片池: module+category(空=全局查询)
+    slice_ = retrieve_vector(question, vector_type="rag-slice", module=corpus)  # 切片池: 只筛 module
     blocks = _load_all_blocks()
     pool = select_corpus(blocks, corpus) if corpus else blocks
-    if locked_categories:
-        cats = set(locked_categories)
-        pool = [b for b in pool
-                if b["tags"].get("pool") != "slice" or not b["tags"].get("category")
-                or b["tags"]["category"] in cats]
     bm = retrieve_bm25(question, pool)
     return {"full": full, "slice": slice_, "bm25": bm}
 
@@ -582,7 +567,6 @@ def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict
     vec2_rank = {k: r for r, k in enumerate(vec2_keys)}
     bm_rank = {k: r for r, k in enumerate(bm_keys)}
     locked = set(strategy.get("locked_sections", []))
-    locked_cats = set(strategy.get("locked_categories", []) or [])
 
     scored = []
     for key in set(vec_rank) | set(vec2_rank) | set(bm_rank):
@@ -597,17 +581,10 @@ def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict
         if block is None:
             continue
         t = block["tags"]
-        # 类别过滤: 只对切片池命中筛(全量池不过滤); 无锁定类别 → 全保留。
-        # 无 category 的切片块不筛(防"空召回", 生产 294 块全有 category, 此处仅兜底)。
-        if locked_cats and t.get("pool") == "slice" and t.get("category") \
-                and t["category"] not in locked_cats:
-            continue
         authority = t.get("authority", 0.7)
         anchor_w = ANCHOR_WEIGHT if t.get("section") in locked else 1.0
-        # 类别提权: 意图锁定类别时, 切片池该类块加权(让具体坑块浮出, 压过全量池权威分)
-        cat_w = CATEGORY_WEIGHT if locked_cats and t.get("pool") == "slice" \
-            and t.get("category") in locked_cats else 1.0
-        scored.append((rrf * authority * anchor_w * cat_w, rrf, authority, key))
+        # 1.13.2 决策: 不做类别过滤/提权(LLM 判类别不准会误伤相关块); 保留 RRF×authority×节锚定
+        scored.append((rrf * authority * anchor_w, rrf, authority, key))
 
     scored.sort(key=lambda x: -x[0])
     hits = []

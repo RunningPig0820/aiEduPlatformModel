@@ -167,12 +167,18 @@ class TestRunEvalCase:
 
     @pytest.fixture
     def mock_core(self, monkeypatch):
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")  # classify 内部用
-        # 向量路返回 04 块(命中 expected_references)
-        monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
-                                                  "distance": 0.1}], "confidence": 0.9})
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_llm_intent",
+                            lambda q, h, current_project="ai-tutoring": {
+                                "anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
+                                "switch_detected": False, "ambiguous": False, "candidates": []})
+        # 双池召回: 全量池返回 04 块(命中 expected_references)
+        monkeypatch.setattr(rag_core, "retrieve_dual",
+                            lambda q, corpus=None, locked_categories=None: {
+                                "full": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                                                   "distance": 0.1}], "confidence": 0.9},
+                                "slice": {"hits": [], "confidence": 0.0},
+                                "bm25": {"hits": [], "confidence": 0.0}})
         # 生成 mock 掉(doubao 不碰); 判分 mock 掉
         monkeypatch.setattr(rag_core, "generate",
                             lambda hits, q, return_usage=False:
@@ -200,13 +206,15 @@ class TestRunEvalCase:
         assert trace["usage"]["cost_yuan"] > 0
 
     def test_case_vector_retrieve_called(self, mock_core, monkeypatch):
-        # 评测走真实 retrieve_vector(不降级)—— 验证被调用(而非跳过)
+        # 评测走真实 retrieve_dual(不降级)—— 验证被调用(而非跳过)
         called = []
-        real = rag_core.retrieve_vector
-        monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: (called.append(q), real(q))[1])
+        real = rag_core.retrieve_dual
+        monkeypatch.setattr(rag_core, "retrieve_dual",
+                            lambda q, corpus=None, locked_categories=None:
+                                (called.append(q), real(q, corpus=corpus,
+                                                        locked_categories=locked_categories))[1])
         eval_agent.run_eval_case(CASE)
-        assert called, "评测应走真实 retrieve_vector(不降级)"
+        assert called, "评测应走真实 retrieve_dual(不降级)"
 
 
 class TestPrecisionAtK:
@@ -256,12 +264,16 @@ class TestBoundaryRefusal:
 
     def _mock_low_conf(self, monkeypatch, hits_empty=True):
         """低置信检索: 向量/BM25 双路都低 → 触发 boundary"""
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
-        monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [], "confidence": 0.1})
-        monkeypatch.setattr(rag_core, "retrieve_bm25",
-                            lambda q, blocks: {"hits": [], "confidence": 0.1})
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_llm_intent",
+                            lambda q, h, current_project="ai-tutoring": {
+                                "anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
+                                "switch_detected": False, "ambiguous": False, "candidates": []})
+        monkeypatch.setattr(rag_core, "retrieve_dual",
+                            lambda q, corpus=None, locked_categories=None: {
+                                "full": {"hits": [], "confidence": 0.1},
+                                "slice": {"hits": [], "confidence": 0.1},
+                                "bm25": {"hits": [], "confidence": 0.1}})
         monkeypatch.setattr(rag_core, "orchestrate", lambda *a, **k: [])
         # 边界拒答不得进 generate/判分(0 token)
         monkeypatch.setattr(rag_core, "generate", _forbidden_generate)
@@ -281,15 +293,19 @@ class TestBoundaryRefusal:
 
     def test_boundary_refusal_fail_high_conf(self, monkeypatch, boundary_case):
         """意外高置信命中 → 拒答失败 score=0(语义: 该拒答却答了)"""
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
-        monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": ["v"], "confidence": 0.9})
-        monkeypatch.setattr(rag_core, "retrieve_bm25",
-                            lambda q, blocks: {"hits": ["b"], "confidence": 0.8})
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_llm_intent",
+                            lambda q, h, current_project="ai-tutoring": {
+                                "anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
+                                "switch_detected": False, "ambiguous": False, "candidates": []})
+        monkeypatch.setattr(rag_core, "retrieve_dual",
+                            lambda q, corpus=None, locked_categories=None: {
+                                "full": {"hits": ["v"], "confidence": 0.9},
+                                "slice": {"hits": [], "confidence": 0.9},
+                                "bm25": {"hits": ["b"], "confidence": 0.8}})
         # orchestrate 返回相关块(04)
         monkeypatch.setattr(rag_core, "orchestrate", lambda *a, **k: [{
-            "key": "ai-tutoring/04-安全与防作弊#0", "score": 0.9, "authority": 1.0,
+            "key": "rag-slice/04-安全与防作弊#0", "score": 0.9, "authority": 1.0,
             "section": "04", "file": "04-安全与防作弊", "anchor": "04-安全与防作弊",
             "text": "防套答案", "summary": "s", "file_path": "f"}])
         trace = eval_agent.run_eval_case(boundary_case)
