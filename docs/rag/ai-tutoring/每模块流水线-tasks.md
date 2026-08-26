@@ -661,6 +661,18 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 **验证用例**：`这个功能的底层是怎么实现的`(cp=ai-tutoring) → **ai-tutoring**；`RAG 系统整体架构是什么`(cp=ai-tutoring) → **rag-system**（硬路由保留）；`知识图谱的底层` → knowledge-graph（点名其他模块不兜底）。
 
+### 1.13.8 追问展开（方案 A+B，2026-08-26）
+
+> **动机**：多轮追问"能说的详细一点吗"省略了主语（上一轮"流程图"），旧 query 端点**无 history 无改写**，把它当独立新问题检索 → 答偏。
+
+**修复（方案 A + B 结合）**：
+- **方案 A（链路改写）**：`RAGQueryRequest` 加 `history`（Java 传最近几轮）；`api/rag.py` 流程改为 `intent(带history) → rewrite_query(question, anchor, history) → 双路召回(改写后) → 生成(改写后)`。rewrite 把省略句补全为带主题的检索查询
+- **方案 B（展开基础）**：`generate` 加 `prev_answer` 参数——追问时传上一轮 answer 作展开基础，模型围绕上轮答案细化而非另起炉灶
+
+**实测**："能说的详细一点吗" + history(流程图) → rewrite="ai-tutoring 流程图详细说明" → 检索 top1 命中"AI答疑项目流程图是什么样的？"（引导问题-86）。
+
+**Java 待办**：`/api/tutoring/rag/query` 请求体带 `history`（最近 N 轮 {question, answer, anchor}）。
+
 ---
 
 ## 2. AI答疑 评测集（5 条）

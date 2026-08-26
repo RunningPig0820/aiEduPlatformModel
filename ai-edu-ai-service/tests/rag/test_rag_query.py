@@ -206,6 +206,35 @@ class TestRagAPI:
         assert r.json()["references"]  # BM25 路兜底, 仍有命中
         assert "04" in r.json()["references"][0]["file"]
 
+    def test_query_followup_rewrite(self, monkeypatch):
+        """追问改写(方案A, 2026-08-26): history 传入 → rewrite 补全省略句 → 检索用改写后 → 生成用改写后(不基于旧答案)"""
+        calls = {}
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "rewrite_query",
+                            lambda q, anchor, history=None:
+                                (calls.update({"rw": (q, history)}) or "ai-tutoring 流程图详细内容"))
+        monkeypatch.setattr(rag_core, "retrieve_dual",
+                            lambda q, corpus=None, locked_categories=None:
+                                (calls.update({"q": q}) or {
+                                    "full": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                                                       "distance": 0.1}],
+                                             "confidence": 0.9},
+                                    "slice": {"hits": [], "confidence": 0.0},
+                                    "slice_q": {"hits": [], "confidence": 0.0},
+                                    "bm25": {"hits": [], "confidence": 0.0}}))
+        monkeypatch.setattr(rag_core, "generate",
+                            lambda hits, q, return_usage=False, prev_answer="":
+                                (calls.update({"gen_q": q, "prev": prev_answer}) or "详细答案"))
+        history = [{"question": "流程图是什么样的", "answer": "流程图: 前端→Java→Python", "anchor": "ai-tutoring"}]
+        r = self.client.post("/api/tutoring/rag/query", headers=self.auth,
+                             json={"question": "能说的详细一点吗", "history": history})
+        assert r.status_code == 200
+        assert calls["rw"][1] == history                              # rewrite 收到 history
+        assert calls["q"] == "ai-tutoring 流程图详细内容"              # 检索用改写后
+        assert calls["gen_q"] == "ai-tutoring 流程图详细内容"          # 生成用改写后(完整问题)
+        assert calls.get("prev") == ""                                # 不传旧答案(硬性约束6: 重读语料重生成)
+        assert r.json()["answer"] == "详细答案"
+
     def test_query_generate_fail_degrade_references(self, monkeypatch):
         """降级语义2: doubao 挂了 → references 当答案, 不空答"""
         monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)

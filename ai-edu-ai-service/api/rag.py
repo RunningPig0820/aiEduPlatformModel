@@ -83,12 +83,19 @@ async def rag_query(
     # --- 1.6C 降级语义: COS 向量挂了 → 降级纯 BM25(需绕开 rag_query 的整链路) ---
     try:
         blocks = rag_core._load_all_blocks()
-        it = rag_core.intent(request.question, current_project=request.current_project)  # 多模块: 判模块+9类, 倾向当前模块
+        it = rag_core.intent(request.question, current_project=request.current_project,
+                             history=request.history)  # 多模块: 判模块+9类, 倾向当前模块; 带 history 供指代
         corpus = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None
+
+        # 追问改写(方案 A, 2026-08-26): 结合 history 补全指代/省略
+        #   "能说的详细一点吗" + history(上一轮"流程图") → "ai-tutoring 流程图详细内容"
+        # 追问不基于旧答案扩写(_GEN_SYSTEM 硬性约束 6): 重读全部召回语料重新生成, 生成只用改写后问题+新检索块
+        rewritten = rag_core.rewrite_query(request.question, anchor=it["anchor"],
+                                           history=request.history)
 
         # 双池向量路失败冒泡 → 捕获降级纯 BM25(构造空向量结果)
         try:
-            dual = rag_core.retrieve_dual(request.question, corpus=corpus,
+            dual = rag_core.retrieve_dual(rewritten, corpus=corpus,
                                           locked_categories=it["locked_categories"])
         except Exception as e:
             logger.warning("RAG 向量路失败, 降级纯 BM25: %s", e)
@@ -96,9 +103,9 @@ async def rag_query(
             dual = {"full": {"hits": [], "confidence": 0.0},
                     "slice": {"hits": [], "confidence": 0.0},
                     "slice_q": {"hits": [], "confidence": 0.0},   # 双向量: summary/问题路
-                    "bm25": rag_core.retrieve_bm25(request.question, bm_pool)}
+                    "bm25": rag_core.retrieve_bm25(rewritten, bm_pool)}
 
-        hits = rag_core.orchestrate(request.question, blocks, dual["full"], dual["bm25"],
+        hits = rag_core.orchestrate(rewritten, blocks, dual["full"], dual["bm25"],
                                     it, top_k=request.top_k, vec2_result=dual["slice"],
                                     vec3_result=dual["slice_q"], corpus=corpus)
 
@@ -120,7 +127,7 @@ async def rag_query(
 
         # --- 降级语义 2: doubao 挂了 → references 当答案, 不空答 ---
         try:
-            answer = rag_core.generate(hits, request.question)
+            answer = rag_core.generate(hits, rewritten)
         except Exception as e:
             logger.error("RAG 生成失败(doubao), 降级返回召回块清单: %s", e)
             answer = "生成服务不可用，以下为检索到的语料：\n" + "\n".join(

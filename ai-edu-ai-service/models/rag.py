@@ -14,6 +14,9 @@ class RAGQueryRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20, description="生成用召回块数(双向量方案编排 top-5)")
     current_project: str = Field(default="ai-tutoring",
                                  description="当前上下文模块(调用方传入, intent LLM 倾向保持该模块)")
+    history: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="最近 N 轮 {question, answer, anchor}, 供追问改写(补全指代/省略)/展开上下文(上一轮 answer 作基础); Java 传最近几轮")
 
 
 class RAGReference(BaseModel):
