@@ -37,6 +37,7 @@ from fastapi.testclient import TestClient
 
 from config.settings import settings
 from core.rag import assistant
+from core.rag import guide_pool
 
 TOKEN = settings.INTERNAL_TOKEN
 AUTH = {"x-internal-token": TOKEN}
@@ -107,6 +108,10 @@ def _forbidden_async(*a, **k):
     async def _f(*a2, **k2):
         raise AssertionError("不应被调用")
     return _f
+
+
+def _forbidden_sync(*a, **k):
+    raise AssertionError("不应被调用")
 
 
 def _collect(agen):
@@ -322,15 +327,75 @@ class TestAssembleUsage:
 
 
 class TestGuide:
-    def test_guide_static_pool(self):
-        data = assistant.guide()
-        sugs = data["suggestions"]
-        assert 1 <= len(sugs) <= 3
+    def test_guide_entry_pool_simple(self):
+        """M6 ③+用户反馈: 入口引导从 entry 池取 3 条入门级问题, 必含 ≥1 条 rag 方向"""
+        entry_qs = {q for _, q in guide_pool.entry_for("ai-tutoring")}
+        entry_dirs = {d for d, _ in guide_pool.entry_for("ai-tutoring")}
+        sugs = assistant.guide("ai-tutoring")["suggestions"]
+        assert len(sugs) == 3
         assert all("title" in s and "direction" in s for s in sugs)
-        assert all(s["direction"] in ("architecture", "data_flow", "evaluation")
-                   for s in sugs)
-        # RAG 定向: 方向闭集均为 RAG 项目主题 + 至少一条 title 含字面 RAG
-        assert any("RAG" in s["title"] for s in sugs)
+        assert all(s["title"] in entry_qs for s in sugs)                       # 只出入口简单题
+        assert any(s["direction"] == "rag" for s in sugs)                      # ≥1 rag 方向
+        assert all(s["direction"] in entry_dirs for s in sugs)
+
+    def test_guide_fallback_module(self):
+        """未知/缺省 current_project → FALLBACK(ai-tutoring), 仍 3 条含 rag"""
+        entry_qs = {q for _, q in guide_pool.entry_for("ai-tutoring")}
+        for cp in (None, "unknown-module"):
+            sugs = assistant.guide(cp)["suggestions"]
+            assert len(sugs) == 3
+            assert any(s["direction"] == "rag" for s in sugs)
+            assert all(s["title"] in entry_qs for s in sugs)                   # 入口题不超池
+
+
+# ============ M6 ④ 问候识别(6.6) ============
+
+
+class TestGreeting:
+    def test_is_greeting_short_keywords(self):
+        """短句问候命中"""
+        for q in ("你好", "您好", "hi", "hello", "哈喽", "在吗"):
+            assert assistant.is_greeting(q), q
+
+    def test_is_greeting_not_misjudge(self):
+        """含问候词的正常提问不误杀(短句门槛)"""
+        for q in ("你好，请介绍一下这个项目", "怎么防学生套答案", "SSE 时序是什么样的"):
+            assert not assistant.is_greeting(q), q
+
+    def test_greeting_short_circuits_before_intent(self, monkeypatch):
+        """问候: intent→done(固定欢迎 + 池内引导), 不调 intent LLM/recall/generate"""
+        monkeypatch.setattr(assistant.rag_core, "intent", _forbidden_sync)
+        monkeypatch.setattr(assistant, "recall", _forbidden_async())
+        monkeypatch.setattr(assistant, "stream_generate", _forbidden_async())
+        evs = _collect(assistant.pipeline_events("你好", trace_id="g1"))
+        assert [e["event"] for e in evs] == ["intent", "done"]
+        it = evs[0]["data"]
+        assert it["category"] == "问候" and it["ambiguous"] is False
+        done = evs[1]["data"]
+        assert done["answer"] == assistant.WELCOME_MSG
+        assert done["tokens_usage"]["total_tokens"] == 0       # 0 生成 token
+        assert 1 <= len(done["suggestions"]) <= 3              # 池内引导建议
+        assert done["reason"] is None
+
+    def test_greeting_llm_category_branch(self, monkeypatch):
+        """LLM intent 判 category=问候(非关键词短句) → 同样走欢迎分支, 不 recall"""
+        monkeypatch.setattr(
+            assistant.rag_core, "intent",
+            lambda q, h=None, cp="ai-tutoring": _intent(category="问候"))
+        monkeypatch.setattr(assistant, "recall", _forbidden_async())
+        monkeypatch.setattr(assistant, "stream_generate", _forbidden_async())
+        evs = _collect(assistant.pipeline_events("你好呀，我们来聊聊吧", trace_id="g2"))
+        assert [e["event"] for e in evs] == ["intent", "done"]
+        assert evs[1]["data"]["answer"] == assistant.WELCOME_MSG
+        assert evs[1]["data"]["tokens_usage"]["total_tokens"] == 0
+
+    def test_greeting_uses_current_project_pool(self, monkeypatch):
+        """问候建议来自 current_project 模块入口池(缺省 → FALLBACK; 入门级问题)"""
+        entry_qs = {q for _, q in guide_pool.entry_for("ai-tutoring")}
+        monkeypatch.setattr(assistant.rag_core, "intent", _forbidden_sync)
+        evs = _collect(assistant.pipeline_events("你好", current_project="ai-tutoring", trace_id="g3"))
+        sugs = evs[1]["data"]["suggestions"]
+        assert all(s in entry_qs for s in sugs)
 
 
 # ============ API 层端点(TestClient) ============
@@ -439,6 +504,24 @@ class TestGuideAPI:
         sugs = r.json()["suggestions"]
         assert 1 <= len(sugs) <= 3
         assert all("title" in s and "direction" in s for s in sugs)
+
+    def test_guide_current_project_passthrough(self, client):
+        """M6 ③: ?current_project= 透传 → 模块池 3 条, 含 rag 方向"""
+        r = client.get("/api/rag/assistant/guide?current_project=ai-tutoring", headers=AUTH)
+        assert r.status_code == 200
+        sugs = r.json()["suggestions"]
+        assert len(sugs) == 3
+        assert any(s["direction"] == "rag" for s in sugs)
+        assert all(s["direction"] in ("intro", "operation", "data_relation", "difficulty", "rag")
+                   for s in sugs)
+
+    def test_guide_unknown_project_fallback(self, client):
+        """未知 current_project → FALLBACK(ai-tutoring), 仍 3 条含 rag"""
+        r = client.get("/api/rag/assistant/guide?current_project=xxx", headers=AUTH)
+        assert r.status_code == 200
+        sugs = r.json()["suggestions"]
+        assert len(sugs) == 3
+        assert any(s["direction"] == "rag" for s in sugs)
 
     def test_guide_missing_token_403(self, client):
         assert client.get("/api/rag/assistant/guide").status_code == 403

@@ -142,10 +142,14 @@ def _ask_stream(request: Request, req: RagAssistantAskRequest) -> StreamingRespo
 
 
 @router.get("/guide")
-async def guide(x_internal_token: str = Header(None)):
-    """开始引导(RAG 定向静态池, 0 token, 非 SSE, 不占冻结时序)。"""
+async def guide(current_project: str | None = None, x_internal_token: str = Header(None)):
+    """开始引导(M6 模块底座池, 0 token, 非 SSE, 不占冻结时序)。
+
+    current_project(可选 query, 后端 ?current_project= 透传): 每功能引导问题不同,
+    进页面/切换功能以当前功能为准; 缺省/未知 → FALLBACK_MODULE(ai-tutoring)。
+    """
     verify_internal_token(x_internal_token)
-    return rag_assistant.guide()
+    return rag_assistant.guide(current_project)
 
 
 @router.get("/eval/report")

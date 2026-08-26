@@ -591,6 +591,29 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 > **后端联调**：Java 需适配的点（current_project 请求字段 / intent 响应 anchor+categories / file_path 变 COS key / 模块隔离拒答）记录在 `后端联调对接清单.md`，联调前需先做 U4（`/api/rag/source` 改读 COS）。
 
+### 1.13.4 M6 引导底座池改造（2026-08-26 完成，后端问题6 落地）
+
+> **动机**（known-issues 问题6）：引导问题不能自由发挥——开始引导 `guide` / 结束建议 `done.suggestions` 自由生成的建议很多在语料里没对应切片，学生点了答不上。改为围绕 `docs/rag/ai-tutoring/7. 引导问题/引导问题.md` 的底座池做受约束生成。
+
+**决策（3 条，对齐后端 M6 方案）**：
+1. 底座池 = 75 题从 `引导问题.md` 抄录进 `core/rag/guide_pool.py`（`GUIDE_POOL[模块][方向]`），每题落一个主方向（intro/operation/data_relation/difficulty），rag 组是 RAG 桥接子集（可重复，scope 去重）；`FALLBACK_MODULE=ai-tutoring`（防御，正常前端必传 current_project）
+2. `gen_suggestions` 结束建议：system prompt 尾部注入「可提问范围」（逐条列池内问题，硬约束不超池）；兜底从写死 3 条静态池 → **池内随机 2 条必含 ≥1 条 rag**（删 `STATIC_SUGGESTIONS`）
+3. `guide(current_project=None)` 开始引导：从**入口池**取 3 条入门级问题（必含 ≥1 条 rag 方向入口题 + 其余随机）；direction 值随池方向：`intro/operation/data_relation/difficulty/rag`（**替换旧 architecture/data_flow/evaluation**，Java/前端如按旧值硬编码需适配）
+
+**入口池（entry，2026-08-26 用户反馈补充）**：入口引导要简单——用户还不知道怎么用，先给"能不能介绍一下 / X 是干什么的"级别，太复杂有割裂距离。入口引导**通用模板 + 模块中文名动态生成**（`_ENTRY_TEMPLATES` 5 条含 1 条 rag 方向入口题，`{模块}` 替换为当前模块中文名，**不写死"AI答疑"**——多模块下写死模块名会驴唇不对马嘴），每模块可加 `entry` 组覆盖定制。`guide()` 和问候引导（`_spread_pool_suggestions`）**只从 entry 取**；难题留在主池，由结束建议（用户问过一轮有上下文）给出。entry 不进 `scope_questions`（主池 75 题不受影响），`entry_for(module)` 未配 entry → 模板生成。
+
+**问候识别（6.6，实联调"你好"被误判 ambiguous 修复）**：`is_greeting` 关键词预检（短句 ≤8 字防误杀）+ intent category 加"问候"；问候走固定欢迎话术 + 池内引导建议，**0 token，不 recall 不 generate**（pipeline_events 新增问候分支，关键词命中不花 intent LLM）。
+
+**已完成（2026-08-26）**：
+- [x] `core/rag/guide_pool.py`：`GUIDE_POOL`（ai-tutoring 75 题 + rag 6 子集）/ `pool_for` / `scope_questions`（去重保序）
+- [x] `assistant.py`：`gen_suggestions` 池约束 + `_pool_fallback` + `guide(current_project)` + `is_greeting`/`WELCOME_MSG`/`_spread_pool_suggestions` + pipeline_events 问候分支
+- [x] `api/rag_assistant.py`：`GET /guide` 加可选 `?current_project=` 透传
+- [x] `query.py`：`_INTENT_SYSTEM` category 枚举加"问候" + `CATEGORY_SECTIONS` 加映射（不锁节）
+- [x] 测试：`test_guide_pool.py` 新增（75 题/去重/子集/兜底）；`test_assistant_suggestions.py` 兜底改池内抽样 + 可提问范围断言；`test_assistant_api.py` guide current_project 透传 + 问候分支短路（不调 intent LLM/recall/generate）
+- [x] 回归：RAG 全套 245 过；全量非 real 562 过
+
+**多模块**：GUIDE_POOL 当前仅 ai-tutoring 一池；知识图谱/题型分析/rag-system 语料就绪各加一条（未知模块 → FALLBACK_MODULE 兜底，不崩）。
+
 ---
 
 ## 2. AI答疑 评测集（5 条）

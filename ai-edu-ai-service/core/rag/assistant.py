@@ -13,10 +13,12 @@
 """
 import asyncio
 import logging
+import random
 
 from starlette.concurrency import run_in_threadpool
 
 from config.settings import settings
+from core.rag import guide_pool
 from core.rag import query as rag_core
 
 logger = logging.getLogger(__name__)
@@ -316,15 +318,9 @@ def resolve_clarify(intent_result: dict, history: list | None,
             "candidates": candidates, "default": default}
 
 
-# ============ A8 suggestions 引导 ============
+# ============ A8 suggestions 引导（M6: 底座池约束, 2026-08-26） ============
 
-# 静态池兜底(预写 2~3 条, 含 RAG 方向常驻; 对齐后端 D11: 定位/架构/数据流/评测)
-STATIC_SUGGESTIONS = [
-    "想了解 RAG 的整体架构吗？可以聊聊多路召回和 RRF 融合",
-    "想知道知识库语料是如何流转入库的吗？从切片到向量索引",
-    "想看看评测体系是怎么设计的吗？hit@k 和判分机制",
-]
-
+# 底座池 = core/rag/guide_pool.py（问题源 引导问题.md）; 兜底改池内抽样, 删写死静态池。
 _SUGGEST_SYSTEM = """你是「AI答疑」RAG 助手的引导建议生成器。根据上一轮回答，给面试官 1~3 条"接下来可以问什么"的建议。
 
 规则：
@@ -332,16 +328,38 @@ _SUGGEST_SYSTEM = """你是「AI答疑」RAG 助手的引导建议生成器。�
 2. 1~3 条，每条一行，不要编号
 3. **必须包含至少 1 条 RAG 方向**（RAG 是底层引擎，任何模块回答后都应把话题带回 RAG：多路召回/RRF 融合/向量索引/评测/防作弊护栏）
 4. 其余可围绕回答内容追问（项目介绍/操作/数据关联/难点）
+5. 只能生成与下方「可提问范围」方向类似的问题，不得自由发挥、不得超出范围
+
 只输出建议文本，每行一条。"""
 
 
-def gen_suggestions(answer: str, anchor: str = "", llm=None) -> list:
-    """结束引导: LLM 生成 1~3 条建议, 必含 ≥1 条 RAG 方向(C5/D11); 失败 → 静态池兜底。
+def _suggest_scope(module: str) -> str:
+    """模块池全部问题 → 提示词「可提问范围」约束（逐条列, 硬约束不超池）。"""
+    qs = guide_pool.scope_questions(module)
+    return ("可提问范围(只能生成与以下问题方向类似的问题, 不得自由发挥、不得超出):\n"
+            + "\n".join(f"- {q}" for q in qs))
 
-    llm 注入用(测试); 默认 doubao 0.2 温度短调用。返回 1~3 条建议列表。
+
+def _pool_fallback(module: str) -> list:
+    """池内兜底: 随机 2 条, 必含 ≥1 条 rag 组（替换写死静态池, M6 ②）。"""
+    pool = guide_pool.pool_for(module)
+    rag = pool.get("rag", [])
+    others = [q for d in guide_pool.DIRECTIONS for q in pool.get(d, [])]
+    picks = []
+    if rag:
+        picks.append(random.choice(rag))
+    if others:
+        picks.append(random.choice(others))
+    return picks[:2]
+
+
+def gen_suggestions(answer: str, anchor: str = "", llm=None, module: str | None = None) -> list:
+    """结束引导(M6): LLM 生成 1~3 条建议, 必含 ≥1 条 RAG 方向(C5/D11), 约束在池内;
+    失败/形状异常 → 池内随机 2 条兜底。llm 注入用(测试); 默认 doubao 0.2 温度短调用。
     """
+    module = module or (anchor if anchor in rag_core.MODULE_ANCHORS
+                        else guide_pool.FALLBACK_MODULE)
     try:
-        import json as _json
         from langchain_core.messages import HumanMessage, SystemMessage
         from core.gateway.factory import LLMFactory
         if llm is None:
@@ -350,19 +368,45 @@ def gen_suggestions(answer: str, anchor: str = "", llm=None) -> list:
                 extra_body={"thinking": {"type": "disabled"}},
                 request_timeout=20, max_retries=0,
             )
+        system = _SUGGEST_SYSTEM + "\n\n" + _suggest_scope(module)
         text = llm.invoke([
-            SystemMessage(content=_SUGGEST_SYSTEM),
-            HumanMessage(content=f"上一轮回答（节选）：{answer[:400]}\n\n当前模块：{anchor}\n\n请生成建议："),
+            SystemMessage(content=system),
+            HumanMessage(content=f"上一轮回答（节选）：{answer[:400]}\n\n当前模块：{module}\n\n请生成建议："),
         ]).content or ""
         lines = [ln.strip().lstrip("1234567890.、）) ") for ln in text.strip().splitlines()
                  if ln.strip()]
         if 1 <= len(lines) <= 3:
             return lines
-        # LLM 输出形状异常(0 条或 >3 条) → 兜底静态池
-        return list(STATIC_SUGGESTIONS)
+        # LLM 输出形状异常(0 条或 >3 条) → 池内兜底
+        return _pool_fallback(module)
     except Exception as e:
-        logger.warning("RAG suggestions LLM 失败, 静态池兜底: %s", e)
-        return list(STATIC_SUGGESTIONS)
+        logger.warning("RAG suggestions LLM 失败, 池内兜底: %s", e)
+        return _pool_fallback(module)
+
+
+# ============ M6 ④ 问候识别(6.6): 固定欢迎 + 池内引导, 0 token ============
+
+# 问候关键词预检(实联调"你好"被误判 ambiguous → 关键词兜底; 短句才命中防误杀正常提问)
+GREETING_KEYWORDS = ("你好", "您好", "hello", "hi", "哈喽", "嗨", "hey", "在吗")
+WELCOME_MSG = ("你好！我是「AI答疑」的面试助手，可以聊项目介绍、操作流程、数据关联、开发难点，"
+               "也可以深入 RAG 底层实现。想从哪方面开始，或者直接点下面的问题。")
+
+
+def is_greeting(question: str) -> bool:
+    """问候预检(关键词): 归一化后短句命中 → 问候分支(0 token, 不 recall 不 generate)。
+
+    短句门槛防误杀: "你好，请介绍一下这个项目" 含问候词但语义是真实提问, 不命中。
+    """
+    q = (question or "").strip().lower().strip(" \t!！。?？~～,.，、")
+    return 0 < len(q) <= 8 and any(k in q for k in GREETING_KEYWORDS)
+
+
+def _spread_pool_suggestions(module: str, n: int = 3) -> list:
+    """问候/入口引导建议(0 token): 从入口池抽 n 条入门级问题(用户刚进来, 不给难题)。"""
+    entry = guide_pool.entry_for(module)
+    if len(entry) <= n:
+        return [q for _, q in entry]
+    return [q for _, q in random.sample(entry, n)]
 
 
 # ============ A9 范围门低置信过滤(唯一拒答路径) ============
@@ -503,17 +547,32 @@ def assemble_done(answer: str, quoted_keys: list, usage: dict | None, trace_id: 
     }
 
 
-# 开始引导静态池(RAG 定向, 0 token; 对齐后端 api.md guide direction: 架构/数据流/评测/坑)
-GUIDE_SUGGESTIONS = [
-    {"title": "想了解 RAG 的整体架构吗？", "direction": "architecture"},
-    {"title": "想知道知识库语料是如何流转入库的吗？", "direction": "data_flow"},
-    {"title": "想看看评测体系是怎么设计的吗？", "direction": "evaluation"},
-]
+# M6 ③: 开始引导从**入口池**取 3 条(入门级, 用户还不知道怎么用时的第一屏)。
+# 2026-08-26 用户反馈: 入口问题要简单("能不能介绍一下 AI答疑项目"级别), 太复杂会有割裂距离;
+# 难题留给结束建议(用户问过一轮有上下文)。必含 ≥1 条 rag 方向入口题, 其余入口随机。
+# direction 值随池方向: intro/operation/data_relation/difficulty/rag(替换旧 architecture/data_flow/evaluation,
+# 后端联调清单已记录 —— Java/前端如按旧值硬编码需适配)。
 
 
-def guide() -> dict:
-    """GET /api/rag/assistant/guide: 开始引导(RAG 定向静态池, 非 SSE, 0 token)。"""
-    return {"suggestions": list(GUIDE_SUGGESTIONS)}
+def guide(current_project: str | None = None) -> dict:
+    """GET /api/rag/assistant/guide: 开始引导(M6 入口池, 非 SSE, 0 token)。
+
+    current_project(可空, 后端 ?current_project= 透传): 选模块池; 未知/缺省 → FALLBACK。
+    从入口池取 3 条入门级问题(必含 ≥1 条 rag 方向入口题 + 其余随机), 不取难题。
+    返回 shape 不变: {"suggestions": [{"title", "direction"}]}。
+    """
+    module = current_project if current_project in rag_core.MODULE_ANCHORS \
+        else guide_pool.FALLBACK_MODULE
+    entry = guide_pool.entry_for(module)
+    rag_entries = [(d, q) for d, q in entry if d == "rag"]
+    others = [(d, q) for d, q in entry if d != "rag"]
+    picked = []
+    if rag_entries:
+        picked.append(random.choice(rag_entries))
+    for d, q in random.sample(others, k=min(2, len(others))):
+        picked.append((d, q))
+    suggestions = [{"title": q, "direction": d} for d, q in picked[:3]]
+    return {"suggestions": suggestions}
 
 
 async def pipeline_events(question: str, history: list | None = None,
@@ -535,14 +594,31 @@ async def pipeline_events(question: str, history: list | None = None,
     request.is_disconnected() 在 generate 前/中检测 → 中止(断连取消, close 由 Java 关中继触发)。
     history/trace_id 由 Java 传入只消费; done 回显 trace_id。Python 无状态(D-D)。
     """
-    # ---- 1. intent(LLM 结构化输出) ----
-    it = rag_core.intent(question, history, current_project)
+    # ---- 1. intent(问候预检短路: 关键词命中不花 intent LLM; 否则 LLM 结构化输出) ----
+    greet = is_greeting(question)
+    if greet:
+        module = current_project if current_project in rag_core.MODULE_ANCHORS \
+            else guide_pool.FALLBACK_MODULE
+        it = {"anchor": module, "category": "问候", "categories": [],
+              "switch_detected": False, "ambiguous": False, "candidates": [],
+              "locked_sections": [], "locked_categories": [], "degraded": False}
+    else:
+        it = rag_core.intent(question, history, current_project)
     yield {"event": "intent", "data": {
         "anchor": it["anchor"], "category": it["category"],
         "switch_detected": it["switch_detected"], "ambiguous": it["ambiguous"],
         "candidates": it["candidates"], "locked_sections": it["locked_sections"],
         "degraded": it["degraded"],
     }}
+
+    # ---- 1.5 问候分支(M6 ④: 固定欢迎 + 模块池引导建议, 0 token, 不 recall 不 generate) ----
+    if greet or it["category"] == "问候":
+        module = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS \
+            else guide_pool.FALLBACK_MODULE
+        yield {"event": "done", "data": assemble_done(
+            answer=WELCOME_MSG, quoted_keys=[], usage=None, trace_id=trace_id,
+            suggestions=_spread_pool_suggestions(module), reason=None)}
+        return
 
     # ---- 2. clarify 分支(澄清轮: 无 rewrite/rerank/token, 0 token) ----
     clarify = resolve_clarify(it, history, current_project)

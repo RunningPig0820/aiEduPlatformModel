@@ -80,12 +80,13 @@
 ## 6. 开始引导 `GET /api/rag/assistant/guide`
 
 ```json
+// 可选 query: current_project（模块池选择，缺省/未知 → ai-tutoring 兜底；每功能引导问题不同）
 { "suggestions": [
-    { "title": "想了解RAG的整体架构吗？", "direction": "architecture" },
-    { "title": "想知道知识库数据是如何流转的吗？", "direction": "data_flow" },
-    { "title": "想看看评测体系是怎么设计的吗？", "direction": "evaluation" } ] }
+    { "title": "AI答疑链路本身不直接写 Neo4j，点亮由独立变更承担?", "direction": "rag" },
+    { "title": "为什么答疑不给学生直接答案，要做成苏格拉底式分步引导？", "direction": "intro" },
+    { "title": "图片题分析为什么之前慢到 50~145 秒？你是怎么修到 1.2 秒的？", "direction": "difficulty" } ] }
 ```
-静态池 0 token，RAG 定向（架构/数据流/评测/坑），会话入口展示。
+**M6（2026-08-26）**：从模块底座池取 3 条（必含 ≥1 条 rag 组 + 其余 intro/operation/difficulty 随机），0 token，会话入口展示。direction 值随池方向：`intro/operation/data_relation/difficulty/rag`（替换旧 `architecture/data_flow/evaluation`）。
 
 ---
 
