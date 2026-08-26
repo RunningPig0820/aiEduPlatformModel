@@ -561,19 +561,21 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 ```
 新增模块流程（SOP ⑥步）：语料 → `md_to_jsonl.py`/`slice_full.py`(tags.module=模块id) → `build_index.py --pool full/slice --clear` 入同桶 → 检索自动按模块路由。
 
-### 1.13.2 Filter 下推到向量层（2026-08-26 完成）
+### 1.13.2 Filter 下推到向量层（2026-08-26 完成，随后去掉类别过滤）
 
 > **动机**：module/category 筛选原来在编排层做（查完全模块 top-12 再丢弃）——其他模块/类别的相似向量挤占 top-k 名额。实测 COS 向量桶 `query_vectors` 支持 `Filter` 条件筛选，把筛选下推到向量查询层，top-k 更精准 + 性能更好。
 
 **已完成（2026-08-26）**：
 - [x] `vector_store.query_vector(text, top_k, vector_type, filter_)`：Filter 透传
-- [x] `query.build_filter(module, categories)`：`$eq`/`$in` + `$and` 组合；**module 未传 → 默认 rag-system；categories 未传 → 不筛（全量池）**
+- [x] `query.build_filter(module, categories)`：`$eq`/`$in` + `$and` 组合；**module 未传 → 默认 rag-system**
 - [x] `retrieve_vector(question, vector_type, module, categories)`：向量层条件筛选
-- [x] `retrieve_dual`：全量池 `module` 只筛；切片池 `module + category`（未传 category → **默认架构设计**）
-- [x] `assistant.recall`/`_recall_vector`：同步传 module/categories
-- [x] 实测 Filter 语法（2026-08-26）：`{"module":{"$eq":...}}` / `{"category":{"$in":[...]}}` / `{"$and":[...]}` 均被 COS 接受；数组 `[...]` 不接受
+- [x] `retrieve_dual`：全量池/切片池都按 `module` 过滤
+- [x] `assistant.recall`/`_recall_vector`：同步传 module
+- [x] 实测 Filter 语法（2026-08-26）：`{"module":{"$eq":...}}` 被 COS 接受；`$in`/`$and` 也支持
 
-**默认值**：`module=rag-system`（项目介绍 RAG 上下文）——intent 判出模块/类别时显式传入覆盖默认。
+**⚠️ 后续决策（2026-08-26）**：**查询去掉 categories 过滤**。评测实测 LLM 判 9 类不准（"答疑和知识图谱怎么联动"被判项目介绍），类别过滤会误伤相关块 → 编造 0 分。去掉后质量分 3.67→4.17、编造消除。`build_filter`/`retrieve_vector`/`retrieve_dual` 保留 `categories` 参数仅签名兼容，不再过滤；`orchestrate` 去掉类别提权。**module 过滤保留**（多模块隔离必需）。
+
+**默认值**：`module=rag-system`（项目介绍 RAG 上下文）——intent 判出模块时显式传入覆盖默认。
 
 ### 1.13.3 current_project 倾向约束 + RAGQueryRequest 加字段（2026-08-26 完成）
 
