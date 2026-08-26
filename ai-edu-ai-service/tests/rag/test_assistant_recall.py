@@ -110,7 +110,7 @@ class TestRecall:
     def test_recall_both_hits_no_degraded(self, monkeypatch):
         """两路都命中 → rerank 有内容, 无 degraded"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag", module=None, categories=None: {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor="ai-tutoring"))
         assert r["rerank"]
@@ -144,7 +144,7 @@ class TestRecall:
     def test_recall_anchor_empty_corpus_degrade(self, monkeypatch):
         """anchor 指无语料模块 → 空 rerank + degraded(bm25_empty), 无生成"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag", module=None, categories=None: {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("知识图谱问题", anchor="knowledge-graph"))
         assert r["rerank"] == []            # 语料池空 → 范围门低置信入口
@@ -153,7 +153,7 @@ class TestRecall:
     def test_recall_corpus_passed_to_orchestrate(self, monkeypatch):
         """anchor 闭集 → corpus 传对, 只该模块块进 rerank"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag", module=None, categories=None: {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor="ai-tutoring"))
         assert r["corpus"] == "ai-tutoring"
@@ -162,7 +162,7 @@ class TestRecall:
     def test_recall_no_anchor_full_pool(self, monkeypatch):
         """anchor None → corpus=None 全池(向后兼容)"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag", module=None, categories=None: {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor=None))
         assert r["corpus"] is None

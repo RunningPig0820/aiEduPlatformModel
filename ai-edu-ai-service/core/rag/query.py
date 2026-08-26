@@ -411,13 +411,35 @@ def _load_all_blocks() -> list:
 # ============ 召回单元 (1.6B, 独立) ============
 
 
-def retrieve_vector(question: str, vector_type: str = "rag") -> dict:
-    """向量召回单元: COS query_vectors(rag 桶) → hits + confidence。
+DEFAULT_MODULE = "rag-system"        # 1.13: 未传 module 时的默认(项目介绍 RAG 上下文)
+DEFAULT_CATEGORIES = ["架构设计"]    # 1.13: 切片池未传 category 时的默认
 
-    独立单元契约: 入参 question + vector_type(双池: rag-full/rag-slice), 出参 {hits, confidence};
-    异常由编排器捕获(未来熔断/降级)。默认 "rag" 向后兼容旧调用。
+
+def build_filter(module: str | None = None, categories: list | None = None) -> dict:
+    """module/category → COS Filter($eq/$in + $and)。
+
+    - module 恒筛(未传 → DEFAULT_MODULE rag-system); 单值 $eq
+    - categories: None → 不筛类别(全量池用); 提供 list(含空=不筛) → 单值 $eq / 多值 $in
+    - 两者都筛 → $and。实测: {"module":{"$eq":...}}, {"category":{"$in":[...]}},
+      {"$and":[...]} 均被 COS 向量桶接受(2026-08-26)。
     """
-    hits = query_vector(question, top_k=VEC_K, vector_type=vector_type)
+    conds = [{"module": {"$eq": module or DEFAULT_MODULE}}]
+    if categories:
+        conds.append({"category": {"$eq": categories[0]}} if len(categories) == 1
+                     else {"category": {"$in": categories}})
+    return conds[0] if len(conds) == 1 else {"$and": conds}
+
+
+def retrieve_vector(question: str, vector_type: str = "rag",
+                    module: str | None = None, categories: list | None = None) -> dict:
+    """向量召回单元: COS query_vectors(rag 桶, 带 module/category 条件筛选) → hits + confidence。
+
+    独立单元契约: 入参 question + vector_type + module/categories(1.13 多模块, 向量层过滤,
+    防其他模块/类别相似向量挤占 top-k), 出参 {hits, confidence}; 异常由编排器捕获。
+    module 未传 → 默认 rag-system; categories 未传 → 不筛类别(调用方决定: 全量池不筛/切片池给默认)。
+    """
+    filt = build_filter(module, categories)
+    hits = query_vector(question, top_k=VEC_K, vector_type=vector_type, filter_=filt)
     # confidence = 平均相似度(1 - 平均余弦距离); COS distance 越小越相似
     conf = 0.0
     if hits:
@@ -429,12 +451,15 @@ def retrieve_dual(question: str, corpus: str | None = None,
                   locked_categories: list | None = None) -> dict:
     """双池召回(1.13 Q3 + 多模块): 全量池向量 + 切片池向量 + BM25 → 三路供 RRF。
 
-    全量池管整体(整篇), 切片池管细节(块), BM25 本地关键词兜底(向量挂可降级)。
+    向量层条件筛选(1.13 下推): 全量池只按 module; 切片池按 module + category。
+    module 未传 → 默认 rag-system; 切片池 category 未传 → 默认架构设计。
     corpus(模块 anchor): 本地 BM25 只打该模块语料池(与编排层 select_corpus 一致)。
     locked_categories(9 类): 本地 BM25 只打切片池该类别的块(全量池块不过滤, 与编排层一致)。
     """
-    full = retrieve_vector(question, vector_type="rag-full")
-    slice_ = retrieve_vector(question, vector_type="rag-slice")
+    full = retrieve_vector(question, vector_type="rag-full", module=corpus)   # 全量池: 只筛 module
+    slice_ = retrieve_vector(question, vector_type="rag-slice", module=corpus,
+                             categories=locked_categories if locked_categories is not None
+                             else DEFAULT_CATEGORIES)                         # 切片池: module+category
     blocks = _load_all_blocks()
     pool = select_corpus(blocks, corpus) if corpus else blocks
     if locked_categories:

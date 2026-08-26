@@ -120,22 +120,27 @@ def put_vector(key: str, text: str, vector_type: str, metadata: Optional[Dict[st
                 vector_type, bucket, index, key, len(vector))
 
 
-def query_vector(text: str, top_k: int, vector_type: str) -> List[Dict[str, Any]]:
+def query_vector(text: str, top_k: int, vector_type: str,
+                 filter_: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """embed → query_vectors 查最近邻 Top-K(按 vector_type 路由桶)。
 
+    filter_(1.13 多模块): COS 条件筛选(如 {"module": {"$eq": "ai-tutoring"}} 或
+    {"$and": [...]})——在向量层过滤, 不让其他模块/类别的相似向量挤占 top-k。
     返回命中列表(COS data["vectors"], 每项 {key, metadata, distance}), 按 distance 升序。
     """
     bucket, index = _resolve_bucket_index(vector_type)
     vector = embed(text)
     client = _get_cos_client()
+    kw = {"ReturnMetaData": True, "ReturnDistance": True}
+    if filter_:
+        kw["Filter"] = filter_
     try:
         _, data = client.query_vectors(
             Bucket=bucket,
             Index=index,
             QueryVector={"float32": vector},
             TopK=top_k,
-            ReturnMetaData=True,
-            ReturnDistance=True,
+            **kw,
         )
     except Exception as e:
         logger.error("vector COS query 失败: type=%s bucket=%s index=%s top_k=%d: %s",

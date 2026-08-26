@@ -277,7 +277,7 @@ class TestMultiModule:
         ]
         monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: multi)
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q, vector_type="rag": {"hits": [], "confidence": 0.0})
+                            lambda q, vector_type="rag", module=None, categories=None: {"hits": [], "confidence": 0.0})
         dual = rag_core.retrieve_dual("RAG 召回", corpus="rag-system", locked_categories=["架构设计"])
         bm_keys = [h["key"] for h in dual["bm25"]["hits"]]
         assert bm_keys, "BM25 应有命中"

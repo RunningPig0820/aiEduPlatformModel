@@ -561,6 +561,20 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 ```
 新增模块流程（SOP ⑥步）：语料 → `md_to_jsonl.py`/`slice_full.py`(tags.module=模块id) → `build_index.py --pool full/slice --clear` 入同桶 → 检索自动按模块路由。
 
+### 1.13.2 Filter 下推到向量层（2026-08-26 完成）
+
+> **动机**：module/category 筛选原来在编排层做（查完全模块 top-12 再丢弃）——其他模块/类别的相似向量挤占 top-k 名额。实测 COS 向量桶 `query_vectors` 支持 `Filter` 条件筛选，把筛选下推到向量查询层，top-k 更精准 + 性能更好。
+
+**已完成（2026-08-26）**：
+- [x] `vector_store.query_vector(text, top_k, vector_type, filter_)`：Filter 透传
+- [x] `query.build_filter(module, categories)`：`$eq`/`$in` + `$and` 组合；**module 未传 → 默认 rag-system；categories 未传 → 不筛（全量池）**
+- [x] `retrieve_vector(question, vector_type, module, categories)`：向量层条件筛选
+- [x] `retrieve_dual`：全量池 `module` 只筛；切片池 `module + category`（未传 category → **默认架构设计**）
+- [x] `assistant.recall`/`_recall_vector`：同步传 module/categories
+- [x] 实测 Filter 语法（2026-08-26）：`{"module":{"$eq":...}}` / `{"category":{"$in":[...]}}` / `{"$and":[...]}` 均被 COS 接受；数组 `[...]` 不接受
+
+**默认值**：`module=rag-system`（项目介绍 RAG 上下文）、切片池 `category=架构设计`——intent 判出模块/类别时显式传入覆盖默认。
+
 ---
 
 ## 2. AI答疑 评测集（5 条）

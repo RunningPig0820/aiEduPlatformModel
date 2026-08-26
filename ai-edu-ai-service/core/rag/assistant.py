@@ -66,15 +66,16 @@ def resolve_switch(intent_result: dict, history: list | None,
 # ============ A3 recall 双路 + anchor 选池 ============
 
 
-async def _recall_vector(question: str, vector_type: str = "rag") -> dict:
+async def _recall_vector(question: str, vector_type: str = "rag",
+                         module: str | None = None, categories: list | None = None) -> dict:
     """向量路超时包裹: asyncio.wait_for + run_in_threadpool(同步 COS 查询)。
 
     A3/D-B: 单路 2s 超时, 超时/异常 → 空路降级(confidence=0), 由编排器标记 degraded。
-    vector_type(1.13): rag-full/rag-slice 双池各召一路。
+    vector_type(1.13): rag-full/rag-slice 双池各召一路; module/categories → 向量层条件筛选。
     """
     try:
         return await asyncio.wait_for(
-            run_in_threadpool(rag_core.retrieve_vector, question, vector_type),
+            run_in_threadpool(rag_core.retrieve_vector, question, vector_type, module, categories),
             timeout=settings.RAG_RECALL_TIMEOUT,
         )
     except asyncio.TimeoutError:
@@ -97,8 +98,12 @@ async def recall(question: str, anchor: str | None = None,
     - rerank = orchestrate 输出(锚定公式原样, corpus 传入池过滤)
     """
     blocks = blocks if blocks is not None else rag_core._load_all_blocks()
-    vec = await _recall_vector(question, vector_type="rag-full")
-    vec2 = await _recall_vector(question, vector_type="rag-slice")
+    module = anchor if anchor in rag_core.MODULE_ANCHORS else None
+    # 1.13 向量层条件筛选: 全量池只按 module; 切片池按 module+category(默认架构设计)
+    vec = await _recall_vector(question, vector_type="rag-full", module=module)
+    vec2 = await _recall_vector(question, vector_type="rag-slice", module=module,
+                                categories=locked_categories if locked_categories is not None
+                                else rag_core.DEFAULT_CATEGORIES)
 
     corpus = anchor if anchor in rag_core.MODULE_ANCHORS else None
     pool = rag_core.select_corpus(blocks, corpus)

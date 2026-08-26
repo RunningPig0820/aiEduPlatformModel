@@ -109,7 +109,7 @@ class TestRecallRerankContract:
     def test_recall_rerank_and_hits_split(self, monkeypatch):
         """rerank 前端契约(默认3块无text) + hits 完整(含text供generate)"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q, vector_type="rag": {"hits": [{"key": h["key"], "distance": 0.1} for h in HITS],
+                            lambda q, vector_type="rag", module=None, categories=None: {"hits": [{"key": h["key"], "distance": 0.1} for h in HITS],
                                        "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor="ai-tutoring"))
         assert len(r["rerank"]) == assistant.RERANK_K == 3     # 前端只回传 3 块
