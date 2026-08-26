@@ -26,13 +26,15 @@ MAX_CHARS_SPLIT = 6000   # 按标题切的块上限: 超限按段落拆成多块
 SPLIT_RE = re.compile(r"^(#{1,4})\s+(.*)$")
 
 # (glob, authority, source, split_level, mode)
-#   mode="file" 整文件一块; mode="split" 按标题切
+#   mode="file" 整文件一块; mode="split" 按标题切; mode="guided" 引导问题(解析文件头结构化块)
 LAYERS = [
     ("4.完善文档/*.md", 1.0, "完善文档", 0, "file"),
     ("1.语雀/*.md", 0.7, "语雀", 2, "split"),
     ("2.OpenSpec design 决策/design-*.md", 0.7, "OpenSpec", 3, "split"),
     ("3.代码/分析-*.md", 0.8, "代码", 2, "split"),
     ("5.难点/坑档案.md", 0.8, "坑档案", 3, "split"),
+    # 引导问题: 切片数据/引导问题/ 已是完整 Q&A 块(带 summary/锚点/类别头), 整文件一块直接入桶
+    ("切片数据/引导问题/*.md", 1.0, "引导问题", 0, "guided"),
 ]
 
 # OpenSpec 段级过滤(面试价值低, 整段不切)
@@ -42,12 +44,9 @@ DISCARD_PREFIX = ("Risk", "Open Question", "Migration", "Non-Goals")
 
 
 def find_files(pattern: str):
-    base, pat = pattern.split("/", 1)
-    d = os.path.join(CORPUS, base)
-    if not os.path.isdir(d):
-        return []
-    return sorted(os.path.join(d, f) for f in os.listdir(d)
-                  if __import__("fnmatch").fnmatch(f, pat))
+    """glob 匹配 CORPUS 下文件(支持多级路径, 如 切片数据/引导问题/*.md)。"""
+    import glob
+    return sorted(glob.glob(os.path.join(CORPUS, pattern)))
 
 
 def section_of(path: str) -> str:
@@ -101,6 +100,36 @@ def slice_file(path: str, authority: float, source: str, split_level: int, mode:
     with open(path, encoding="utf-8") as f:
         lines = f.read().splitlines()
     title = os.path.basename(path).replace(".md", "")
+
+    if mode == "guided":
+        # 引导问题: 文件即完整 Q&A 块, 解析文件头(summary/锚点/类别) + 正文(## 回答 之后)
+        summary = ""
+        header_anchor = ""
+        category = ""
+        body_start = 0
+        for i, ln in enumerate(lines):
+            if ln.startswith("> summary:"):
+                summary = ln[len("> summary:"):].strip()
+            elif "锚点:" in ln and "来源:" in ln:
+                for part in ln.split("｜"):
+                    part = part.strip()
+                    if part.startswith("锚点:"):
+                        header_anchor = part[len("锚点:"):].strip()
+            elif ln.startswith("> 类别"):
+                category = ln.split("：", 1)[-1].split(":", 1)[-1].strip()
+            elif ln.startswith("## 回答"):
+                body_start = i + 1
+                break
+        body = [ln for ln in lines[body_start:] if not ln.startswith("#")]
+        text = "\n".join(body).strip()
+        if len(text) < MIN_CHARS:
+            return []
+        if len(text) > MAX_CHARS_FILE:
+            text = text[:MAX_CHARS_FILE] + "\n\n[已截断]"
+        anchor = header_anchor or title
+        tags = _tags(path, authority, source, anchor, module)
+        tags["category"] = category  # 9 类闭集标签(检索按类别筛选)
+        return [{"text": text, "summary": summary, "tags": tags}]
 
     if mode == "file":
         # 整文件一块: 去掉 # 标题行, 正文 = 全部内容
