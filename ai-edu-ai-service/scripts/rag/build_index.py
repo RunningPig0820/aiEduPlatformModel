@@ -1,15 +1,17 @@
 """
-1.6 索引构建 - 纯 COS 向量桶写入(rag-1318177119/rag-index)
+阶段3 索引构建 - 纯 COS 向量桶写入(rag-1318177119/rag-full|rag-slice, 双池)
 
 每块 embedding 文本 = summary + "\n" + text(summary 引导命中, text 供细节)。
-metadata 含 tags + version + doc_type(summary 一块; text 不进 metadata, 20KB 限制, 检索后按 key 反查 jsonl)。
+metadata 10 字段(≤COS 向量索引上限): version/module/category/source/authority/section/file/file_path/anchor/summary
+(text 不进 metadata, 20KB 限制, 检索后按 key 反查 jsonl)。
 
-用法: cd ai-edu-ai-service && python scripts/rag/build_index.py [--clear]
-输入: scripts/rag/data/rag_slices.jsonl
-输出: rag-1318177119/rag-index 向量(234 块); 语料 jsonl 留本地(向量桶 role mode 不收普通对象)
+用法: cd ai-edu-ai-service && python scripts/rag/build_index.py --pool full|slice [--clear]
+输入: --pool full  → scripts/rag/data/rag_slices_full.jsonl(23 块整篇)
+      --pool slice → scripts/rag/data/rag_slices.jsonl(294 块切片)
+输出: rag-1318177119 / rag-full(全量池) 或 rag-slice(切片池); 语料 jsonl 留本地(BM25/反查)
 
---clear: list_vectors 枚举全部 key → delete_vectors 清空 → 重写(幂等重建, 对齐 project-intro-rag)。
-对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.6A + openspec/changes/project-intro-rag/
+--clear: 该池 list_vectors 枚举全部 key → delete_vectors 清空 → 重写(幂等, 各池各清)。
+对齐: docs/rag/ai-tutoring/每模块流水线-tasks.md 1.13 B1-B2
 """
 import argparse
 import hashlib
@@ -27,17 +29,20 @@ from core.tutoring.vector_store import _get_cos_client, _resolve_bucket_index, e
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DATA = os.path.join(os.path.dirname(__file__), "data", "rag_slices.jsonl")
-VECTOR_TYPE = "rag"
+# 池 → (vector_type, jsonl 文件名)。vector_type = 池前缀(rag-full/rag-slice), 同 key 规则。
+POOLS = {
+    "full":  {"vector_type": "rag-full",  "data": "rag_slices_full.jsonl"},
+    "slice": {"vector_type": "rag-slice", "data": "rag_slices.jsonl"},
+}
 BATCH_PUT = 20        # put_vectors 单批条数(服务端上限约束)
 BATCH_DELETE = 100    # delete_vectors 单批条数
 LIST_PAGE = 200       # list_vectors 分页大小
 WAIT_SECONDS = 10     # put 后异步生效等待(spike 实测 ~10s)
 
 
-def make_key(file_: str, anchor: str, idx: int) -> str:
-    """块唯一 key: ai-tutoring/{file}/{anchor}#{chunk_idx}。同 key upsert, 不带版本。"""
-    return f"ai-tutoring/{file_}/{anchor}#{idx}"
+def make_key(vector_type: str, file_: str, anchor: str, idx: int) -> str:
+    """块唯一 key: {池前缀}/{file}/{anchor}#{chunk_idx}, 池前缀防两池 (file,anchor) 冲突。"""
+    return f"{vector_type}/{file_}/{anchor}#{idx}"
 
 
 def make_version(blocks: list) -> str:
@@ -64,7 +69,7 @@ def list_all_keys(client, bucket: str, index: str) -> list:
 def clear_index(client, bucket: str, index: str) -> None:
     """--clear 幂等清空: list → 分批 delete(空索引也兼容, list 为空直接跳过)。"""
     keys = list_all_keys(client, bucket, index)
-    logger.info("清空 rag-index: 现有 %d 条", len(keys))
+    logger.info("清空 %s: 现有 %d 条", index, len(keys))
     for i in range(0, len(keys), BATCH_DELETE):
         client.delete_vectors(Bucket=bucket, Index=index, Keys=keys[i:i + BATCH_DELETE])
     if keys:
@@ -74,14 +79,20 @@ def clear_index(client, bucket: str, index: str) -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--clear", action="store_true", help="清空 rag-index 后重写(幂等重建)")
+    ap.add_argument("--pool", choices=list(POOLS), required=True,
+                    help="full=全量池(rag-full), slice=切片池(rag-slice)")
+    ap.add_argument("--clear", action="store_true", help="清空该池索引后重写(幂等重建)")
     args = ap.parse_args()
 
-    bucket, index = _resolve_bucket_index(VECTOR_TYPE)
-    logger.info("目标: bucket=%s index=%s (from %s)", bucket, index, settings.COS_VECTORS_RAG_BUCKET)
+    cfg = POOLS[args.pool]
+    vector_type = cfg["vector_type"]
+    data = os.path.join(os.path.dirname(__file__), "data", cfg["data"])
+
+    bucket, index = _resolve_bucket_index(vector_type)
+    logger.info("目标: bucket=%s index=%s (pool=%s, 双池)", bucket, index, args.pool)
 
     client = _get_cos_client()
-    # 校验 rag-index 已建(控制台建, 脚本不建索引)。缺失 → 报错提示先建。
+    # 校验索引已建(控制台建, 脚本不建索引)。缺失 → 报错提示先建。
     try:
         client.get_index(Bucket=bucket, Index=index)
     except Exception as e:
@@ -92,10 +103,11 @@ def main():
     if args.clear:
         clear_index(client, bucket, index)
 
-    with open(DATA, encoding="utf-8") as f:
+    with open(data, encoding="utf-8") as f:
         blocks = [json.loads(line) for line in f if line.strip()]
     version = make_version(blocks)
-    logger.info("读 %d 块, version=%s, 开始 embedding(dashscope 768d)...", len(blocks), version)
+    logger.info("读 %d 块(pool=%s), version=%s, 开始 embedding(dashscope 768d)...",
+                len(blocks), args.pool, version)
 
     # chunk_idx: 同 (file, anchor) 内序号(段落拆块/同锚点多块防 key 冲突)
     counters = {}
@@ -105,14 +117,15 @@ def main():
         group = (t["file"], t["anchor"])
         idx = counters.get(group, 0)
         counters[group] = idx + 1
-        key = make_key(t["file"], t["anchor"], idx)
+        key = make_key(vector_type, t["file"], t["anchor"], idx)
         text = (b["summary"] + "\n" + b["text"])
+        # 注意: COS 向量索引 metadata 单条 ≤10 entries(实测), 现 10 字段恰好上限。
+        # doc_type 与 module 同值冗余已去掉(2026-08-26); 新增字段需先删一个。
         metadata = {
             "version": version,
             # 模块标识(多模块同索引区分, 与 slice_corpus._tags 闭集一致: ai-tutoring/knowledge-graph/...)
-            "doc_type": t.get("module", "ai-tutoring"),
             "module": t.get("module", "ai-tutoring"),
-            "category": t.get("category", ""),   # 9类闭集标签(项目介绍/操作流程/...); 1.11 T1 检索按类别筛选
+            "category": t.get("category", ""),   # 9类闭集标签(项目介绍/操作流程/...); 检索按类别筛选
             "source": t["source"],
             "authority": t["authority"],
             "section": t["section"],
@@ -132,7 +145,7 @@ def main():
 
     # 语料 jsonl 留本地(version 对应): BM25/反查运行时从本地读。
     # 【不传 COS 普通对象】——向量桶是 role mode, put_object 被拒(AccessDenied), 设计已调整。
-    logger.info("语料副本留本地: %s (version=%s, 向量桶 role mode 不收普通对象)", DATA, version)
+    logger.info("语料副本留本地: %s (version=%s, 向量桶 role mode 不收普通对象)", data, version)
 
 
 if __name__ == "__main__":

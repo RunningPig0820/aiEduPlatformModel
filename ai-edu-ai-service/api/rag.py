@@ -49,26 +49,31 @@ async def rag_query(
 
     # --- 1.6C 降级语义: COS 向量挂了 → 降级纯 BM25(需绕开 rag_query 的整链路) ---
     try:
-        blocks = rag_core._load_blocks()
-        strategy = rag_core.classify(request.question)
+        blocks = rag_core._load_all_blocks()
+        it = rag_core.intent(request.question)   # 1.13 多模块: LLM 判模块 anchor + 9类 categories
+        corpus = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None
 
-        # 向量路失败冒泡 → 捕获降级纯 BM25(构造空向量结果)
+        # 双池向量路失败冒泡 → 捕获降级纯 BM25(构造空向量结果)
         try:
-            vec = rag_core.retrieve_vector(request.question)
+            dual = rag_core.retrieve_dual(request.question, corpus=corpus,
+                                          locked_categories=it["locked_categories"])
         except Exception as e:
             logger.warning("RAG 向量路失败, 降级纯 BM25: %s", e)
-            vec = {"hits": [], "confidence": 0.0}
+            bm_pool = rag_core.select_corpus(blocks, corpus) if corpus else blocks
+            dual = {"full": {"hits": [], "confidence": 0.0},
+                    "slice": {"hits": [], "confidence": 0.0},
+                    "bm25": rag_core.retrieve_bm25(request.question, bm_pool)}
 
-        bm = rag_core.retrieve_bm25(request.question, blocks)
-        hits = rag_core.orchestrate(request.question, blocks, vec, bm, strategy,
-                                    top_k=request.top_k)
+        hits = rag_core.orchestrate(request.question, blocks, dual["full"], dual["bm25"],
+                                    it, top_k=request.top_k, vec2_result=dual["slice"],
+                                    corpus=corpus)
 
         references = [
             RAGReference(**{k: h[k] for k in ("file", "file_path", "anchor", "authority", "summary")})
             for h in hits
         ]
-        intent = RAGIntent(locked_sections=strategy["locked_sections"],
-                           strategy=strategy["strategy"])
+        intent = RAGIntent(locked_sections=it["locked_sections"], strategy="retrieve",
+                           anchor=it["anchor"], categories=it["locked_categories"])
 
         # --- 降级语义 3: 无命中 → 拒答不编造 ---
         if not hits:

@@ -92,12 +92,16 @@ class Settings(BaseSettings):
     COS_VECTORS_RAG_BUCKET: str = ""            # RAG 独立向量桶 "rag-1318177119"(topic 不混)
 
     # 逻辑类型 → 物理索引 路由表(多索引)。vector_type 必填, 每次 put/query 由 Java 显式传入。
-    # topic(题型名向量) 走 COS_VECTORS_BUCKET; rag(AI答疑 RAG) 走 COS_VECTORS_RAG_BUCKET 独立桶。
+    # topic(题型名向量) 走 COS_VECTORS_BUCKET; rag/rag-full/rag-slice(AI答疑 RAG) 走 COS_VECTORS_RAG_BUCKET。
     # 桶按 vector_type 路由(vector_store._resolve_bucket_index), 新增桶仅需加配置。
+    # rag-full/rag-slice = 双池检索(2026-08-26): rag-full 全量池(整篇, 管整体问题), rag-slice 切片池(细节块)。
+    # rag(旧 rag-index) 被双池取代, 保留映射仅为向后兼容, 不建新数据。
     COS_VECTORS_INDEXES: dict = {
         "topic": "topic-index",
         # "question": "question-index",         # 相似题, 预留不建
-        "rag": "rag-index",                     # RAG 问答语料(AI答疑/知识图谱/组织中心, 多模块同索引按 doc_type 区分)
+        "rag": "rag-index",                     # 旧单池(AI答疑/知识图谱/组织中心), 双池上线后废弃
+        "rag-full": "rag-full",                 # 双池-全量池: 语雀5+完善文档8+代码10 整篇(23 块)
+        "rag-slice": "rag-slice",               # 双池-切片池: 切片数据/ 294 块(细节)
     }
 
     # RAG 语料根目录(前端按 file_path 访问源文件; 相对项目根)

@@ -66,52 +66,57 @@ def resolve_switch(intent_result: dict, history: list | None,
 # ============ A3 recall 双路 + anchor 选池 ============
 
 
-async def _recall_vector(question: str) -> dict:
+async def _recall_vector(question: str, vector_type: str = "rag") -> dict:
     """向量路超时包裹: asyncio.wait_for + run_in_threadpool(同步 COS 查询)。
 
     A3/D-B: 单路 2s 超时, 超时/异常 → 空路降级(confidence=0), 由编排器标记 degraded。
+    vector_type(1.13): rag-full/rag-slice 双池各召一路。
     """
     try:
         return await asyncio.wait_for(
-            run_in_threadpool(rag_core.retrieve_vector, question),
+            run_in_threadpool(rag_core.retrieve_vector, question, vector_type),
             timeout=settings.RAG_RECALL_TIMEOUT,
         )
     except asyncio.TimeoutError:
-        logger.warning("RAG 向量召回超时(%.1fs), 降级空路", settings.RAG_RECALL_TIMEOUT)
+        logger.warning("RAG 向量召回超时(%.1fs, %s), 降级空路", settings.RAG_RECALL_TIMEOUT, vector_type)
         return {"hits": [], "confidence": 0.0}
     except Exception as e:
-        logger.warning("RAG 向量召回异常, 降级空路: %s", e)
+        logger.warning("RAG 向量召回异常(%s), 降级空路: %s", vector_type, e)
         return {"hits": [], "confidence": 0.0}
 
 
 async def recall(question: str, anchor: str | None = None,
-                 blocks: list | None = None, top_k: int = rag_core.TOP_K) -> dict:
-    """双路召回编排(A3): 向量(2s 超时降级) + BM25(本地) → 按 anchor 选池 → rerank。
+                 blocks: list | None = None, top_k: int = rag_core.TOP_K,
+                 locked_categories: list | None = None) -> dict:
+    """双池三路召回编排(A3 + 1.13): 全量向量 + 切片向量(各 2s 超时降级) + BM25(本地) → 三路 RRF。
 
-    返回: {vec, bm25, degraded, rerank, corpus}。
-    - anchor 明确(闭集) → select_corpus 先按模块过滤语料池, 再池内双路召回 + 池内 RRF 融合(C2)
-    - anchor 空/非闭集 → 全池(向后兼容)
+    返回: {vec, vec2, bm25, degraded, rerank, corpus}。
+    - anchor 明确(闭集) → select_corpus 先按模块过滤语料池, 再池内召回 + RRF(C2)
+    - locked_categories(1.13 Q5): 非空时对切片池命中按 9 类过滤(全量池不过滤)
     - 向量路超时 → 空路 + degraded 标记; BM25 无命中(含语料池空) → degraded 标记
     - rerank = orchestrate 输出(锚定公式原样, corpus 传入池过滤)
     """
-    blocks = blocks if blocks is not None else rag_core._load_blocks()
-    vec = await _recall_vector(question)
+    blocks = blocks if blocks is not None else rag_core._load_all_blocks()
+    vec = await _recall_vector(question, vector_type="rag-full")
+    vec2 = await _recall_vector(question, vector_type="rag-slice")
 
     corpus = anchor if anchor in rag_core.MODULE_ANCHORS else None
     pool = rag_core.select_corpus(blocks, corpus)
     bm25 = rag_core.retrieve_bm25(question, pool)
 
     degraded = []
-    if not vec["hits"]:
+    if not vec["hits"] and not vec2["hits"]:
         degraded.append(DEGRADED_VECTOR)
     if not bm25["hits"]:
         degraded.append(DEGRADED_BM25)
 
-    strategy = {"locked_sections": [], "strategy": "retrieve"}
+    strategy = {"locked_sections": [], "strategy": "retrieve",
+                "locked_categories": locked_categories or []}
     hits = rag_core.orchestrate(question, blocks, vec, bm25, strategy,
-                                top_k=top_k, corpus=corpus)
+                                top_k=top_k, corpus=corpus, vec2_result=vec2)
     return {
         "vec": vec,
+        "vec2": vec2,
         "bm25": bm25,
         "degraded": degraded,
         "rerank": rerank_blocks(hits, top_k=RERANK_K),  # A4: 前端契约精排块(默认 3)
@@ -558,13 +563,15 @@ async def pipeline_events(question: str, history: list | None = None,
     yield {"event": "rewrite", "data": {
         "original_question": question, "rewritten_query": rewritten}}
 
-    # ---- 5. recall 双路 + rerank 精排(anchor 选池 + 2s 超时降级) ----
-    rec = await recall(rewritten, anchor=anchor, blocks=blocks, top_k=top_k)
+    # ---- 5. recall 双池三路 + rerank 精排(anchor 选池 + 2s 超时降级 + 类别过滤) ----
+    rec = await recall(rewritten, anchor=anchor, blocks=blocks, top_k=top_k,
+                       locked_categories=it["locked_categories"])
     yield {"event": "rerank", "data": {"blocks": rec["rerank"]}}
 
     # ---- 6. boundary 范围门(短路纪律: 触发 → 立即 done, 不调 generate) ----
+    vec_conf = max(rec["vec"]["confidence"], rec["vec2"]["confidence"])  # 双池任一置信即不算低
     bd = check_boundary(rec["rerank"],
-                        vec_conf=rec["vec"]["confidence"],
+                        vec_conf=vec_conf,
                         bm_conf=rec["bm25"]["confidence"])
     if bd:
         yield {"event": "boundary", "data": bd}

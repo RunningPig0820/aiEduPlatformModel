@@ -31,12 +31,12 @@ BLOCKS = [
      "summary": "防作弊答案出口机制",
      "tags": {"module": "ai-tutoring", "section": "04", "source": "完善文档",
               "authority": 1.0, "file": "04-安全与防作弊", "file_path": "4.完善文档/04-安全与防作弊.md",
-              "anchor": "04-安全与防作弊"}},
+              "anchor": "04-安全与防作弊", "pool": "slice"}},
     {"text": "RAG 多路召回: 向量 + BM25 双路, RRF 融合 × authority 权威度 × 节锚定加权",
      "summary": "RAG 多路召回机制",
      "tags": {"module": "rag-system", "section": "", "source": "代码",
               "authority": 0.8, "file": "rag-query", "file_path": "3.代码/rag-query.md",
-              "anchor": "rag-query"}},
+              "anchor": "rag-query", "pool": "slice"}},
 ]
 
 
@@ -70,8 +70,8 @@ class TestOrchestrateCorpus:
     def test_corpus_filters_pool(self):
         """传 corpus=ai-tutoring → 只返回该模块块, 不吐 rag-project"""
         strategy = {"locked_sections": [], "strategy": "retrieve"}
-        vec = {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1},
-                        {"key": "ai-tutoring/rag-query/rag-query#0", "distance": 0.2}],
+        vec = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1},
+                        {"key": "rag-slice/rag-query/rag-query#0", "distance": 0.2}],
                "confidence": 0.9}
         bm = {"hits": [{"key": h["key"], "bm25_score": 8.0} for h in vec["hits"]], "confidence": 0.8}
         hits = rag_core.orchestrate("防套答案", BLOCKS, vec, bm, strategy,
@@ -82,9 +82,9 @@ class TestOrchestrateCorpus:
     def test_corpus_anchor_weight_unchanged(self):
         """锚定公式原样: 锁 04 节 → 04 块加权 1.5 仍排第一(corpus 不影响节级加权)"""
         strategy = {"locked_sections": ["04"], "strategy": "retrieve"}
-        vec = {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
+        vec = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
                "confidence": 0.9}
-        bm = {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "bm25_score": 8.0}],
+        bm = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "bm25_score": 8.0}],
               "confidence": 0.8}
         hits = rag_core.orchestrate("防套答案", BLOCKS, vec, bm, strategy,
                                     top_k=5, corpus="ai-tutoring")
@@ -105,12 +105,12 @@ class TestRecall:
 
     @pytest.fixture(autouse=True)
     def stub_load(self, monkeypatch):
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
 
     def test_recall_both_hits_no_degraded(self, monkeypatch):
         """两路都命中 → rerank 有内容, 无 degraded"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor="ai-tutoring"))
         assert r["rerank"]
@@ -144,7 +144,7 @@ class TestRecall:
     def test_recall_anchor_empty_corpus_degrade(self, monkeypatch):
         """anchor 指无语料模块 → 空 rerank + degraded(bm25_empty), 无生成"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("知识图谱问题", anchor="knowledge-graph"))
         assert r["rerank"] == []            # 语料池空 → 范围门低置信入口
@@ -153,7 +153,7 @@ class TestRecall:
     def test_recall_corpus_passed_to_orchestrate(self, monkeypatch):
         """anchor 闭集 → corpus 传对, 只该模块块进 rerank"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor="ai-tutoring"))
         assert r["corpus"] == "ai-tutoring"
@@ -162,7 +162,7 @@ class TestRecall:
     def test_recall_no_anchor_full_pool(self, monkeypatch):
         """anchor None → corpus=None 全池(向后兼容)"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
+                            lambda q, vector_type="rag": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                   "distance": 0.1}], "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor=None))
         assert r["corpus"] is None

@@ -32,17 +32,17 @@ BLOCKS = [
      "summary": "防作弊答案出口机制",
      "tags": {"module": "ai-tutoring", "section": "04", "source": "完善文档",
               "authority": 1.0, "file": "04-安全与防作弊", "file_path": "4.完善文档/04-安全与防作弊.md",
-              "anchor": "04-安全与防作弊"}},
+              "anchor": "04-安全与防作弊", "pool": "slice"}},
     {"text": "AI答疑面向小学到高中全学段, 启发式教学, 不直接给答案",
      "summary": "AI答疑定位与理念",
      "tags": {"module": "ai-tutoring", "section": "01", "source": "语雀",
               "authority": 0.7, "file": "语雀-答疑理念", "file_path": "1.语雀/答疑理念.md",
-              "anchor": "答疑理念"}},
+              "anchor": "答疑理念", "pool": "slice"}},
     {"text": "流式输出用 SSE, 前端逐字展示, 性能优化减少卡顿",
      "summary": "流式与性能",
      "tags": {"module": "ai-tutoring", "section": "07", "source": "代码",
               "authority": 0.8, "file": "分析-09-流式", "file_path": "3.代码/分析-09-流式.md",
-              "anchor": "流式"}},
+              "anchor": "流式", "pool": "slice"}},
 ]
 
 
@@ -106,7 +106,7 @@ class TestOrchestrate:
         monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
         strategy = rag_core.classify("怎么防学生套答案")
         # 向量路: 返回与 BM25 相同的 04 块(模拟两路都命中)
-        vec = {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
+        vec = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
                "confidence": 0.9}
         bm = rag_core.retrieve_bm25("怎么防学生套答案", BLOCKS)
         hits = rag_core.orchestrate("怎么防学生套答案", BLOCKS, vec, bm, strategy, top_k=5)
@@ -120,7 +120,7 @@ class TestOrchestrate:
         """text 反查: 命中块 text 从 jsonl 反查(不依赖向量路 metadata)"""
         strategy = {"locked_sections": [], "strategy": "retrieve"}
         vec = {"hits": [], "confidence": 0.0}
-        bm = {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "bm25_score": 8.0}],
+        bm = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "bm25_score": 8.0}],
               "confidence": 0.8}
         hits = rag_core.orchestrate("防套答案", BLOCKS, vec, bm, strategy, top_k=1)
         assert hits[0]["text"].startswith("防套答案")  # text 按 key 从语料反查到
@@ -130,8 +130,8 @@ class TestOrchestrate:
         """打分排序: 两路同命中时 authority 高者在前(完善1.0 > 语雀0.7)"""
         strategy = {"locked_sections": [], "strategy": "retrieve"}
         both = [
-            {"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.05},
-            {"key": "ai-tutoring/语雀-答疑理念/答疑理念#0", "distance": 0.06},
+            {"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.05},
+            {"key": "rag-slice/语雀-答疑理念/答疑理念#0", "distance": 0.06},
         ]
         vec = {"hits": both, "confidence": 0.9}
         bm = {"hits": [{"key": h["key"], "bm25_score": 8.0} for h in both], "confidence": 0.8}
@@ -144,8 +144,10 @@ class TestRagAPI:
 
     @pytest.fixture(autouse=True)
     def mock_intent_llm(self, monkeypatch):
-        """API 全链路 mock 掉 LLM 意图分类(避免真实 doubao), 统一按'难点'锁 04/07"""
-        monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
+        """API 全链路 mock 掉 LLM 意图(避免真实 doubao), 统一判 ai-tutoring + 难点/开发难点"""
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: {
+            "anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
+            "switch_detected": False, "ambiguous": False, "candidates": []})
 
     def setup_method(self):
         from api.rag import router as rag_router
@@ -155,13 +157,18 @@ class TestRagAPI:
         from config.settings import settings
         self.auth = {"x-internal-token": settings.INTERNAL_TOKEN}
 
+    def _dual_hit(self, q):
+        """双池召回 mock: 全量池命中 04 块, 切片/BM25 空"""
+        return {"full": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                                   "distance": 0.1}], "confidence": 0.9},
+                "slice": {"hits": [], "confidence": 0.0},
+                "bm25": {"hits": [], "confidence": 0.0}}
+
     def test_query_contract_shape(self, monkeypatch):
         """返回结构: answer/references/intent/version(契约字段齐全)"""
-        # 用测试语料替换 DATA 加载 + mock 向量路
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
-                                                  "distance": 0.1}], "confidence": 0.9})
+        # 用测试语料替换双池加载 + mock 双池召回
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "retrieve_dual", self._dual_hit)
         monkeypatch.setattr(rag_core, "generate", lambda hits, q: "面试口述答案")
 
         r = self.client.post("/api/tutoring/rag/query",
@@ -176,10 +183,11 @@ class TestRagAPI:
 
     def test_query_no_hit_refuses(self, monkeypatch):
         """降级语义3: 无命中 → 拒答不编造"""
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "retrieve_vector", lambda q: {"hits": [], "confidence": 0.0})
-        monkeypatch.setattr(rag_core, "retrieve_bm25",
-                            lambda q, b: {"hits": [], "confidence": 0.0})
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "retrieve_dual",
+                            lambda q: {"full": {"hits": [], "confidence": 0.0},
+                                       "slice": {"hits": [], "confidence": 0.0},
+                                       "bm25": {"hits": [], "confidence": 0.0}})
 
         r = self.client.post("/api/tutoring/rag/query",
                              json={"question": "今天天气如何"}, headers=self.auth)
@@ -188,8 +196,8 @@ class TestRagAPI:
 
     def test_query_vector_fail_degrade_bm25(self, monkeypatch):
         """降级语义1: COS 向量挂了 → 降级纯 BM25, references 仍返回"""
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "retrieve_vector",
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "retrieve_dual",
                             lambda q: (_ for _ in ()).throw(RuntimeError("cos down")))
 
         r = self.client.post("/api/tutoring/rag/query",
@@ -200,10 +208,8 @@ class TestRagAPI:
 
     def test_query_generate_fail_degrade_references(self, monkeypatch):
         """降级语义2: doubao 挂了 → references 当答案, 不空答"""
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
-        monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": "ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
-                                                  "distance": 0.1}], "confidence": 0.9})
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "retrieve_dual", self._dual_hit)
         monkeypatch.setattr(rag_core, "generate",
                             lambda hits, q: (_ for _ in ()).throw(RuntimeError("doubao down")))
 
@@ -221,3 +227,59 @@ class TestRagAPI:
         r = self.client.post("/api/tutoring/rag/query",
                              json={"question": "问"}, headers={"x-internal-token": "wrong"})
         assert r.status_code == 403
+
+
+class TestMultiModule:
+    """1.13 多模块: intent 9类 categories + retrieve_dual 模块/类别本地过滤"""
+
+    def _fake_intent(self, monkeypatch, **over):
+        base = {"anchor": "ai-tutoring", "category": "难点", "categories": ["开发难点"],
+                "switch_detected": False, "ambiguous": False, "candidates": []}
+        base.update(over)
+        monkeypatch.setattr(rag_core, "_llm_intent", lambda q, h: base)
+
+    def test_intent_uses_llm_categories(self, monkeypatch):
+        """LLM 输出 categories(9类) → locked_categories 直接用, 不走 6→9 映射"""
+        self._fake_intent(monkeypatch, anchor="rag-system", category="架构", categories=["架构设计"])
+        it = rag_core.intent("RAG 怎么多路召回")
+        assert it["anchor"] == "rag-system"
+        assert it["locked_categories"] == ["架构设计"]
+
+    def test_intent_empty_categories_fallback(self, monkeypatch):
+        """LLM categories 空 → 6→9 映射兜底(难点→开发难点)"""
+        self._fake_intent(monkeypatch, categories=[])
+        it = rag_core.intent("怎么防学生套答案")
+        assert it["locked_categories"] == ["开发难点"]
+
+    def test_intent_sanitize_non_closed_categories(self):
+        """_sanitize_intent: LLM categories 含非 9 类闭集值 → 过滤只留闭集"""
+        raw = {"anchor": "ai-tutoring", "category": "难点",
+               "categories": ["开发难点", "瞎写类别"],
+               "switch_detected": False, "ambiguous": False, "candidates": []}
+        out = rag_core._sanitize_intent(raw, "防套答案")
+        assert out["categories"] == ["开发难点"]
+
+    def test_retrieve_dual_bm25_filters_module_and_category(self, monkeypatch):
+        """retrieve_dual 本地 BM25: 按 module 筛(全量池) + 切片池按 category 筛后再打分"""
+        multi = [
+            {"text": "AI答疑防套答案机制", "summary": "s",
+             "tags": {"module": "ai-tutoring", "section": "04", "source": "完善文档",
+                      "authority": 1.0, "file": "f1", "file_path": "p1", "anchor": "a1",
+                      "category": "开发难点", "pool": "slice"}},
+            {"text": "RAG 多路召回 RRF 融合", "summary": "s",
+             "tags": {"module": "rag-system", "section": "", "source": "代码",
+                      "authority": 0.8, "file": "f2", "file_path": "p2", "anchor": "a2",
+                      "category": "架构设计", "pool": "slice"}},
+            {"text": "RAG 全量池整篇文档", "summary": "s",
+             "tags": {"module": "rag-system", "section": "", "source": "完善文档",
+                      "authority": 1.0, "file": "f3", "file_path": "p3", "anchor": "a3",
+                      "category": "架构设计", "pool": "full"}},
+        ]
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: multi)
+        monkeypatch.setattr(rag_core, "retrieve_vector",
+                            lambda q, vector_type="rag": {"hits": [], "confidence": 0.0})
+        dual = rag_core.retrieve_dual("RAG 召回", corpus="rag-system", locked_categories=["架构设计"])
+        bm_keys = [h["key"] for h in dual["bm25"]["hits"]]
+        assert bm_keys, "BM25 应有命中"
+        assert all("f1" not in k for k in bm_keys)  # ai-tutoring 块被模块筛掉
+        assert any("rag-slice/f2" in k for k in bm_keys) or any("rag-full/f3" in k for k in bm_keys)

@@ -30,27 +30,27 @@ BLOCKS = [
      "summary": "防作弊答案出口机制",
      "tags": {"module": "ai-tutoring", "section": "04", "source": "完善文档",
               "authority": 1.0, "file": "04-安全与防作弊", "file_path": "4.完善文档/04-安全与防作弊.md",
-              "anchor": "04-安全与防作弊"}},
+              "anchor": "04-安全与防作弊", "pool": "slice"}},
     {"text": "流式输出用 SSE, 前端逐字展示, 性能优化减少卡顿",
      "summary": "流式与性能",
      "tags": {"module": "ai-tutoring", "section": "07", "source": "代码",
               "authority": 0.8, "file": "分析-09-流式", "file_path": "3.代码/分析-09-流式.md",
-              "anchor": "流式"}},
+              "anchor": "流式", "pool": "slice"}},
     {"text": "AI答疑面向小学到高中全学段, 启发式教学",
      "summary": "AI答疑定位",
      "tags": {"module": "ai-tutoring", "section": "01", "source": "语雀",
               "authority": 0.7, "file": "语雀-答疑理念", "file_path": "1.语雀/答疑理念.md",
-              "anchor": "答疑理念"}},
+              "anchor": "答疑理念", "pool": "slice"}},
     {"text": "第四块, 超出默认 Top-K 应被截断",
      "summary": "多余块",
      "tags": {"module": "ai-tutoring", "section": "05", "source": "语雀",
               "authority": 0.5, "file": "语雀-多余", "file_path": "1.语雀/多余.md",
-              "anchor": "多余"}},
+              "anchor": "多余", "pool": "slice"}},
 ]
 
 # orchestrate 输出形状(含 text/authority 等完整字段)
 HITS = [{
-    "key": f"ai-tutoring/{b['tags']['file']}/{b['tags']['anchor']}#0",
+    "key": f"rag-slice/{b['tags']['file']}/{b['tags']['anchor']}#0",
     "score": round(1.0 - i * 0.1, 4),
     "authority": b["tags"]["authority"],
     "source": b["tags"]["source"],
@@ -104,12 +104,12 @@ class TestRecallRerankContract:
 
     @pytest.fixture(autouse=True)
     def stub_load(self, monkeypatch):
-        monkeypatch.setattr(rag_core, "_load_blocks", lambda: BLOCKS)
+        monkeypatch.setattr(rag_core, "_load_all_blocks", lambda: BLOCKS)
 
     def test_recall_rerank_and_hits_split(self, monkeypatch):
         """rerank 前端契约(默认3块无text) + hits 完整(含text供generate)"""
         monkeypatch.setattr(rag_core, "retrieve_vector",
-                            lambda q: {"hits": [{"key": h["key"], "distance": 0.1} for h in HITS],
+                            lambda q, vector_type="rag": {"hits": [{"key": h["key"], "distance": 0.1} for h in HITS],
                                        "confidence": 0.9})
         r = asyncio.run(assistant.recall("防套答案", anchor="ai-tutoring"))
         assert len(r["rerank"]) == assistant.RERANK_K == 3     # 前端只回传 3 块

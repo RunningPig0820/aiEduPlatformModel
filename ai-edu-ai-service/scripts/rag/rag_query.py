@@ -24,21 +24,28 @@ def main():
     ap.add_argument("--no-gen", action="store_true", help="只召回不生成")
     args = ap.parse_args()
 
-    blocks = rag_core._load_blocks()
-    strategy = rag_core.classify(args.question)
+    blocks = rag_core._load_all_blocks()
+    it = rag_core.intent(args.question)
+    corpus = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None
     print(f"问题: {args.question}")
-    print(f"意图: 锁节 {strategy['locked_sections'] or '(无, 全量加权)'} 策略 {strategy['strategy']}")
+    print(f"意图: 模块 {it['anchor'] or '(未判)'} 锁节 {it['locked_sections'] or '(无)'} "
+          f"类别 {it['locked_categories'] or '(不筛)'}")
 
     try:
-        vec = rag_core.retrieve_vector(args.question)
-        vec_note = f"向量路 OK ({len(vec['hits'])} hits, conf={vec['confidence']:.2f})"
+        dual = rag_core.retrieve_dual(args.question, corpus=corpus,
+                                      locked_categories=it["locked_categories"])
+        vec_note = (f"全量{len(dual['full']['hits'])}hits conf{dual['full']['confidence']:.2f} | "
+                    f"切片{len(dual['slice']['hits'])}hits conf{dual['slice']['confidence']:.2f} | "
+                    f"BM25 {len(dual['bm25']['hits'])}hits")
     except Exception as e:
-        vec = {"hits": [], "confidence": 0.0}
+        bm_pool = rag_core.select_corpus(blocks, corpus) if corpus else blocks
+        dual = {"full": {"hits": [], "confidence": 0.0}, "slice": {"hits": [], "confidence": 0.0},
+                "bm25": rag_core.retrieve_bm25(args.question, bm_pool)}
         vec_note = f"向量路失败 → 降级纯 BM25 ({e})"
     print(f"召回: {vec_note}")
 
-    bm = rag_core.retrieve_bm25(args.question, blocks)
-    hits = rag_core.orchestrate(args.question, blocks, vec, bm, strategy, top_k=args.k)
+    hits = rag_core.orchestrate(args.question, blocks, dual["full"], dual["bm25"], it,
+                                top_k=args.k, vec2_result=dual["slice"], corpus=corpus)
 
     print("-" * 70)
     if not hits:

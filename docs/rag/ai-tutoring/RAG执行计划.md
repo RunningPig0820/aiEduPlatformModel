@@ -52,15 +52,16 @@
 ## 阶段 3：入向量（双池，两个独立索引）
 
 **目标**：全量池（整体问题）+ 切片池（细节问题），双池召回 RRF 融合。
+**决策已定稿（2026-08-26）**：切片池 **294**（`切片数据/` 已切 md，**不重跑 slice_corpus**，不含完善文档）；全量池 **23**；**同一 `rag-1318177119` 桶双索引** `rag-full` + `rag-slice`（已建好）；**category 筛选本次做**；旧 `rag-index` 清空。任务清单见 `每模块流水线-tasks.md` **1.13**。
 
-- [ ] 3.1 数据准备：`slice_full.py` → `rag_slices_full.jsonl`（语雀5 + 完善文档8 + 代码10 = 23 块，tags.pool=full）；现有 jsonl 324 块补 `tags.pool=slice`
-- [ ] 3.2 settings：`COS_VECTORS_INDEXES` 加 `"rag-full": "rag-full"`, `"rag-slice": "rag-slice"`
-- [ ] 3.3 vector_store：`_resolve_bucket_index` 特判改 `startswith("rag")`（否则 rag-full/rag-slice 落默认桶）
-- [ ] 3.4 build_index：`--pool full|slice` 分池写入；make_key 加池前缀（`rag-full/{file}/{anchor}#{idx}`）
-- [ ] 3.5 query.py：`_key_of` 加池前缀；`retrieve_vector(question, vector_type)` 加参；新增 `retrieve_dual`；`orchestrate` 加 `vec2_result` 第三路 RRF + 切片池 category 筛选
-- [ ] 3.6 调用方：assistant.recall / rag_query.py / api/rag.py 接入双池
-- [ ] 3.7 控制台先建 `rag-full`/`rag-slice` 索引（768/float32/cosine）
-- [ ] 3.8 验证：`build_index.py --pool full` + `--pool slice` → rag-full 23 条 + rag-slice 324 条；"AI答疑是什么"命中全量池、"J1会话卡死"命中切片池
+- [ ] 3.1 数据准备：**D1** 新脚本 `md_to_jsonl.py`（切片数据 md → `rag_slices.jsonl`，294 块，pool=slice）+ **D2** 新脚本 `slice_full.py`（语雀5+完善文档8+代码10 整篇 → `rag_slices_full.jsonl`，23 块，pool=full）+ **D3** 旧 jsonl 备份
+- [ ] 3.2 settings：**C1** `COS_VECTORS_INDEXES` 加 `"rag-full": "rag-full"`, `"rag-slice": "rag-slice"`（同 `COS_VECTORS_RAG_BUCKET`）
+- [ ] 3.3 vector_store：**C2** `_resolve_bucket_index` 特判改 **`startswith("rag")`**（rag-full/rag-slice/rag 全路由 RAG 桶）
+- [ ] 3.4 build_index：**B1** `--pool full|slice` 分池写入；make_key 加池前缀（`rag-full|rag-slice/{file}/{anchor}#{idx}`）
+- [ ] 3.5 query.py：**Q1-Q6** `_key_of` 池前缀；`retrieve_vector` 加参；`retrieve_dual`；`orchestrate` 第三路 RRF + 切片池 category 筛选；意图输出 `locked_categories`
+- [ ] 3.6 调用方：**Q7** assistant.recall / rag_query.py / api/rag.py / query.rag_query 接入双池
+- [ ] 3.7 前置：✅ `rag-full`/`rag-slice` 索引已建（get_index 探测存在）
+- [ ] 3.8 验证：**B2** 入桶（rag-full 23 条 + rag-slice 294 条）+ **B3** 清空 rag-index + **V1-V4** 方向/category/测试/文档对齐
 
 ## 阶段 4：引导问题功能（后续独立线）
 

@@ -54,13 +54,14 @@ RERANK_BLOCK = {"block_id": HIT["key"], "title": HIT["anchor"], "summary": HIT["
 def _intent(**over):
     base = {"anchor": "ai-tutoring", "category": "项目介绍", "switch_detected": False,
             "ambiguous": False, "candidates": [], "locked_sections": ["01", "02"],
-            "degraded": False}
+            "locked_categories": [], "degraded": False}
     base.update(over)
     return base
 
 
 def _recall(**over):
     base = {"vec": {"hits": ["v"], "confidence": 0.9},
+            "vec2": {"hits": ["v2"], "confidence": 0.7},   # 双池(1.13): 切片向量路
             "bm25": {"hits": ["b"], "confidence": 0.8},
             "degraded": [],
             "rerank": [RERANK_BLOCK],
@@ -84,7 +85,7 @@ def _patch_base(monkeypatch, intent=None, rewrite=None, recall=None,
         rewrite = _rw
     monkeypatch.setattr(assistant.rag_core, "rewrite_query", rewrite)
     if recall is None:
-        async def _rec(q, anchor=None, blocks=None, top_k=3):
+        async def _rec(q, anchor=None, blocks=None, top_k=3, locked_categories=None):
             return _recall()
         recall = _rec
     monkeypatch.setattr(assistant, "recall", recall)
@@ -188,7 +189,7 @@ class TestPipelineEvents:
 
     def test_boundary_short_circuit_no_generate(self, monkeypatch):
         """边界低置信(空 rerank) → intent→rewrite→rerank→boundary→done, 短路不调 generate"""
-        async def _rec(q, anchor=None, blocks=None, top_k=3):
+        async def _rec(q, anchor=None, blocks=None, top_k=3, locked_categories=None):
             return _recall(rerank=[], hits=[], vec={"hits": [], "confidence": 0.1},
                            bm25={"hits": [], "confidence": 0.1},
                            degraded=["vector_timeout", "bm25_empty"])

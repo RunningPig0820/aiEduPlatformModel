@@ -28,7 +28,9 @@ from core.tutoring.vector_store import query_vector
 logger = __import__("logging").getLogger(__name__)
 
 # 语料 jsonl 副本(1.6 调整: 向量桶 role mode 不收普通对象, 留本地)
+# 双池(1.13): rag_slices.jsonl = 切片池(294 块), rag_slices_full.jsonl = 全量池(23 块整篇)
 DATA = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "rag", "data", "rag_slices.jsonl")
+DATA_FULL = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "rag", "data", "rag_slices_full.jsonl")
 
 # 检索参数
 RRF_K = 60          # RRF 融合常数
@@ -52,6 +54,9 @@ ANCHOR_RULES = [
     (("题库", "没问", "答错", "乱给", "兜底", "待入库", "防御"), ("08",)),
 ]
 ANCHOR_WEIGHT = 1.5
+# 1.13 Q5: 类别匹配提权——意图锁定 locked_categories 时, 切片池命中该类别的块加权
+# (补强"排除式过滤"不足: 仅过滤时全量池权威 1.0 会压过坑档案 0.8, 提权让具体坑块浮上来)。
+CATEGORY_WEIGHT = 1.5
 
 # 模块锚点闭集(模块级路由, 决定从哪个语料池召回; A1 结构化输出必填 anchor)
 # 对齐后端 guardrails spec 四模块: AI答疑 / 知识图谱 / 题型分析 / RAG项目
@@ -84,6 +89,43 @@ CATEGORY_SECTIONS = {
     "最危险": ("08",),
     "其他": (),
 }
+
+# 9 类切片闭集(切片数据/ 每块 category 标签; intent LLM 输出 categories 供切片池过滤)。
+SLICE_CATEGORIES = ("项目介绍", "操作流程", "数据关联", "开发难点", "业务流程",
+                    "架构设计", "业务视角", "数据存储", "未来演进")
+
+# 意图 6 类(LLM) → 9 类切片闭集兜底映射(1.13 Q5/Q6, 切片池 category 过滤用)。
+# 注意 6 类≠9 类: 项目介绍 6 类含架构/分工, 故映射补 架构设计; 全量池不过滤, 该映射只管切片池。
+# 仅当 intent LLM 未给 categories 时兜底(主路已是 LLM 直接判 9 类)。
+INTENT_TO_CATEGORIES = {
+    "项目介绍": ["项目介绍", "架构设计"],
+    "操作": ["操作流程"],
+    "难点": ["开发难点"],
+    "数据关联": ["数据关联", "数据存储"],
+    "最危险": ["开发难点", "未来演进"],
+    "其他": [],
+}
+
+# T4 初稿: 意图 6 类给不出类别(其他/空)时的关键词兜底 → 9 类闭集
+CATEGORY_KEYWORDS = [
+    (("踩坑", "最危险", "报错", "卡死", "性能慢", "防", "护栏", "幻觉", "慢", "卡", "线上"), "开发难点"),
+    (("怎么用", "怎么走", "怎么处理", "步骤", "操作", "流程", "一次完整"), "操作流程"),
+    (("为什么做", "定位", "价值", "是什么", "介绍", "区别"), "项目介绍"),
+    (("架构", "分工", "协议", "微服务", "选型", "设计"), "架构设计"),
+    (("存储", "落库", "怎么存", "Redis", "MySQL", "COS", "表"), "数据存储"),
+    (("掌握度", "题型", "知识点", "关联", "联动", "数据"), "数据关联"),
+    (("演进", "未来", "升级", "下一步"), "未来演进"),
+]
+
+
+def _category_to_locked(category: str, question: str) -> list:
+    """意图 6 类 → 切片池锁定 9 类闭集列表; 6 类给不出(其他/空) → 关键词兜底; 都无 → [] 不筛。"""
+    if category in INTENT_TO_CATEGORIES and INTENT_TO_CATEGORIES[category]:
+        return INTENT_TO_CATEGORIES[category]
+    for kws, cat in CATEGORY_KEYWORDS:
+        if any(k in question for k in kws):
+            return [cat]
+    return []
 
 _CLASSIFY_SYSTEM = """你是「AI答疑」项目的意图分类器。只判断面试官在问哪类问题，不回答内容。
 
@@ -128,7 +170,8 @@ _INTENT_SYSTEM = """你是「AI答疑」RAG 助手的意图识别器。只输出
 输出 JSON（必须合法 JSON，闭集枚举）：
 {
   "anchor": "ai-tutoring",            // 模块锚点, 闭集: ai-tutoring|knowledge-graph|question-analysis|rag-system
-  "category": "项目介绍",             // 类别闭集: 项目介绍|操作|难点|数据关联|最危险|其他
+  "category": "项目介绍",             // 锁完善文档页的类别闭集: 项目介绍|操作|难点|数据关联|最危险|其他
+  "categories": ["项目介绍"],         // 切片池 9 类过滤标签(可空数组=不筛), 闭集: 项目介绍|操作流程|数据关联|开发难点|业务流程|架构设计|业务视角|数据存储|未来演进
   "switch_detected": false,           // 是否从历史锚点切换到新模块
   "ambiguous": false,                 // 问题指向多个模块、需澄清
   "candidates": []                    // ambiguous=true 时给 2~4 个候选模块闭集
@@ -136,7 +179,8 @@ _INTENT_SYSTEM = """你是「AI答疑」RAG 助手的意图识别器。只输出
 
 判断规则：
 - anchor：问题语义指向哪个模块（AI答疑=ai-tutoring / RAG项目=rag-system / 知识图谱=knowledge-graph / 题型分析=question-analysis）
-- 项目介绍/操作/难点/数据关联/最危险 → AI答疑模块内类别；问系统架构/代码/部署/评测 → RAG 项目模块(rag-system)
+- categories：问题问到哪些"内容类型"就填对应 9 类标签(可多个, 例如"遇到哪些坑/怎么防/性能卡"→["开发难点"]；"为什么做/定位/是什么"→["项目介绍"]；"架构怎么分工"→["架构设计"]；拿不准 → 空数组不筛)
+- 项目介绍/操作/难点/数据关联/最危险 → AI答疑模块内锁页类别；问系统架构/代码/部署/评测 → RAG 项目模块(rag-system)
 - switch_detected：本问题明显不再谈历史锚点模块、转向另一模块 → true
 - ambiguous：问题含"这个/那个/它"指代不清、可指向多个模块 → true，并给 candidates（模块闭集内，≥2 个）
 只输出 JSON 本身。"""
@@ -151,13 +195,18 @@ def _sanitize_intent(raw: dict, question: str) -> dict:
     if anchor not in MODULE_ANCHORS:
         anchor = _fallback_module(question)
     candidates = []
+    categories = []
     if isinstance(raw, dict):
         for c in raw.get("candidates", []) or []:
             if c in MODULE_ANCHORS and c not in candidates:
                 candidates.append(c)
+        for c in raw.get("categories", []) or []:   # 1.13 多模块: 9 类切片闭集校验
+            if c in SLICE_CATEGORIES and c not in categories:
+                categories.append(c)
     return {
         "anchor": anchor,
         "category": raw.get("category", "") if isinstance(raw, dict) else "",
+        "categories": categories,
         "switch_detected": bool(raw.get("switch_detected", False)) if isinstance(raw, dict) else False,
         "ambiguous": bool(raw.get("ambiguous", False)) if isinstance(raw, dict) else False,
         "candidates": candidates,
@@ -242,6 +291,11 @@ def intent(question: str, history: list | None = None,
         category = ""
         locked = sorted(_fallback_anchor(question))
 
+    # 1.13 多模块: 切片池类别过滤主路取 LLM 9 类 categories; 空 → 6→9 映射兜底(不空召回)
+    locked_categories = list(raw.get("categories", [])) if raw else []
+    if not locked_categories:
+        locked_categories = _category_to_locked(category, question)
+
     return {
         "anchor": anchor,
         "category": category,
@@ -249,6 +303,7 @@ def intent(question: str, history: list | None = None,
         "ambiguous": bool(raw.get("ambiguous")) if raw else False,
         "candidates": list(raw.get("candidates", [])) if raw else [],
         "locked_sections": locked,
+        "locked_categories": locked_categories,
         "degraded": degraded,
     }
 
@@ -261,8 +316,10 @@ def classify(question: str) -> dict:
     """
     category = _llm_category(question)
     if category in CATEGORY_SECTIONS:
-        return {"locked_sections": list(CATEGORY_SECTIONS[category]), "strategy": "retrieve"}
-    return {"locked_sections": sorted(_fallback_anchor(question)), "strategy": "retrieve"}
+        return {"locked_sections": list(CATEGORY_SECTIONS[category]), "strategy": "retrieve",
+                "locked_categories": _category_to_locked(category, question)}
+    return {"locked_sections": sorted(_fallback_anchor(question)), "strategy": "retrieve",
+            "locked_categories": _category_to_locked("", question)}
 
 
 def _llm_category(question: str) -> str:
@@ -341,20 +398,52 @@ def _load_blocks() -> list:
         return [json.loads(line) for line in f if line.strip()]
 
 
+def _load_full_blocks() -> list:
+    with open(DATA_FULL, encoding="utf-8") as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def _load_all_blocks() -> list:
+    """双池合并语料(切片池 + 全量池), BM25/keymap 用。池前缀在 _key_of 区分。"""
+    return _load_blocks() + _load_full_blocks()
+
+
 # ============ 召回单元 (1.6B, 独立) ============
 
 
-def retrieve_vector(question: str) -> dict:
+def retrieve_vector(question: str, vector_type: str = "rag") -> dict:
     """向量召回单元: COS query_vectors(rag 桶) → hits + confidence。
 
-    独立单元契约: 入参 question, 出参 {hits, confidence}; 异常由编排器捕获(未来熔断/降级)。
+    独立单元契约: 入参 question + vector_type(双池: rag-full/rag-slice), 出参 {hits, confidence};
+    异常由编排器捕获(未来熔断/降级)。默认 "rag" 向后兼容旧调用。
     """
-    hits = query_vector(question, top_k=VEC_K, vector_type="rag")
+    hits = query_vector(question, top_k=VEC_K, vector_type=vector_type)
     # confidence = 平均相似度(1 - 平均余弦距离); COS distance 越小越相似
     conf = 0.0
     if hits:
         conf = 1.0 - sum(h.get("distance", 1.0) for h in hits) / len(hits)
     return {"hits": hits, "confidence": max(0.0, conf)}
+
+
+def retrieve_dual(question: str, corpus: str | None = None,
+                  locked_categories: list | None = None) -> dict:
+    """双池召回(1.13 Q3 + 多模块): 全量池向量 + 切片池向量 + BM25 → 三路供 RRF。
+
+    全量池管整体(整篇), 切片池管细节(块), BM25 本地关键词兜底(向量挂可降级)。
+    corpus(模块 anchor): 本地 BM25 只打该模块语料池(与编排层 select_corpus 一致)。
+    locked_categories(9 类): 本地 BM25 只打切片池该类别的块(全量池块不过滤, 与编排层一致)。
+    """
+    full = retrieve_vector(question, vector_type="rag-full")
+    slice_ = retrieve_vector(question, vector_type="rag-slice")
+    blocks = _load_all_blocks()
+    pool = select_corpus(blocks, corpus) if corpus else blocks
+    if locked_categories:
+        cats = set(locked_categories)
+        pool = [b for b in pool
+                if b["tags"].get("pool") != "slice" or not b["tags"].get("category")
+                or b["tags"]["category"] in cats]
+    bm = retrieve_bm25(question, pool)
+    return {"full": full, "slice": slice_, "bm25": bm}
 
 
 def _tokenize(text: str) -> list:
@@ -413,9 +502,13 @@ def retrieve_bm25(question: str, blocks: list) -> dict:
 
 
 def _key_of(b: dict) -> str:
-    """块 → 向量 key(与 build_index 同规则: 同 file+anchor 组内序号)"""
+    """块 → 向量 key(与 build_index 同规则: {池前缀}/{file}/{anchor}#{idx})。
+
+    池前缀 = rag-{tags.pool}(rag-full/rag-slice), 与 COS 索引 key 对齐, 防两池 (file,anchor) 冲突。
+    """
     t = b["tags"]
-    return f"ai-tutoring/{t['file']}/{t['anchor']}#{t.get('_idx', 0)}"
+    pool = t.get("pool", "slice")
+    return f"rag-{pool}/{t['file']}/{t['anchor']}#{t.get('_idx', 0)}"
 
 
 def _assign_idx(blocks: list) -> dict:
@@ -444,38 +537,54 @@ def select_corpus(blocks: list, anchor: str | None) -> list:
 
 
 def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict,
-                strategy: dict, top_k: int = TOP_K, corpus: str | None = None) -> list:
-    """编排器: RRF 融合 × authority 权威度 × 页面锚定加权 → top-K 完整命中。
+                strategy: dict, top_k: int = TOP_K, corpus: str | None = None,
+                vec2_result: dict | None = None) -> list:
+    """编排器: RRF 融合 × authority 权威度 × 页面锚定加权 × 类别过滤 → top-K 完整命中。
 
-    corpus(可选, A3/C2): 模块 anchor, 给定时先按 module 过滤语料池再融合; None → 全池
-    (向后兼容, /api/tutoring/rag/query 不传)。锚定公式原样: 节级 locked_sections 池内加权。
+    三路 RRF(1.13 Q4): vec_result(全量池向量) + vec2_result(切片池向量, 可选) + bm25_result。
+    category 过滤(1.13 Q5): strategy.locked_categories 非空时, 只保留切片池命中该类别块
+    (先 module 选池、再类别过滤两级; 全量池不过滤, 无类别锁定全保留)。
+    corpus(可选, A3/C2): 模块 anchor, 给定时先按 module 过滤语料池再融合; None → 全池。
     top_k 命中项含: key/metadata/authority/source/section/file/file_path/anchor/summary/text。
     """
     pool = select_corpus(blocks, corpus) if corpus else blocks
     keymap = _assign_idx(pool)
 
-    # 两路 rank: 向量路(COS 返回 key) / BM25 路
+    # 三路 rank: 全量向量(COS 返回 key) + 切片向量(可选) + BM25
     vec_keys = [h["key"] for h in vec_result["hits"]]
+    vec2_keys = [h["key"] for h in vec2_result["hits"]] if vec2_result else []
     bm_keys = [h["key"] for h in bm25_result["hits"]]
 
     vec_rank = {k: r for r, k in enumerate(vec_keys)}
+    vec2_rank = {k: r for r, k in enumerate(vec2_keys)}
     bm_rank = {k: r for r, k in enumerate(bm_keys)}
     locked = set(strategy.get("locked_sections", []))
+    locked_cats = set(strategy.get("locked_categories", []) or [])
 
     scored = []
-    for key in set(vec_rank) | set(bm_rank):
+    for key in set(vec_rank) | set(vec2_rank) | set(bm_rank):
         rrf = 0.0
         if key in vec_rank:
             rrf += 1.0 / (RRF_K + vec_rank[key])
+        if key in vec2_rank:
+            rrf += 1.0 / (RRF_K + vec2_rank[key])
         if key in bm_rank:
             rrf += 1.0 / (RRF_K + bm_rank[key])
         block = keymap.get(key)
         if block is None:
             continue
         t = block["tags"]
+        # 类别过滤: 只对切片池命中筛(全量池不过滤); 无锁定类别 → 全保留。
+        # 无 category 的切片块不筛(防"空召回", 生产 294 块全有 category, 此处仅兜底)。
+        if locked_cats and t.get("pool") == "slice" and t.get("category") \
+                and t["category"] not in locked_cats:
+            continue
         authority = t.get("authority", 0.7)
         anchor_w = ANCHOR_WEIGHT if t.get("section") in locked else 1.0
-        scored.append((rrf * authority * anchor_w, rrf, authority, key))
+        # 类别提权: 意图锁定类别时, 切片池该类块加权(让具体坑块浮出, 压过全量池权威分)
+        cat_w = CATEGORY_WEIGHT if locked_cats and t.get("pool") == "slice" \
+            and t.get("category") in locked_cats else 1.0
+        scored.append((rrf * authority * anchor_w * cat_w, rrf, authority, key))
 
     scored.sort(key=lambda x: -x[0])
     hits = []
@@ -563,15 +672,19 @@ def generate(hits: list, question: str, return_usage: bool = False):
 
 
 def rag_query(question: str, top_k: int = TOP_K) -> dict:
-    """完整问答: 意图 → 双路召回 → 编排 → 生成。
+    """完整问答: 意图(模块+类别) → 双池三路召回 → 编排 → 生成。
 
+    双池(1.13) + 多模块(1.13.1): intent 判模块 anchor + 9 类 categories;
+    全量池按模块筛、切片池按模块+类别筛(向量/BM25 一致), 三路 RRF。
     返回 1.6C 契约结构: {answer, references, intent, version}(API 端点/CLI 共用)。
     """
-    blocks = _load_blocks()
-    strategy = classify(question)
-    vec = retrieve_vector(question)
-    bm = retrieve_bm25(question, blocks)
-    hits = orchestrate(question, blocks, vec, bm, strategy, top_k=top_k)
+    blocks = _load_all_blocks()
+    it = intent(question)
+    corpus = it["anchor"] if it["anchor"] in MODULE_ANCHORS else None
+    dual = retrieve_dual(question, corpus=corpus,
+                         locked_categories=it["locked_categories"])
+    hits = orchestrate(question, blocks, dual["full"], dual["bm25"], it,
+                       top_k=top_k, vec2_result=dual["slice"], corpus=corpus)
 
     references = [
         {k: h[k] for k in ("file", "file_path", "anchor", "authority", "summary")}

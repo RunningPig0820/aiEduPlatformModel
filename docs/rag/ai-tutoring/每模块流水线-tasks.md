@@ -477,6 +477,90 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 **重建索引**：`python scripts/rag/build_index.py --clear` 后，rag-index 才有引导问题 90 块（324 条）。
 
+### 1.13 双池入向量（rag-full 全量池 + rag-slice 切片池，2026-08-26 定稿待开发）
+
+> **动机**：面试问题分两类方向——整体/全局（"AI答疑是什么""架构怎么分工"）用完整文档答更准；细节/步骤（"某一步怎么走""J1 坑根因"）用切片块答更准。单索引 `rag-index`（324 块全切片）答整体问题丢整篇上下文。改为**双池独立索引 + 三路 RRF 融合**（全量向量 + 切片向量 + BM25）。
+
+**已确认决策（2026-08-26）**：
+| 项 | 结论 |
+|---|---|
+| 全量池 rag-full | **23 块**（语雀5 + 完善文档8 + 代码10，各整篇一块），索引 `rag-full` |
+| 切片池 rag-slice | **294 块**（`切片数据/` 5 类已切 md 每文件一块），索引 `rag-slice`；**不含完善文档**（与全量池整篇重复） |
+| 桶 | **同一 `rag-1318177119` 双索引**（rag-full + rag-slice 同桶共存，2026-08-26 用户确认） |
+| 切片源头 | **用已切 md，不重跑 slice_corpus**（切归切、改归改）——质量改动直接改 md，jsonl 从 md 重新生成 |
+| file_path | jsonl 同步时**一步改成 COS key**（阶段 2 定稿：`rag-source|rag-slices/<模块>/...`） |
+| category 筛选 | **本次做**：意图输出 `locked_categories` → 切片池按类别过滤（与 module 选池叠加，先模块后类别两级过滤）；全量池不过滤 |
+| 索引创建 | ✅ 用户已建 `rag-full` / `rag-slice`（768 / float32 / **余弦**），get_index 探测存在（2026-08-26） |
+| 旧 rag-index | **直接不用，清空**（324 块单池，2026-08-26 确认 B3） |
+
+**任务清单**：
+
+**数据层**
+- [ ] **D1 切片池 jsonl 生成**（新脚本 `scripts/rag/md_to_jsonl.py`）：遍历 `切片数据/**/*.md` → 每文件一块 → 覆盖写 `rag_slices.jsonl`（**294 块**）
+      - tags 从文件头解析：module / category / source / authority / section / file / file_path / anchor / summary；`> COS路径:` 作 file_path
+      - text = 正文（引导问题取 `## 回答` 后）；README.md / 无头文件跳过；`tags.pool = "slice"`
+      - 验收：294 块、category 全 294、无重复 key、COS路径 头全解析成功
+- [ ] **D2 全量池 jsonl 生成**（新脚本 `scripts/rag/slice_full.py`）：`1.语雀/` + `4.完善文档/` + `3.代码/` 各**整篇一块** → `rag_slices_full.jsonl`（**23 块**），`tags.pool = "full"`，file_path = COS key（`rag-source/ai-tutoring/<目录>/<文件>.md`）
+      - 验收：23 块（语雀5 + 完善文档8 + 代码10）
+- [ ] **D3 旧 jsonl 备份**：现有 324 块（含旧 代码30 / 坑档案28）→ 备份 `rag_slices.jsonl.bak-20260826` 后再覆盖（防回滚）
+
+**配置层**
+- [ ] **C1 settings.py**：`COS_VECTORS_INDEXES` 加 `"rag-full": "rag-full"`, `"rag-slice": "rag-slice"`（同一 `COS_VECTORS_RAG_BUCKET`，无需新桶字段）
+- [ ] **C2 vector_store._resolve_bucket_index**：`== "rag"` 特判 → **`startswith("rag")`**（rag / rag-full / rag-slice 全部路由到 RAG 桶）；未知索引 ValueError；测试同步
+
+**索引层**
+- [ ] **B1 build_index.py 多池**：`--pool full|slice` → 读对应 jsonl → 对应索引（同桶）；`make_key` 加池前缀（`rag-full|rag-slice/{file}/{anchor}#{idx}`）；`--clear` 各清各的
+- [ ] **B2 执行入桶**：`build_index.py --pool full --clear`（23 条）→ `--pool slice --clear`（294 条）；list_vectors 验证条数
+- [ ] **B3 旧 rag-index 清空**：删除 `rag-index` 324 条（双池上线后防误用）
+
+**查询层**
+- [ ] **Q1 `_key_of` 池前缀**：按 `tags.pool` 生成 `rag-full|rag-slice/{file}/{anchor}#{idx}`（与 build_index 同规则）
+- [ ] **Q2 `retrieve_vector(question, vector_type)`**：加 vector_type 参数（默认 `"rag"` 兼容现有调用）
+- [ ] **Q3 `retrieve_dual(question)`**：全量池向量召一次 + 切片池向量召一次；**BM25 语料 = full+slice 合并 jsonl（317 块）**（防向量挂时全量池文档失联）
+- [ ] **Q4 orchestrate 第三路 RRF**：融合集 = vec_full ∪ vec_slice ∪ bm25；三路 `1/(RRF_K+rank)` 累加；authority × 锚定加权原样
+- [ ] **Q5 category 筛选**：strategy 加 `locked_categories`；**切片池命中按 category 过滤**（先 module 选池、再 category 过滤，两级）；全量池不过滤；无匹配类别回退全池（不空召回）
+- [ ] **Q6 意图→类别映射**：`_INTENT_SYSTEM` 闭集扩展类别维度，`classify`/`intent` 输出 `locked_categories`（映射规则用 1.11 T4 初稿）
+- [ ] **Q7 调用方接入**：assistant.recall / rag_query.py / api/rag.py / query.rag_query 接双池（现有 4 处调用点）
+
+**验证层**
+- [ ] **V1 方向验证**：`rag_query.py "AI答疑是什么" --no-gen` → 命中**全量池**完善文档 01（整篇）；`"J1会话卡死"` → 命中**切片池**坑档案 J1
+- [ ] **V2 category 验证**：`"项目遇到了哪些问题"` → 命中 `category=开发难点` 的**具体坑块**（J1/P1/F1…，非目录头）
+- [ ] **V3 测试**：tests/rag、tests/tutoring/unit/test_vector_store.py 更新 + 双池/类别新增用例；全量回归 315+ 全绿
+- [ ] **V4 文档对齐**：双池检索方案.md / 向量桶入桶清单.md 数字改 294/23、新桶、category 筛选落地、旧 rag-index 状态
+
+**风险/注意**：
+- D1 解析依赖文件头（`> summary:` / `> 类别：` / `> COS路径:` 必须齐全）——缺失块记录告警、不静默跳过
+- 引导问题 / 坑档案 / 语雀 / OpenSpec / 代码 的 md 已是定稿内容，从 md 生成无损；完善文档只在全量池，不进切片池
+- `rag-full` / `rag-slice` 索引已建好（get_index 探测通过），可直接入桶
+- 查询切换双池后，旧 `rag-index`（单池 324）清理（B3）
+
+### 1.13.1 多模块 intent 改造（2026-08-26 完成）
+
+> **动机**：后面多模块（ai答疑 / rag / 题库 / 知识图谱）同桶同索引入 `rag-full`/`rag-slice`，检索必须先判模块，否则跨模块混答。`classify` 只判类别不判模块，`/api/tutoring/rag/query` 原走它 → 换 `intent`（LLM 判模块 + 9 类）。
+
+**已完成（2026-08-26）**：
+- [x] `_INTENT_SYSTEM` 扩展：LLM 一次输出 `anchor`(模块闭集) + `categories`(9 类切片闭集列表, 可空=不筛) + `category`(6 类锁页)
+- [x] `intent()`：`locked_categories` 主路取 LLM 9 类 `categories`；空 → 6→9 映射 + T4 关键词兜底（不空召回）
+- [x] `_sanitize_intent`：`categories` 9 类闭集校验（`SLICE_CATEGORIES` 常量）
+- [x] `retrieve_dual(question, corpus, locked_categories)`：本地 BM25 用 module+category 过滤后 pool 打分（与编排层一致）
+- [x] `/api/tutoring/rag/query` + CLI + `rag_query()`：`classify` → `intent`（模块判断）；orchestrate 传 `corpus`
+- [x] `RAGIntent` 响应模型：加 `anchor` + `categories` 字段（前端可展示路由模块）
+- [x] 多模块测试：`TestMultiModule` 4 用例（LLM 9类主路 / 空 categories 兜底 / 9类闭集清洗 / retrieve_dual 模块+类别本地过滤）
+
+**行为验证（2026-08-26 CLI 实测）**：
+- `"RAG系统怎么做多路召回"` → 模块 **rag-system** + 类别 架构设计 → rag-system 无语料 → **拒答"语料未覆盖"**（正确隔离，不硬答）
+- `"怎么防学生套答案"` → 模块 ai-tutoring + 锁节 04/07 + 类别 开发难点 → 双池召回正常（完善文档04 + 引导问题边界防御 + OpenSpec 出口机制）
+
+**多模块检索架构（定型）**：
+```
+问题 → intent LLM {anchor(模块), categories(9类)}
+  全量池 rag-full  按 anchor 筛模块(不筛类别)
+  切片池 rag-slice 按 anchor 筛模块 + categories 筛类别
+  本地 BM25        同样过滤后 pool
+  三路 RRF 融合
+```
+新增模块流程（SOP ⑥步）：语料 → `md_to_jsonl.py`/`slice_full.py`(tags.module=模块id) → `build_index.py --pool full/slice --clear` 入同桶 → 检索自动按模块路由。
+
 ---
 
 ## 2. AI答疑 评测集（5 条）

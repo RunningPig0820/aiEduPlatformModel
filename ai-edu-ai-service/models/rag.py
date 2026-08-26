@@ -24,9 +24,11 @@ class RAGReference(BaseModel):
 
 
 class RAGIntent(BaseModel):
-    """意图钩子输出(1.6B) - 前端可展示'命中了哪些页'"""
+    """意图钩子输出(1.6B + 1.13 多模块) - 前端可展示'命中了哪个模块/哪些页'"""
     locked_sections: List[str] = Field(default_factory=list, description="锚定锁定的完善文档节(01~08)")
     strategy: str = Field(default="retrieve", description="检索策略(未来意图驱动选择)")
+    anchor: str = Field(default="", description="模块锚点(ai-tutoring/rag-system/knowledge-graph/question-analysis)")
+    categories: List[str] = Field(default_factory=list, description="切片池 9 类过滤标签(可空=不筛)")
 
 
 class RAGQueryResponse(BaseModel):

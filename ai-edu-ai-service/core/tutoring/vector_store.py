@@ -77,15 +77,15 @@ def embed(text: str) -> List[float]:
 
 
 def _resolve_bucket_index(vector_type: str) -> tuple:
-    """vector_type(逻辑名) → (bucket, index)。rag 走独立 RAG 桶, 其余走默认桶。未知 → ValueError。
+    """vector_type(逻辑名) → (bucket, index)。rag* 走独立 RAG 桶, 其余走默认桶。未知 → ValueError。
 
-    桶隔离: topic(题型聚集) 在 question-bank-1318177119, rag(AI答疑 RAG) 在 rag-1318177119,
-    互不影响(重建 rag-index 不碰 topic 生产查询)。
+    桶隔离: topic(题型聚集) 在 question-bank-1318177119, rag/rag-full/rag-slice(双池) 在 rag-1318177119,
+    互不影响(重建 rag-slice 不碰 topic 生产查询)。
     """
     index = settings.COS_VECTORS_INDEXES.get(vector_type)
     if not index:
         raise ValueError(f"unknown vector_type: {vector_type!r}, 合法值: {list(settings.COS_VECTORS_INDEXES.keys())}")
-    if vector_type == "rag":
+    if vector_type.startswith("rag"):
         bucket = settings.COS_VECTORS_RAG_BUCKET
         if not bucket:
             raise RuntimeError("COS_VECTORS_RAG_BUCKET 未配置, 无法路由 rag 向量")
