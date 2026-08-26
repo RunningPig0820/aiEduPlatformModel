@@ -3,7 +3,7 @@
 > summary: 面试问答中提及decide单次调用的schema拆分设计
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 7. decide 单次调用,schema 可拆
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-7-decide-单次调用schema-可拆.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-7-decide-单次调用schema-可拆.md
 > 类别：架构设计
 
 ---

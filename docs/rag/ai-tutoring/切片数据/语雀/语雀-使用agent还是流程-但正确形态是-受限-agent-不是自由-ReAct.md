@@ -3,7 +3,7 @@
 > summary: 教育场景应采用受限agent而非自由ReAct
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 但正确形态是"受限 agent"，不是自由 ReAct
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-使用agent还是流程-但正确形态是-受限-agent-不是自由-ReAct.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-使用agent还是流程-但正确形态是-受限-agent-不是自由-ReAct.md
 > 类别：架构设计
 
 ---

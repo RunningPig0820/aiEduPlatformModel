@@ -3,7 +3,7 @@
 > summary: AI答疑的交互模型为decide→guard→generate流程
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 2. 交互模型:decide → guard → generate(类型先行流式)
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-2-交互模型-decide-guard-generate类型先行流式.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-2-交互模型-decide-guard-generate类型先行流式.md
 > 类别：架构设计
 
 ---

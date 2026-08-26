@@ -3,7 +3,7 @@
 > summary: 明确学科分类功能的目标与非目标范围
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-tutoring-subject-gate-python-Goals-Non-Goals.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-tutoring-subject-gate-python-Goals-Non-Goals.md
 > 类别：项目介绍
 
 ---

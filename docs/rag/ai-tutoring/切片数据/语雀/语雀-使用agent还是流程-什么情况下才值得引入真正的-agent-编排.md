@@ -3,7 +3,7 @@
 > summary: 答疑场景下何时需引入真正的agent编排
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 什么情况下才值得引入真正的 agent 编排
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-使用agent还是流程-什么情况下才值得引入真正的-agent-编排.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-使用agent还是流程-什么情况下才值得引入真正的-agent-编排.md
 > 类别：架构设计
 
 ---

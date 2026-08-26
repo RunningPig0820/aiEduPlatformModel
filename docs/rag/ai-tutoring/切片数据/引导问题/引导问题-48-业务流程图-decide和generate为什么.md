@@ -3,7 +3,7 @@
 > summary: 职责不同、可独立控制，且护栏必须插在两者之间——拆开是"类型先行流式"安全成立的前提。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: decide 和 generate 为什么拆成两个独立接口？各自管什么？
 > 模块: ai-tutoring ｜ 节: 业务流程图
-> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-48-业务流程图-decide和generate为什么.md
+> COS路径: rag-slices/ai-tutoring/引导问题/引导问题-48-业务流程图-decide和generate为什么.md
 > 类别：业务流程
 
 ## 回答

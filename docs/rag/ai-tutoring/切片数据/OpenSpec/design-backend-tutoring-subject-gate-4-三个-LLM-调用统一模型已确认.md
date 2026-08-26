@@ -3,7 +3,7 @@
 > summary: 确认三个LLM调用统一使用doubao-seed-2-0-mini模型
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 三个 LLM 调用统一模型（已确认）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-subject-gate
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-subject-gate-4-三个-LLM-调用统一模型已确认.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-subject-gate-4-三个-LLM-调用统一模型已确认.md
 > 类别：架构设计
 
 ---

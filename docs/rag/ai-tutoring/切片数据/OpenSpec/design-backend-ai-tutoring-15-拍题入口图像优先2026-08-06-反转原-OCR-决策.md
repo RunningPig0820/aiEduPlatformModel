@@ -3,7 +3,7 @@
 > summary: 面试问拍题入口方案，答用视觉模型看图而非OCR
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 15. 拍题入口：图像优先（2026-08-06 反转原 OCR 决策）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-15-拍题入口图像优先2026-08-06-反转原-OCR-决策.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-ai-tutoring-15-拍题入口图像优先2026-08-06-反转原-OCR-决策.md
 > 类别：操作流程
 
 ---

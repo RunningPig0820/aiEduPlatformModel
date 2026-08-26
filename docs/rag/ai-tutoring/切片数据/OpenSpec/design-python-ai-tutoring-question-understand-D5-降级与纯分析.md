@@ -3,7 +3,7 @@
 > summary: 面试问答中AI辅导题理解的降级规则说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D5. 降级与纯分析
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-question-understand
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-question-understand-D5-降级与纯分析.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-question-understand-D5-降级与纯分析.md
 > 类别：开发难点
 
 ---

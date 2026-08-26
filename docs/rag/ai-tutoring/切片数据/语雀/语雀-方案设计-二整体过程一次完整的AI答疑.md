@@ -3,7 +3,7 @@
 > summary: 面试问语雀AI答疑的流程，答7步完整交互过程
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 二、整体过程（一次完整的AI答疑）
 > 模块: ai-tutoring ｜ 节: 语雀-方案设计
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-方案设计-二整体过程一次完整的AI答疑.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-方案设计-二整体过程一次完整的AI答疑.md
 > 类别：操作流程
 
 ---

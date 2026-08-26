@@ -3,7 +3,7 @@
 > summary: 解决decide误判非答题场景收尾的问题
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: P6. decide 两分法（不答题不该收尾）
 > 模块: ai-tutoring ｜ 节: 坑档案
-> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-P6-decide-两分法不答题不该收尾.md
+> COS路径: rag-slices/ai-tutoring/坑档案/坑档案-P6-decide-两分法不答题不该收尾.md
 > 类别：开发难点
 
 ---

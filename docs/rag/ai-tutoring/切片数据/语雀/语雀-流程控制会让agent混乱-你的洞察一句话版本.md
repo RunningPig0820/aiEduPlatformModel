@@ -3,7 +3,7 @@
 > summary: 面试问答中，提出agent应管能力而非流程，避免状态爆炸
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 你的洞察一句话版本
 > 模块: ai-tutoring ｜ 节: 语雀-流程控制会让agent混乱
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-流程控制会让agent混乱-你的洞察一句话版本.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-流程控制会让agent混乱-你的洞察一句话版本.md
 > 类别：架构设计
 
 ---

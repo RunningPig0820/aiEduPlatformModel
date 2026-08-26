@@ -3,7 +3,7 @@
 > summary: 明确学科判定异常情况的输出规则，保障Java侧安全放行
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 失败/非法 → 空 subject(Java 放行),而非 other
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-tutoring-subject-gate-python-4-失败-非法-空-subjectJava-放行而非-other.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-tutoring-subject-gate-python-4-失败-非法-空-subjectJava-放行而非-other.md
 > 类别：开发难点
 
 ---

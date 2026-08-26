@@ -3,7 +3,7 @@
 > summary: 讲AI答疑的安全过滤两层处理规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 安全过滤
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-安全过滤.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-ai-tutoring-安全过滤.md
 > 类别：开发难点
 
 ---

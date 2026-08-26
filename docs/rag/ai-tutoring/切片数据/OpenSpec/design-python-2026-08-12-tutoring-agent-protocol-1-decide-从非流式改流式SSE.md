@@ -3,7 +3,7 @@
 > summary: 面试问答中Python tutoring agent的decide接口改SSE流方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 1. decide 从非流式改流式(SSE)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-1-decide-从非流式改流式SSE.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-1-decide-从非流式改流式SSE.md
 > 类别：架构设计
 
 ---

@@ -3,7 +3,7 @@
 > summary: 说明AI辅导前端的组件结构与各模块职责
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 11. 组件结构
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-11-组件结构.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-frontend-add-ai-tutoring-frontend-11-组件结构.md
 > 类别：架构设计
 
 ---

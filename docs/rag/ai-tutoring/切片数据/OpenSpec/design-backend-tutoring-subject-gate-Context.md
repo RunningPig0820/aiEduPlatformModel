@@ -3,7 +3,7 @@
 > summary: 确认数学答疑后端编排及模型调用现状
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-subject-gate
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-subject-gate-Context.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-subject-gate-Context.md
 > 类别：架构设计
 
 ---

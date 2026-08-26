@@ -3,7 +3,7 @@
 > summary: 明确AI辅导end的三类触发条件及必填reason规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D4. `end` 收紧为三类 + `end_reason` 必填
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-decide-guide-not-end-D4-end-收紧为三类-endreason-必填.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-decide-guide-not-end-D4-end-收紧为三类-endreason-必填.md
 > 类别：开发难点
 
 ---

@@ -3,7 +3,7 @@
 > summary: 面试问答检索：AI答疑的现有技术栈与知识图谱现状盘点
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 语雀原文：ai回答（现状盘点）
 > 模块: ai-tutoring ｜ 节: 语雀-ai回答
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-ai回答-语雀原文ai回答现状盘点-3.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-ai回答-语雀原文ai回答现状盘点-3.md
 > 类别：未来演进
 
 ---

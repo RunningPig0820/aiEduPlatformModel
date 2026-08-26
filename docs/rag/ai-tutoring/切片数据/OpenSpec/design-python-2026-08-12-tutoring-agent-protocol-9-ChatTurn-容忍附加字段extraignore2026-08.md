@@ -3,7 +3,7 @@
 > summary: 设置 ChatTurn 容忍附加字段的契约规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 9. ChatTurn 容忍附加字段(extra='ignore',2026-08)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-9-ChatTurn-容忍附加字段extraignore2026-08.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-9-ChatTurn-容忍附加字段extraignore2026-08.md
 > 类别：架构设计
 
 ---

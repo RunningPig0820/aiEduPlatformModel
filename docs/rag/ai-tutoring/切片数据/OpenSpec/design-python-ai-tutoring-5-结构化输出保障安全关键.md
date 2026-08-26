@@ -3,7 +3,7 @@
 > summary: 面试问答中说明结构化输出保障的四段降级方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 5. 结构化输出保障(安全关键)
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-5-结构化输出保障安全关键.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-5-结构化输出保障安全关键.md
 > 类别：开发难点
 
 ---

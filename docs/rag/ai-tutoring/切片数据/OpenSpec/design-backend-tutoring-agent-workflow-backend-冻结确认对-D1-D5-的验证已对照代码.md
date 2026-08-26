@@ -3,7 +3,7 @@
 > summary: 验证D1-D5后端契约符合冻结要求
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 冻结确认（对 D1-D5 的验证，已对照代码）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-冻结确认对-D1-D5-的验证已对照代码.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-agent-workflow-backend-冻结确认对-D1-D5-的验证已对照代码.md
 > 类别：架构设计
 
 ---

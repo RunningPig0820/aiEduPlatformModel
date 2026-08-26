@@ -3,7 +3,7 @@
 > summary: 状态在 Java Redis，Python 每次调用接收压缩后的上下文（history 截断 + 快照 top-N + 文本截断）。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 多轮对话状态存在哪？每次调用传给模型的历史和快照是怎么压缩的？
 > 模块: ai-tutoring ｜ 节: Agent架构
-> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-58-Agent架构-多轮对话状态存在哪每次调用传给模型的.md
+> COS路径: rag-slices/ai-tutoring/引导问题/引导问题-58-Agent架构-多轮对话状态存在哪每次调用传给模型的.md
 > 类别：架构设计
 
 ## 回答

@@ -3,7 +3,7 @@
 > summary: 定义agent事件格式，说明Java侧序列化与方法实现
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D6. agent 事件格式
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-events-D6-agent-事件格式.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-agent-events-D6-agent-事件格式.md
 > 类别：架构设计
 
 ---

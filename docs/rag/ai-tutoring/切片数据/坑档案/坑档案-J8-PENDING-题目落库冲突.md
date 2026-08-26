@@ -3,7 +3,7 @@
 > summary: 解决PENDING题目落库冲突，修改topic_label可空
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: J8. PENDING 题目落库冲突
 > 模块: ai-tutoring ｜ 节: 坑档案
-> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-J8-PENDING-题目落库冲突.md
+> COS路径: rag-slices/ai-tutoring/坑档案/坑档案-J8-PENDING-题目落库冲突.md
 > 类别：开发难点
 
 ---

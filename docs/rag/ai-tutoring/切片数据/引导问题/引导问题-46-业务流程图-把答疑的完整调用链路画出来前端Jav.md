@@ -3,7 +3,7 @@
 > summary: 前端（纯交互）→ Java（平台层）→ Python（纯智能），内部 token 鉴权，各端职责单一、边界清晰。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 把答疑的完整调用链路画出来，前端 / Java / Python 各自负责什么？
 > 模块: ai-tutoring ｜ 节: 业务流程图
-> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-46-业务流程图-把答疑的完整调用链路画出来前端Jav.md
+> COS路径: rag-slices/ai-tutoring/引导问题/引导问题-46-业务流程图-把答疑的完整调用链路画出来前端Jav.md
 > 类别：业务流程
 
 ## 回答

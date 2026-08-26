@@ -3,7 +3,7 @@
 > summary: 说明学科分类端点的同构实现结构
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 1. 端点结构 = question_understand 同构(stateless,绝不抛异常)
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-tutoring-subject-gate-python-1-端点结构-questionunderstand-同构stateless绝不抛异常.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-tutoring-subject-gate-python-1-端点结构-questionunderstand-同构stateless绝不抛异常.md
 > 类别：架构设计
 
 ---

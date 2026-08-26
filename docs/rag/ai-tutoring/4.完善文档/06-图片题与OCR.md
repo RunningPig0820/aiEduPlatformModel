@@ -1,5 +1,5 @@
 # 06 图片题与 OCR
-> COS路径: ai-tutoring/rag-source/完善文档/06-图片题与OCR.md
+> COS路径: rag-source/ai-tutoring/完善文档/06-图片题与OCR.md
 
 > 模块=ai-tutoring｜节=06｜问题表=操作｜权威度=高（正文）
 

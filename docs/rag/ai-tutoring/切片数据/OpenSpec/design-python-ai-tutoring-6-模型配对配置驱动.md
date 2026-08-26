@@ -3,7 +3,7 @@
 > summary: 面试问答中介绍AI辅导模型配对的配置驱动规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 6. 模型配对(配置驱动)
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-6-模型配对配置驱动.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-6-模型配对配置驱动.md
 > 类别：架构设计
 
 ---

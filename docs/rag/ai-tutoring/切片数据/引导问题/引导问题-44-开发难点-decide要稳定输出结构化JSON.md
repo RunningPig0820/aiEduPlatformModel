@@ -3,7 +3,7 @@
 > summary: 四段降级管线 + 纠错重试，保证绝不吐畸形、绝不抛异常——结构化输出的工程化兜底。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: decide 要稳定输出结构化 JSON，模型不给力时你们做了哪些兜底？
 > 模块: ai-tutoring ｜ 节: 开发难点
-> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-44-开发难点-decide要稳定输出结构化JSON.md
+> COS路径: rag-slices/ai-tutoring/引导问题/引导问题-44-开发难点-decide要稳定输出结构化JSON.md
 > 类别：开发难点
 
 ## 回答

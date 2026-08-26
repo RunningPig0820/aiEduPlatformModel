@@ -3,7 +3,7 @@
 > summary: 明确本项目在AI答疑领域的差异化优势
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 2. 本项目差异化优势
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-2-本项目差异化优势.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-AI答疑-2-本项目差异化优势.md
 > 类别：业务视角
 
 ---

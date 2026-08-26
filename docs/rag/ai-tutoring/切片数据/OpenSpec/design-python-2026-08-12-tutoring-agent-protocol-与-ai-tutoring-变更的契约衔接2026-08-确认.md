@@ -3,7 +3,7 @@
 > summary: 说明本变更与 ai-tutoring 的契约衔接规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 与 ai-tutoring 变更的契约衔接(2026-08 确认)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-与-ai-tutoring-变更的契约衔接2026-08-确认.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-与-ai-tutoring-变更的契约衔接2026-08-确认.md
 > 类别：架构设计
 
 ---

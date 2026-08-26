@@ -3,7 +3,7 @@
 > summary: 开展教育行业头部产品AI答疑功能的竞品分析
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 五、竞品分析
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-五竞品分析.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-AI答疑-五竞品分析.md
 > 类别：业务视角
 
 ---

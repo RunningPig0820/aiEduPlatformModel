@@ -3,7 +3,7 @@
 > summary: 明确语雀AI答疑的业务、成本、用户及迭代目标
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 一、业务目标
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-一业务目标.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-AI答疑-一业务目标.md
 > 类别：项目介绍
 
 ---

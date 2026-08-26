@@ -3,7 +3,7 @@
 > summary: 梳理学而思、讯飞等四家竞品的AI答疑核心特点
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 1. 竞品核心特点（AI答疑相关）
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-1-竞品核心特点AI答疑相关.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-AI答疑-1-竞品核心特点AI答疑相关.md
 > 类别：业务视角
 
 ---

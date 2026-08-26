@@ -3,7 +3,7 @@
 > summary: 面试问情绪枚举标准，答以Python F7七态为准
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 16. 情绪枚举以 Python F7 为准
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-16-情绪枚举以-Python-F7-为准.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-ai-tutoring-16-情绪枚举以-Python-F7-为准.md
 > 类别：数据关联
 
 ---

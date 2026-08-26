@@ -3,7 +3,7 @@
 > summary: 解决langchain流式返回丢失思考过程问题
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: P5. langchain 流式丢 thinking
 > 模块: ai-tutoring ｜ 节: 坑档案
-> COS路径: ai-tutoring/rag-slices/坑档案/坑档案-P5-langchain-流式丢-thinking.md
+> COS路径: rag-slices/ai-tutoring/坑档案/坑档案-P5-langchain-流式丢-thinking.md
 > 类别：开发难点
 
 ---

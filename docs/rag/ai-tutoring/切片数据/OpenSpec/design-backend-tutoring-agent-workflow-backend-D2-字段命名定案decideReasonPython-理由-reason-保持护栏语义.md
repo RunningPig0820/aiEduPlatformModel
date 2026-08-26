@@ -3,7 +3,7 @@
 > summary: 面试问答：后端D2阶段字段命名定案，新增decideReason字段
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D2. 字段命名定案：`decideReason`（Python 理由）+ `reason` 保持护栏语义
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-D2-字段命名定案decideReasonPython-理由-reason-保持护栏语义.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-agent-workflow-backend-D2-字段命名定案decideReasonPython-理由-reason-保持护栏语义.md
 > 类别：架构设计
 
 ---

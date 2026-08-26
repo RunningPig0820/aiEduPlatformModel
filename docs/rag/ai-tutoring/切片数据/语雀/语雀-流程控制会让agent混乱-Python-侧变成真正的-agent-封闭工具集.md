@@ -3,7 +3,7 @@
 > summary: 面试问答中，介绍Python侧改为带封闭工具集的agent
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: Python 侧变成真正的 agent + 封闭工具集
 > 模块: ai-tutoring ｜ 节: 语雀-流程控制会让agent混乱
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-流程控制会让agent混乱-Python-侧变成真正的-agent-封闭工具集.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-流程控制会让agent混乱-Python-侧变成真正的-agent-封闭工具集.md
 > 类别：架构设计
 
 ---

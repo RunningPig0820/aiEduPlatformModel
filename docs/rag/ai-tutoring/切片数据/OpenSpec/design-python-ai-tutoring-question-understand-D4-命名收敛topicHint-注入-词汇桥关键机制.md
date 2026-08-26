@@ -3,7 +3,7 @@
 > summary: 面试问答中AI辅导题理解的命名收敛机制
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D4. 命名收敛（topicHint 注入）—— 词汇桥关键机制
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-question-understand
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-question-understand-D4-命名收敛topicHint-注入-词汇桥关键机制.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-question-understand-D4-命名收敛topicHint-注入-词汇桥关键机制.md
 > 类别：架构设计
 
 ---

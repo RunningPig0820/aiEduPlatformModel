@@ -3,7 +3,7 @@
 > summary: 面试问答中工具阶段协议预留暂不实现真实工具
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 工具阶段(tool)协议预留,不实现真工具
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-4-工具阶段tool协议预留不实现真工具.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-2026-08-12-tutoring-agent-protocol-4-工具阶段tool协议预留不实现真工具.md
 > 类别：架构设计
 
 ---

@@ -3,7 +3,7 @@
 > summary: 面试问答：后端D4阶段新增questionKps字段的契约透传
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D4. questionKps
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-agent-workflow-backend-D4-questionKps.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-agent-workflow-backend-D4-questionKps.md
 > 类别：架构设计
 
 ---

@@ -3,7 +3,7 @@
 > summary: 引入agent模式需承担的三个代价
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 三个诚实的代价
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-使用agent还是流程-三个诚实的代价.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-使用agent还是流程-三个诚实的代价.md
 > 类别：架构设计
 
 ---

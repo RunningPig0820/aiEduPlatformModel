@@ -3,7 +3,7 @@
 > summary: 对比MongoDB、ES、HDFS三种存储方案的差异
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 1. 存储方案对比（MongoDB vs ES vs HDFS）
 > 模块: ai-tutoring ｜ 节: 语雀-AI答疑
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-AI答疑-1-存储方案对比MongoDB-vs-ES-vs-HDFS.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-AI答疑-1-存储方案对比MongoDB-vs-ES-vs-HDFS.md
 > 类别：数据存储
 
 ---

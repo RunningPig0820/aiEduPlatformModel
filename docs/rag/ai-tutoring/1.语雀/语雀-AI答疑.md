@@ -1,7 +1,7 @@
 # 语雀原文：AI答疑（模块主文档）
 
 > 来源: 语雀 业务实施→AI答疑 (doc 262968725, 3684字)
-> COS路径: ai-tutoring/rag-source/语雀/语雀-AI答疑.md
+> COS路径: rag-source/ai-tutoring/语雀/语雀-AI答疑.md
 > 定位: 模块级主文档——业务目标 / 关联模块 / 方案设计 / 方案对比 / 竞品分析
 
 ---

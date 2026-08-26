@@ -3,7 +3,7 @@
 > summary: 识别失败降级 PENDING，但数据不丢、作答信号保留、后续可批量补齐。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: 一道题没被识别出题型（PENDING）时会怎么处理？会不会丢数据？
 > 模块: ai-tutoring ｜ 节: 操作流程
-> COS路径: ai-tutoring/rag-slices/引导问题/引导问题-29-操作流程-一道题没被识别出题型PENDING时.md
+> COS路径: rag-slices/ai-tutoring/引导问题/引导问题-29-操作流程-一道题没被识别出题型PENDING时.md
 > 类别：操作流程
 
 ## 回答

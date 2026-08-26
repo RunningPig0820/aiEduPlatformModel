@@ -3,7 +3,7 @@
 > summary: 面试问语雀AI答疑的功能小点，答11项具体功能
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 一、功能小点清单（AI答疑模块）
 > 模块: ai-tutoring ｜ 节: 语雀-方案设计
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-方案设计-一功能小点清单AI答疑模块.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-方案设计-一功能小点清单AI答疑模块.md
 > 类别：操作流程
 
 ---

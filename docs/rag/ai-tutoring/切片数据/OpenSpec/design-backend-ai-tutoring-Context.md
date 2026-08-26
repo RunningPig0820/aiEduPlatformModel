@@ -3,7 +3,7 @@
 > summary: 面试问答：AI答疑采用agent+护栏模式，Java与Python服务分工明确
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-Context.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-ai-tutoring-Context.md
 > 类别：架构设计
 
 ---

@@ -3,7 +3,7 @@
 > summary: 解决从单次调用升级为LangGraph多步agent的演进问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 12. 演进:L0 单次调用 → 阶段 2 LangGraph
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-12-演进-L0-单次调用-阶段-2-LangGraph.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-12-演进-L0-单次调用-阶段-2-LangGraph.md
 > 类别：未来演进
 
 ---

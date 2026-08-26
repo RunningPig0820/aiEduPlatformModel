@@ -3,7 +3,7 @@
 > summary: 讲流程控制会让agent混乱，核心是状态≠内容的设计原则
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 语雀原文：流程控制会让agent 混乱
 > 模块: ai-tutoring ｜ 节: 语雀-流程控制会让agent混乱
-> COS路径: ai-tutoring/rag-slices/语雀/语雀-流程控制会让agent混乱-语雀原文流程控制会让agent-混乱.md
+> COS路径: rag-slices/ai-tutoring/语雀/语雀-流程控制会让agent混乱-语雀原文流程控制会让agent-混乱.md
 > 类别：架构设计
 
 ---

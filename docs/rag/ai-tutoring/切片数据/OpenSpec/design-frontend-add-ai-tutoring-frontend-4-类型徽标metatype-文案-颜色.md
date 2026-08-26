@@ -3,7 +3,7 @@
 > summary: 说明AI答疑中类型徽标的渲染规则与会话结束判定
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 类型徽标(meta.type → 文案 + 颜色)
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-4-类型徽标metatype-文案-颜色.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-frontend-add-ai-tutoring-frontend-4-类型徽标metatype-文案-颜色.md
 > 类别：业务流程
 
 ---

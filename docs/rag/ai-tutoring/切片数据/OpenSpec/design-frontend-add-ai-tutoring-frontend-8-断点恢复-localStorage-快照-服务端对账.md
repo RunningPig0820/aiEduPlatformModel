@@ -3,7 +3,7 @@
 > summary: 讲AI答疑的断点恢复及本地快照对账方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 8. 断点恢复:localStorage 快照 + 服务端对账
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-frontend-add-ai-tutoring-frontend-8-断点恢复-localStorage-快照-服务端对账.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-frontend-add-ai-tutoring-frontend-8-断点恢复-localStorage-快照-服务端对账.md
 > 类别：开发难点
 
 ---

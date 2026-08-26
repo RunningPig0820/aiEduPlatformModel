@@ -3,7 +3,7 @@
 > summary: 解决AI辅导后端换题回旧题的数据更新规则问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 6. 换题 / 回旧题（数据更新，非状态转换）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-6-换题-回旧题数据更新非状态转换.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-ai-tutoring-6-换题-回旧题数据更新非状态转换.md
 > 类别：业务流程
 
 ---

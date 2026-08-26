@@ -3,7 +3,7 @@
 > summary: 讲学科判定需独立端点，避免decide混用学科逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 1. 学科判定 = 独立 subject-classify 端点，在 decide 之前
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-subject-gate
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-tutoring-subject-gate-1-学科判定-独立-subject-classify-端点在-decide-之前.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-tutoring-subject-gate-1-学科判定-独立-subject-classify-端点在-decide-之前.md
 > 类别：操作流程
 
 ---

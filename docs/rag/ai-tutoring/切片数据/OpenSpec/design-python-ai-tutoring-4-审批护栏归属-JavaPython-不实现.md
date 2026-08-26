@@ -3,7 +3,7 @@
 > summary: 面试问答中明确AI辅导审批归属Java侧实现
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 审批(护栏)归属 Java,Python 不实现
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-4-审批护栏归属-JavaPython-不实现.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-4-审批护栏归属-JavaPython-不实现.md
 > 类别：开发难点
 
 ---

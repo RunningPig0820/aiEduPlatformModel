@@ -3,7 +3,7 @@
 > summary: 面试问AI答疑的状态数据归属，答明确各数据的存储归属
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 状态与数据
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-backend-ai-tutoring-状态与数据.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-backend-ai-tutoring-状态与数据.md
 > 类别：数据存储
 
 ---

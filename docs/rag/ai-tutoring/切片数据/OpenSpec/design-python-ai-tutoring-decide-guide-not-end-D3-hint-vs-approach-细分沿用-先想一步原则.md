@@ -3,7 +3,7 @@
 > summary: 明确Python decide中hint与approach的细分规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D3. hint vs approach 细分（沿用"先想一步原则"）
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
-> COS路径: ai-tutoring/rag-slices/OpenSpec/design-python-ai-tutoring-decide-guide-not-end-D3-hint-vs-approach-细分沿用-先想一步原则.md
+> COS路径: rag-slices/ai-tutoring/OpenSpec/design-python-ai-tutoring-decide-guide-not-end-D3-hint-vs-approach-细分沿用-先想一步原则.md
 > 类别：开发难点
 
 ---
