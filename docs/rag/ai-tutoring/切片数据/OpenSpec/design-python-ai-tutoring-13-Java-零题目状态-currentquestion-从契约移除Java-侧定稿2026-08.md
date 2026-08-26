@@ -3,6 +3,7 @@
 > summary: 解决Java侧移除题目状态后Python推断当前题目的问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 13. Java 零题目状态:current_question 从契约移除(Java 侧定稿,2026-08)
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：开发难点
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 解决AI辅导后端知识点key采用TextbookKP URI的问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 8. 知识点 key = TextbookKP URI
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：数据关联
 
 ---
 

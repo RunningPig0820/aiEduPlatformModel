@@ -3,6 +3,7 @@
 > summary: AI答疑decide输出的动作契约闭集规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 3. 动作契约(decide 输出,闭集)
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：架构设计
 
 ---
 

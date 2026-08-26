@@ -3,6 +3,7 @@
 > summary: 讲AI答疑知识点chips的条件渲染规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 9. 知识点 chips 条件渲染
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：操作流程
 
 ---
 

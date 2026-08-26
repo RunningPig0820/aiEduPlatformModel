@@ -3,6 +3,7 @@
 > summary: 明确 tutoring agent 对接 Java 的各类细节规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 7. Java 对接细节(2026-08 后端联调确认)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> 类别：架构设计
 
 ---
 

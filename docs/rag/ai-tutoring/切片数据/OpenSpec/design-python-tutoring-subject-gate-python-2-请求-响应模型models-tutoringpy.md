@@ -3,6 +3,7 @@
 > summary: 定义学科分类接口的请求响应模型与校验规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 2. 请求/响应模型(models/tutoring.py)
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
+> 类别：架构设计
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 面试问答：后端D5阶段契约文档更新与测试验证
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D5. 契约文档与测试
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
+> 类别：架构设计
 
 ---
 

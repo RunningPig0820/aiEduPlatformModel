@@ -3,6 +3,7 @@
 > summary: 讲AI答疑的安全过滤两层处理规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 安全过滤
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：开发难点
 
 ---
 

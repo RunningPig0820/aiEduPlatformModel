@@ -3,6 +3,7 @@
 > summary: 解决学科识别器的判定规则，避免数学题误拦问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 3. 学科无关提示词(后端 Open Question 由 Python 定稿)
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
+> 类别：操作流程
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 介绍AI答疑两调用架构及改造的三个现实原因
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> 类别：项目介绍
 
 ---
 

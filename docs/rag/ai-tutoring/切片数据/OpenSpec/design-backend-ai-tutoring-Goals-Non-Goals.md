@@ -3,6 +3,7 @@
 > summary: 答疑AI后端的目标、非目标及核心规则说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：项目介绍
 
 ---
 

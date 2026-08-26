@@ -3,6 +3,7 @@
 > summary: 面试问答：后端D3阶段解决masterySignals序列化的契约问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D3. masterySignals 序列化（隐性坑）：新建 SseMasterySignalDTO
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-workflow-backend
+> 类别：开发难点
 
 ---
 

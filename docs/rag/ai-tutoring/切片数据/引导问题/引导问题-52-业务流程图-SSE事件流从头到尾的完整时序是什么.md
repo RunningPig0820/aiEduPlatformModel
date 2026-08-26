@@ -3,7 +3,7 @@
 > summary: 完整时序——agent(guardrail,Java) → meta → agent(generate,Python) → thinking* → token* → agent(memory,Java) → done。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: SSE 事件流从头到尾的完整时序是什么？前端怎么消费这些事件？
 > 模块: ai-tutoring ｜ 节: 业务流程图
-> 类别：业务流程图
+> 类别：业务流程
 
 ## 回答
 

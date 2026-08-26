@@ -3,6 +3,7 @@
 > summary: 面试问答检索：AI答疑采用Workflow而非LLM Agent的设计结论
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 语雀原文：使用agent 还是流程
 > 模块: ai-tutoring ｜ 节: 语雀-使用agent还是流程
+> 类别：架构设计
 
 ---
 

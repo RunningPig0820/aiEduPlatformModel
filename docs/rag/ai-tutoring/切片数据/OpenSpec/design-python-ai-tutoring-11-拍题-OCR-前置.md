@@ -3,6 +3,7 @@
 > summary: 解决拍题OCR前置预处理及百度OCR接口适配问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 11. 拍题 OCR 前置
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：操作流程
 
 ---
 

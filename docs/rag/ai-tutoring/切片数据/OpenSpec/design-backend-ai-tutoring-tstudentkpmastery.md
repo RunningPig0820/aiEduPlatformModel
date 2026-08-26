@@ -3,6 +3,7 @@
 > summary: 学生知识点掌握表t_student_kp_mastery的字段设计说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: `t_student_kp_mastery`
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：数据存储
 
 ---
 

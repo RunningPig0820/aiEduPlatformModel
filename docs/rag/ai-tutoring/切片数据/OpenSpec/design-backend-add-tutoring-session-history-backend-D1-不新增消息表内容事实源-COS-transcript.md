@@ -3,6 +3,7 @@
 > summary: 答疑会话历史模块D1阶段的设计方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D1. 不新增消息表；内容事实源 = COS transcript
 > 模块: ai-tutoring ｜ 节: design-backend-add-tutoring-session-history-backend
+> 类别：数据存储
 
 ---
 

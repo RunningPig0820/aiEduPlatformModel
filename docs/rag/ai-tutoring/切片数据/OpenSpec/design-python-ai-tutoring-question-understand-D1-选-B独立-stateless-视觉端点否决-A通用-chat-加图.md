@@ -3,6 +3,7 @@
 > summary: 面试问答中AI辅导题理解选独立视觉端点的理由
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D1. 选 B（独立 stateless 视觉端点），否决 A（通用 chat 加图）
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-question-understand
+> 类别：架构设计
 
 ---
 

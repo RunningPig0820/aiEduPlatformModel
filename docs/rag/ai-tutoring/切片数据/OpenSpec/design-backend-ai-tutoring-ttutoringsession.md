@@ -3,6 +3,7 @@
 > summary: 答疑会话表t_tutoring_session的字段设计说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: `t_tutoring_session`
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：数据存储
 
 ---
 

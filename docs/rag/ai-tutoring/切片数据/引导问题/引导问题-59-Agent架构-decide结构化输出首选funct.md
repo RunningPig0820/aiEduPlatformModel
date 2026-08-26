@@ -3,7 +3,7 @@
 > summary: with_structured_output 的默认实现（Structured Outputs）不兼容 deepseek，bind_tools 走原生 tool-calling 更稳。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: decide 结构化输出首选 function calling，为什么不直接用 with_structured_output？
 > 模块: ai-tutoring ｜ 节: Agent架构
-> 类别：Agent架构
+> 类别：架构设计
 
 ## 回答
 

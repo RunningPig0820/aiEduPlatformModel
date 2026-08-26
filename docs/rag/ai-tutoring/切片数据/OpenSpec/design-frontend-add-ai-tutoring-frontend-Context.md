@@ -3,6 +3,7 @@
 > summary: 讲前端需消费后端AI答疑协议，补全学生端答疑页面
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：项目介绍
 
 ---
 

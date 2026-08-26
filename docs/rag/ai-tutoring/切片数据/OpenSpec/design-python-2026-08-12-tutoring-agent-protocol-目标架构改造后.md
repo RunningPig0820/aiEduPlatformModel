@@ -3,6 +3,7 @@
 > summary: 阐述AI答疑改造后的目标架构与各层职责
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 目标架构(改造后)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> 类别：架构设计
 
 ---
 

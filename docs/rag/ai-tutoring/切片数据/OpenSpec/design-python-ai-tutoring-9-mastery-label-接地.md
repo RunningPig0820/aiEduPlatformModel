@@ -3,6 +3,7 @@
 > summary: 解决AI答疑中知识点标签与URI解析命中率问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 9. mastery label 接地
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：数据关联
 
 ---
 

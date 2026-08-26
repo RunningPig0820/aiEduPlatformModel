@@ -3,6 +3,7 @@
 > summary: 答疑会话历史模块的目标与非目标范围
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-backend-add-tutoring-session-history-backend
+> 类别：项目介绍
 
 ---
 

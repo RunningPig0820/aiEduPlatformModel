@@ -3,6 +3,7 @@
 > summary: 解决Python答疑的无状态上下文压缩与截断问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 10. 无状态与上下文压缩
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：开发难点
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 介绍学科分类接口的后端契约与模型现状
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
+> 类别：架构设计
 
 ---
 

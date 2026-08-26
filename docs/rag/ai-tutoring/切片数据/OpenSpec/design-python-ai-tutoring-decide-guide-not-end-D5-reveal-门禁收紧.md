@@ -3,6 +3,7 @@
 > summary: 收紧AI辅导reveal答案的触发门禁，仅学生明确要答案才放行
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D5. `reveal` 门禁收紧
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：开发难点
 
 ---
 

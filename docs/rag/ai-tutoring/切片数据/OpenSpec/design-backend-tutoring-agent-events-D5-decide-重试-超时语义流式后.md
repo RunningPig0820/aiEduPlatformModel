@@ -3,6 +3,7 @@
 > summary: 解决重试超时语义定义问题，明确触发条件与超时规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D5. decide 重试/超时语义（流式后）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> 类别：开发难点
 
 ---
 

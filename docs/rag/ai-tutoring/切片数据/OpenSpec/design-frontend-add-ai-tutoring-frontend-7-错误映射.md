@@ -3,6 +3,7 @@
 > summary: 讲AI答疑各错误码对应的前端处理方式
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 7. 错误映射
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：开发难点
 
 ---
 

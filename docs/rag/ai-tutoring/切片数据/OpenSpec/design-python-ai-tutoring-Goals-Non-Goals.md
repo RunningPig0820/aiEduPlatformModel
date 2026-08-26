@@ -3,6 +3,7 @@
 > summary: Python AI答疑agent的目标与非目标范围定义
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：项目介绍
 
 ---
 

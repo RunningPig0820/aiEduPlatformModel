@@ -3,6 +3,7 @@
 > summary: 说明Python辅导的多模态支持及现有代码事实情况
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-question-understand
+> 类别：项目介绍
 
 ---
 

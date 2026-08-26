@@ -3,6 +3,7 @@
 > summary: 解决Python decide误将答错判为结束会话的问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：开发难点
 
 ---
 

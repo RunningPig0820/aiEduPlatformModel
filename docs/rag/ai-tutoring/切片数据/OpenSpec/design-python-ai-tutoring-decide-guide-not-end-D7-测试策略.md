@@ -3,6 +3,7 @@
 > summary: 制定AI辅导规则的测试策略，含语义断言与real用例
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D7. 测试策略
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：开发难点
 
 ---
 

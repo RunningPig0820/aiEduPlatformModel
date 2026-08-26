@@ -3,6 +3,7 @@
 > summary: 面试问答中Java需发guardrail和memory事件的要求
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 3. Java 发把关/记忆事件(展示"守门")
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> 类别：架构设计
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 解决AI辅导后端会话状态与计数器的设计问题
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 7. 会话状态：生命周期 + 计数器（不随内容增长）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：业务流程
 
 ---
 

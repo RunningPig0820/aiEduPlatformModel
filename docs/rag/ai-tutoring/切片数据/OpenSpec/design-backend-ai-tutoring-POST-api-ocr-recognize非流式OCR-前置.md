@@ -3,6 +3,7 @@
 > summary: 讲OCR识别接口的请求响应与编排逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: `POST /api/ocr/recognize`（非流式，OCR 前置）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：操作流程
 
 ---
 

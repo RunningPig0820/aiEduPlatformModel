@@ -3,6 +3,7 @@
 > summary: 解决SSE流异常关闭导致前端永久卡SENDING问题
 > 权威度: 0.8 ｜ 来源: 坑档案 ｜ 锚点: F1. 永久卡 SENDING（SSE 看门狗）
 > 模块: ai-tutoring ｜ 节: 坑档案
+> 类别：开发难点
 
 ---
 

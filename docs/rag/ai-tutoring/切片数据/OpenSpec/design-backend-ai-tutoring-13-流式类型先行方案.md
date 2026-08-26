@@ -3,6 +3,7 @@
 > summary: AI辅导采用类型先行的流式交互方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 13. 流式：类型先行（方案 ②）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：架构设计
 
 ---
 

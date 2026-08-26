@@ -3,6 +3,7 @@
 > summary: 说明学科分类模块与decide模块的边界，不侵入调用链
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 5. 与 decide 的边界(不复用、不侵入)
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
+> 类别：架构设计
 
 ---
 

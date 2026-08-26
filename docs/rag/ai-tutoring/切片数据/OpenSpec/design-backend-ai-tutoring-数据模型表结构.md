@@ -3,6 +3,7 @@
 > summary: 面试问AI答疑的数据模型，答属学习域用ai_edu_learning库
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 数据模型（表结构）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：数据存储
 
 ---
 

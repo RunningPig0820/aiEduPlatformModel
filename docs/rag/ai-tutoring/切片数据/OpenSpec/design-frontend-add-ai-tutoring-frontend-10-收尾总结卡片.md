@@ -3,6 +3,7 @@
 > summary: 讲AI辅导收尾总结卡片的渲染与按钮功能
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 10. 收尾总结卡片
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：业务流程
 
 ---
 

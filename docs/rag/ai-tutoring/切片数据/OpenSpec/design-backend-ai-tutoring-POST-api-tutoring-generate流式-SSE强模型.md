@@ -3,6 +3,7 @@
 > summary: 讲AI答疑生成接口的请求响应规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: `POST /api/tutoring/generate`（流式 SSE，强模型）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：架构设计
 
 ---
 

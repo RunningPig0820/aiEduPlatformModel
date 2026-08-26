@@ -3,6 +3,7 @@
 > summary: 说明学科分类端点的同构实现结构
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 1. 端点结构 = question_understand 同构(stateless,绝不抛异常)
 > 模块: ai-tutoring ｜ 节: design-python-tutoring-subject-gate-python
+> 类别：架构设计
 
 ---
 

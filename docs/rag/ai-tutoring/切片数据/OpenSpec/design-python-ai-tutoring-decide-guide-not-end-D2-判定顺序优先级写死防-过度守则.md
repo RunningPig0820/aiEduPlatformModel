@@ -3,6 +3,7 @@
 > summary: 确定Python decide的判定优先级顺序
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D2. 判定顺序（优先级写死，防"过度守则"）
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：开发难点
 
 ---
 

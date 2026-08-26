@@ -3,6 +3,7 @@
 > summary: 确定guardrail事件的注入时机与逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D2. guardrail 事件注入点：护栏通过后、generate 前
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> 类别：架构设计
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 面试问答中明确emotion定义归Python侧负责
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 8. emotion 归 Python 定义
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：数据关联
 
 ---
 

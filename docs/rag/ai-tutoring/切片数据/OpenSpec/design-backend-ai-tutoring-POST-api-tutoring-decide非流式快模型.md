@@ -3,6 +3,7 @@
 > summary: POST /api/tutoring/decide接口的请求响应与判定规则说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: `POST /api/tutoring/decide`（非流式，快模型）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：架构设计
 
 ---
 

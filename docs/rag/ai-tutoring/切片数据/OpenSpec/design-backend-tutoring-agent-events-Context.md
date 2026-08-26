@@ -3,6 +3,7 @@
 > summary: 讲答疑编排的接口变更与对接要求
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> 类别：架构设计
 
 ---
 

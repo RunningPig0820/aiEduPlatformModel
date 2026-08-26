@@ -3,6 +3,7 @@
 > summary: AI辅导采用Redis+MySQL+COS三层存储方案
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 11. 存储三层：Redis（活跃）+ MySQL（业务）+ OSS/COS（归档）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：数据存储
 
 ---
 

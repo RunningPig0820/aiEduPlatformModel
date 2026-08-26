@@ -3,6 +3,7 @@
 > summary: 答疑AI后端decide输出的动作契约规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 3. 动作契约（decide 输出）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：架构设计
 
 ---
 

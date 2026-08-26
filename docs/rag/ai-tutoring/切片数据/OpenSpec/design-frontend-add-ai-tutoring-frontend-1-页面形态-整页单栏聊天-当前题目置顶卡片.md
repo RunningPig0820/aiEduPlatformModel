@@ -3,6 +3,7 @@
 > summary: 说明AI答疑前端页面的整页单栏聊天布局形态
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 1. 页面形态:整页单栏聊天 + 当前题目置顶卡片
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：操作流程
 
 ---
 

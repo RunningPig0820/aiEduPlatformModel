@@ -3,6 +3,7 @@
 > summary: 面试问答中AI辅导题理解的端点契约定义
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D2. 端点契约
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-question-understand
+> 类别：架构设计
 
 ---
 

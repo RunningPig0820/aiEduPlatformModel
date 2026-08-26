@@ -3,6 +3,7 @@
 > summary: 面试问AI答疑MVP的LangGraph方案，答用L0单次调用
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 14. LangGraph 程度：MVP = L0 单次调用
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：未来演进
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 说明decide消费SSE的实现方案及演进情况
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D1. decide 消费：`bodyToFlux(SSE)` + 过滤 meta 事件（blockLast 同步取）
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> 类别：架构设计
 
 ---
 

@@ -3,7 +3,7 @@
 > summary: 动作闭集六值——hint / approach / reveal / concept / switch / end，每个动作都有严格的语义边界。
 > 权威度: 1.0 ｜ 来源: 引导问题 ｜ 锚点: decide 决策器的动作闭集是哪六个？提示词里怎么约束模型不乱输出？
 > 模块: ai-tutoring ｜ 节: Agent架构
-> 类别：Agent架构
+> 类别：架构设计
 
 ## 回答
 

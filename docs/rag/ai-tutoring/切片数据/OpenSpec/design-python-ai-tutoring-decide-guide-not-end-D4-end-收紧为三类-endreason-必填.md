@@ -3,6 +3,7 @@
 > summary: 明确AI辅导end的三类触发条件及必填reason规则
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D4. `end` 收紧为三类 + `end_reason` 必填
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：开发难点
 
 ---
 

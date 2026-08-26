@@ -3,6 +3,7 @@
 > summary: AI辅导通过Java网关代理实现认证与会话桥接
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 12. 认证/会话桥接：Java 网关代理（方案 A）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：架构设计
 
 ---
 

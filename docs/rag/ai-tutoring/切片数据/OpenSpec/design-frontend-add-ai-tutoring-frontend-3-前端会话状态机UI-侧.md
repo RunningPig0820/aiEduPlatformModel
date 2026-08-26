@@ -3,6 +3,7 @@
 > summary: 讲解AI答疑前端的会话状态机设计逻辑
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 3. 前端会话状态机(UI 侧)
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：业务流程
 
 ---
 

@@ -3,6 +3,7 @@
 > summary: 答疑Python端点契约的实现与调用规则说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Python 端点契约（L0 单次调用）
 > 模块: ai-tutoring ｜ 节: design-backend-ai-tutoring
+> 类别：架构设计
 
 ---
 

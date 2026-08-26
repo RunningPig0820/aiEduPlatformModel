@@ -3,6 +3,7 @@
 > summary: 说明AI答疑中类型徽标的渲染规则与会话结束判定
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 4. 类型徽标(meta.type → 文案 + 颜色)
 > 模块: ai-tutoring ｜ 节: design-frontend-add-ai-tutoring-frontend
+> 类别：业务流程
 
 ---
 

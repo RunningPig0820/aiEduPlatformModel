@@ -3,6 +3,7 @@
 > summary: 面试问答中agent事件协议的标准格式与阶段表定义
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 2. agent 事件协议(标准格式 + 标准阶段表)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> 类别：架构设计
 
 ---
 

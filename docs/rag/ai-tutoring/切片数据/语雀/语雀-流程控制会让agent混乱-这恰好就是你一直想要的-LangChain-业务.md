@@ -3,6 +3,7 @@
 > summary: LangGraph agent结合Java护栏的业务架构方案
 > 权威度: 0.7 ｜ 来源: 语雀 ｜ 锚点: 这恰好就是你一直想要的 LangChain 业务
 > 模块: ai-tutoring ｜ 节: 语雀-流程控制会让agent混乱
+> 类别：架构设计
 
 ---
 

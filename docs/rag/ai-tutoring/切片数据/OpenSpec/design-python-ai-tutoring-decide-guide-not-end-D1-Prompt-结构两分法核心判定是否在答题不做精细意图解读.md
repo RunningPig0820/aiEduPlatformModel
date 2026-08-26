@@ -3,6 +3,7 @@
 > summary: 设计Python decide的两分法核心判定prompt结构
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D1. Prompt 结构：两分法核心判定（是否在答题），不做精细意图解读
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：开发难点
 
 ---
 

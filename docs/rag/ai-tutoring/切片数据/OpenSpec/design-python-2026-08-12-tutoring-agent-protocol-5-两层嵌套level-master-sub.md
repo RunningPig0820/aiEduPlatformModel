@@ -3,6 +3,7 @@
 > summary: 面试问答中agent协议支持master/sub两层嵌套结构
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: 5. 两层嵌套(level: master/sub)
 > 模块: ai-tutoring ｜ 节: design-python-2026-08-12-tutoring-agent-protocol
+> 类别：架构设计
 
 ---
 

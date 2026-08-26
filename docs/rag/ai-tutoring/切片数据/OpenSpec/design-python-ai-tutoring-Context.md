@@ -3,6 +3,7 @@
 > summary: Python AI答疑agent的上下文与现有地基说明
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Context
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring
+> 类别：项目介绍
 
 ---
 

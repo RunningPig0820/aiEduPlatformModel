@@ -3,6 +3,7 @@
 > summary: 明确memory事件的注入时机与作用
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: D3. memory 事件注入点：落库完成后、流尾收尾信号
 > 模块: ai-tutoring ｜ 节: design-backend-tutoring-agent-events
+> 类别：架构设计
 
 ---
 

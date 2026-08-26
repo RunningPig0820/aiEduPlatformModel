@@ -3,6 +3,7 @@
 > summary: 明确Python decide模块优化的目标与非目标
 > 权威度: 0.7 ｜ 来源: OpenSpec ｜ 锚点: Goals / Non-Goals
 > 模块: ai-tutoring ｜ 节: design-python-ai-tutoring-decide-guide-not-end
+> 类别：项目介绍
 
 ---
 
