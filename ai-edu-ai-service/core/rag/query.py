@@ -153,7 +153,9 @@ _INTENT_SYSTEM = """你是「AI答疑」RAG助手的意图识别器。**只输�
 - knowledge-graph：知识图谱相关
 - question-analysis：题型分析、题目解析业务
 
-> 优先级规则：同一个问题同时涉及业务产品与底层RAG实现，看用户提问重心：问业务效果/业务流程选 ai-tutoring；问工程实现、底层技术选 rag-system。
+> 优先级规则：只有问题在**没有指代当前功能**、且明确问 RAG 系统本身的整体实现（如"RAG 系统整体架构""多路召回怎么实现"）才选 rag-system；问"这个功能的底层/实现/架构" → 选 current_project（current_project 语料有该功能的架构切片）。
+
+> 指代词规则：问题中的"这个功能/它/本功能/当前功能/这个项目/这个系统"等指代词，指代的就是当前上下文模块（current_project）。除非问题明确点名另一个模块名称（如"知识图谱的…""题型分析…""RAG 系统…"），否则这些指代一律解析为 current_project，不得因"底层/实现/架构/怎么做到"等关键词跳走。
 
 2. category（文档页路由，单选，页面跳转使用）
 枚举：项目介绍 | 操作 | 难点 | 数据关联 | 最危险 | 问候 | 其他
@@ -232,8 +234,10 @@ def _llm_intent(question: str, history: list, current_project: str = "ai-tutorin
             f"Q{h}: {h.get('question', '')} (anchor={h.get('anchor', '')})"
             for h in history
         ) or "（无）"
-        ctx_line = (f"当前上下文模块：{current_project}（除非问题明确属于其他模块, "
-                    f"否则 anchor 保持该模块）")
+        ctx_line = (f"当前上下文模块：{current_project}。"
+                    f"【关键】问题里出现'这个功能/它/本功能/当前功能'等指代时，指的就是 {current_project}，"
+                    f"不要因'底层/实现/架构/怎么做到'等词跳到 rag-system。"
+                    f"只有当问题无指代、且明确问 RAG 系统整体实现（点名 rag 系统/整体架构/召回算法）才选 rag-system。")
         text = llm.invoke([
             SystemMessage(content=_INTENT_SYSTEM),
             HumanMessage(content=f"学生问题：{question}\n{ctx_line}\n最近会话：\n{hist_lines}\n\n请输出 JSON。"),
@@ -261,6 +265,24 @@ def _extract_json(text: str) -> dict | None:
         return None
 
 
+def _deictic_anchor(question: str, anchor: str, current_project: str) -> str:
+    """指代词确定性兜底(后端改法4, 2026-08-26): 问题含"这个功能/这个/它/本功能/当前功能/本项目"
+    指代当前模块, 且未点名其他模块名, 强制 anchor=current_project——LLM 因"底层/实现/架构"
+    跳走 rag-system 时也能兜住(如"这个功能的底层是怎么实现的" current_project=ai-tutoring)。
+
+    current_project 非闭集 → 不动; anchor 已是 current_project → 不动;
+    问题点名其他模块(RAG 系统/知识图谱/题型/多路召回等) → 不动(硬路由保留)。
+    """
+    if current_project not in MODULE_ANCHORS or anchor == current_project:
+        return anchor
+    deictic = ("这个功能", "这个系统", "这个项目", "本功能", "当前功能", "这个", "它")
+    named_other = ("知识图谱", "题型", "RAG 系统", "RAG系统", "rag 系统", "rag系统",
+                   "RAG 项目", "多路召回", "召回算法", "向量库", "RRF", "评测")
+    if any(d in question for d in deictic) and not any(n in question for n in named_other):
+        return current_project
+    return anchor
+
+
 def intent(question: str, history: list | None = None,
            current_project: str = "ai-tutoring") -> dict:
     """问题 + 会话 → 完整意图 {anchor, category, switch_detected, ambiguous, candidates,
@@ -285,6 +307,10 @@ def intent(question: str, history: list | None = None,
         anchor = _fallback_module(question) or current_project  # 模块兜底, 缺省当前项目
         category = ""
         locked = sorted(_fallback_anchor(question))
+
+    # 改法4(后端建议, 2026-08-26): 指代词确定性兜底——LLM 因"底层/实现"把"这个功能"判走
+    # rag-system 时, 强制 anchor=current_project(即使 LLM 不听话也能兜住)
+    anchor = _deictic_anchor(question, anchor, current_project)
 
     # 1.13.2 定稿: 切片池类别过滤只取 LLM 9 类 categories(空数组=不筛);
     # LLM 未给 categories 字段/给空 → 全局查询不筛(去掉 6→9 映射兜底)。
@@ -650,7 +676,10 @@ _GEN_SYSTEM = """你是「AI答疑」项目的介绍人，正在接受面试官�
 1. 只依据语料内容回答，语料没覆盖到的信息绝对不能编造、不要脑补扩展。
 2. 禁止输出你的思考过程、推理草稿，只输出最终回答文本。
 3. 输出格式：先简短抛出核心结论，再分层展开；适合口述面试，逻辑清晰，便于面试官追问。
-4. 文档引用统一放到回答的最后一行集中展示，不在正文段落中间插入来源标记。格式示例：【参考来源：来源A/文件A/锚点A；来源B/文件B/锚点B】
+4. 文档引用统一放到回答的最后一段集中展示，不在正文段落中间插入来源标记；**每个来源单独占一行**。格式示例：
+【参考来源：
+来源A/文件A/锚点A
+来源B/文件B/锚点B】
 5. 语料中出现的 ⚠️ ✅ 🚫 代码对账标记，**不作为主体回答内容**；仅当面试官明确问到落地现状、代码实现差异时，才引用对账信息。
 
 ## 问题分类输出规则（非常重要）

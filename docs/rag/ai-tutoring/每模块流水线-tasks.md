@@ -597,7 +597,7 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 **决策（3 条，对齐后端 M6 方案）**：
 1. 底座池 = 75 题从 `引导问题.md` 抄录进 `core/rag/guide_pool.py`（`GUIDE_POOL[模块][方向]`），每题落一个主方向（intro/operation/data_relation/difficulty），rag 组是 RAG 桥接子集（可重复，scope 去重）；`FALLBACK_MODULE=ai-tutoring`（防御，正常前端必传 current_project）
-2. `gen_suggestions` 结束建议：system prompt 尾部注入「可提问范围」（逐条列池内问题，硬约束不超池）；兜底从写死 3 条静态池 → **池内随机 2 条必含 ≥1 条 rag**（删 `STATIC_SUGGESTIONS`）
+2. `gen_suggestions` 结束建议：**直接返回池内原题 2~3 条（必含 ≥1 条 rag），不做 LLM 改编**（2026-08-26 用户实测: LLM 改编"换提问方法"偏离池内范围——如把"三张表关系"编成"题目数据怎么和向量索引关联"，新问题没对应切片 → 匹配不到答案；池内原题 100% 可答，双向量 -q 问题路 sim~0.99 直接命中。删 `_SUGGEST_SYSTEM`/`_suggest_scope`，0 token）
 3. `guide(current_project=None)` 开始引导：从**入口池**取 3 条入门级问题（必含 ≥1 条 rag 方向入口题 + 其余随机）；direction 值随池方向：`intro/operation/data_relation/difficulty/rag`（**替换旧 architecture/data_flow/evaluation**，Java/前端如按旧值硬编码需适配）
 
 **入口池（entry，2026-08-26 用户反馈补充）**：入口引导要简单——用户还不知道怎么用，先给"能不能介绍一下 / X 是干什么的"级别，太复杂有割裂距离。入口引导**通用模板 + 模块中文名动态生成**（`_ENTRY_TEMPLATES` 5 条含 1 条 rag 方向入口题，`{模块}` 替换为当前模块中文名，**不写死"AI答疑"**——多模块下写死模块名会驴唇不对马嘴），每模块可加 `entry` 组覆盖定制。`guide()` 和问候引导（`_spread_pool_suggestions`）**只从 entry 取**；难题留在主池，由结束建议（用户问过一轮有上下文）给出。entry 不进 `scope_questions`（主池 75 题不受影响），`entry_for(module)` 未配 entry → 模板生成。
@@ -648,6 +648,18 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 - [x] 重入 slice 池 588 条；实测两条问题路 sim 0.99（对比混合 0.85）、编排 #1
 
 **SOP**：凡"问题+答案"结构切片（引导问题类）适用双向量；纯文档类保持单向量（full 池）。新模块语料就绪时，引导问题 summary=标题（问题）→ 双向量自动生效。`-c`/`-q` 两路权重/融合常数届时按评测调。
+
+### 1.13.7 intent 指代词兜底（后端建议 4 改法，2026-08-26）
+
+> **动机**："这个功能的底层是怎么实现的？" 被 intent 判 **rag-system**——"底层/实现"命中 rag-system 关键字，忽略"这个功能"指代当前模块 → 从 rag-system 池召回（空）拒答。引导入口已取消该泛题，但用户真实输入仍会踩中，根因在 intent 不在引导池。
+
+**修复（后端建议 4 改法全做）**：
+1. `_INTENT_SYSTEM` 加**指代词规则**："这个功能/它/本功能/当前功能/这个项目"指代 current_project，除非点名其他模块名，不得因"底层/实现/架构"跳走
+2. `_INTENT_SYSTEM` **优先级规则改"无指代"前提**：只有无指代且明确问 RAG 系统整体实现才选 rag-system；问"这个功能的底层/架构" → current_project
+3. `_llm_intent` ctx_line 强约束：指代词→current_project 显式写明
+4. `_deictic_anchor`（query.py）**确定性兜底**：intent() 中若 LLM anchor≠current_project 且问题含指代词、未点名其他模块 → 强制 anchor=current_project（LLM 不听话也能兜住）
+
+**验证用例**：`这个功能的底层是怎么实现的`(cp=ai-tutoring) → **ai-tutoring**；`RAG 系统整体架构是什么`(cp=ai-tutoring) → **rag-system**（硬路由保留）；`知识图谱的底层` → knowledge-graph（点名其他模块不兜底）。
 
 ---
 

@@ -328,23 +328,20 @@ class TestAssembleUsage:
 
 class TestGuide:
     def test_guide_entry_pool_simple(self):
-        """M6 ③+用户反馈: 入口引导从 entry 池取 3 条入门级问题, 必含 ≥1 条 rag 方向"""
+        """M6 ③+用户反馈: 入口引导从 entry 池取 3 条入门级可答题(取消 rag 泛题"底层怎么实现")"""
         entry_qs = {q for _, q in guide_pool.entry_for("ai-tutoring")}
-        entry_dirs = {d for d, _ in guide_pool.entry_for("ai-tutoring")}
         sugs = assistant.guide("ai-tutoring")["suggestions"]
         assert len(sugs) == 3
         assert all("title" in s and "direction" in s for s in sugs)
         assert all(s["title"] in entry_qs for s in sugs)                       # 只出入口简单题
-        assert any(s["direction"] == "rag" for s in sugs)                      # ≥1 rag 方向
-        assert all(s["direction"] in entry_dirs for s in sugs)
+        assert not any("底层" in s["title"] for s in sugs)                     # 泛题已取消
 
     def test_guide_fallback_module(self):
-        """未知/缺省 current_project → FALLBACK(ai-tutoring), 仍 3 条含 rag"""
+        """未知/缺省 current_project → FALLBACK(ai-tutoring), 仍 3 条入口题"""
         entry_qs = {q for _, q in guide_pool.entry_for("ai-tutoring")}
         for cp in (None, "unknown-module"):
             sugs = assistant.guide(cp)["suggestions"]
             assert len(sugs) == 3
-            assert any(s["direction"] == "rag" for s in sugs)
             assert all(s["title"] in entry_qs for s in sugs)                   # 入口题不超池
 
 
@@ -506,22 +503,20 @@ class TestGuideAPI:
         assert all("title" in s and "direction" in s for s in sugs)
 
     def test_guide_current_project_passthrough(self, client):
-        """M6 ③: ?current_project= 透传 → 模块池 3 条, 含 rag 方向"""
+        """M6 ③: ?current_project= 透传 → 模块池 3 条入口题"""
         r = client.get("/api/rag/assistant/guide?current_project=ai-tutoring", headers=AUTH)
         assert r.status_code == 200
         sugs = r.json()["suggestions"]
         assert len(sugs) == 3
-        assert any(s["direction"] == "rag" for s in sugs)
-        assert all(s["direction"] in ("intro", "operation", "data_relation", "difficulty", "rag")
-                   for s in sugs)
+        assert all(s["direction"] in ("intro", "operation") for s in sugs)
 
     def test_guide_unknown_project_fallback(self, client):
-        """未知 current_project → FALLBACK(ai-tutoring), 仍 3 条含 rag"""
+        """未知 current_project → FALLBACK(ai-tutoring), 仍 3 条入口题"""
         r = client.get("/api/rag/assistant/guide?current_project=xxx", headers=AUTH)
         assert r.status_code == 200
         sugs = r.json()["suggestions"]
         assert len(sugs) == 3
-        assert any(s["direction"] == "rag" for s in sugs)
+        assert all(s["direction"] in ("intro", "operation") for s in sugs)
 
     def test_guide_missing_token_403(self, client):
         assert client.get("/api/rag/assistant/guide").status_code == 403

@@ -291,6 +291,37 @@ class TestMultiModule:
         assert any("rag-slice/f2" in k for k in bm_keys) or any("rag-full/f3" in k for k in bm_keys)
 
 
+class TestDeicticAnchor:
+    """改法4(后端建议, 2026-08-26): 指代词确定性兜底——"这个功能"指代当前模块,
+    不被"底层/实现"拉走 rag-system"""
+
+    def test_force_current_project(self):
+        """指代当前功能 + 未点名其他模块 → 强制 current_project"""
+        assert rag_core._deictic_anchor("这个功能的底层是怎么实现的", "rag-system", "ai-tutoring") == "ai-tutoring"
+        assert rag_core._deictic_anchor("这个系统是怎么做的", "rag-system", "ai-tutoring") == "ai-tutoring"
+        assert rag_core._deictic_anchor("本功能怎么实现", "rag-system", "ai-tutoring") == "ai-tutoring"
+
+    def test_hard_route_kept(self):
+        """点名 RAG 系统/其他模块 → 不兜底(硬路由保留)"""
+        assert rag_core._deictic_anchor("RAG 系统整体架构是什么", "rag-system", "ai-tutoring") == "rag-system"
+        assert rag_core._deictic_anchor("知识图谱的底层怎么实现", "knowledge-graph", "ai-tutoring") == "knowledge-graph"
+        assert rag_core._deictic_anchor("多路召回怎么实现", "rag-system", "ai-tutoring") == "rag-system"
+
+    def test_already_current_or_invalid(self):
+        """已是 current_project / 非闭集 → 不动"""
+        assert rag_core._deictic_anchor("这个功能怎么用", "ai-tutoring", "ai-tutoring") == "ai-tutoring"
+        assert rag_core._deictic_anchor("这个功能的底层", "rag-system", "xxx") == "rag-system"
+
+    def test_intent_integration_fallback(self, monkeypatch):
+        """intent() 集成: LLM 判 rag-system, 指代兜底拉回 ai-tutoring"""
+        monkeypatch.setattr(rag_core, "_llm_intent",
+                            lambda q, h, cp="ai-tutoring": {
+                                "anchor": "rag-system", "category": "难点", "categories": ["开发难点"],
+                                "switch_detected": False, "ambiguous": False, "candidates": []})
+        it = rag_core.intent("这个功能的底层是怎么实现的", current_project="ai-tutoring")
+        assert it["anchor"] == "ai-tutoring"
+
+
 class TestRagSource:
     """U4: /api/rag/source 读 COS 普通桶("查看原文")"""
 

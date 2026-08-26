@@ -321,70 +321,38 @@ def resolve_clarify(intent_result: dict, history: list | None,
             "candidates": candidates, "default": default}
 
 
-# ============ A8 suggestions 引导（M6: 底座池约束, 2026-08-26） ============
+# ============ A8 suggestions 引导（底座池原题, 2026-08-26） ============
 
-# 底座池 = core/rag/guide_pool.py（问题源 引导问题.md）; 兜底改池内抽样, 删写死静态池。
-_SUGGEST_SYSTEM = """你是「AI答疑」RAG 助手的引导建议生成器。根据上一轮回答，给面试官 1~3 条"接下来可以问什么"的建议。
-
-规则：
-1. 必须是疑问句式，可直接作为下一个问题（例如"想了解 X 吗？"）
-2. 1~3 条，每条一行，不要编号
-3. **必须包含至少 1 条 RAG 方向**（RAG 是底层引擎，任何模块回答后都应把话题带回 RAG：多路召回/RRF 融合/向量索引/评测/防作弊护栏）
-4. 其余可围绕回答内容追问（项目介绍/操作/数据关联/难点）
-5. 只能生成与下方「可提问范围」方向类似的问题，不得自由发挥、不得超出范围
-
-只输出建议文本，每行一条。"""
+# 底座池 = core/rag/guide_pool.py（问题源 引导问题.md）。
+# 2026-08-26 用户实测反馈: LLM 改编"换提问方法"会偏离池内范围——如把池内
+# "题目记录/错误事件/掌握度三张表关系"编成"题目数据怎么和向量索引关联"(引入池外概念
+# "向量索引"), 新问题没对应切片 → 学生点了匹配不到答案(问题6 翻版)。
+# 结论: 结束引导**直接返回池内原题**(0 token, 100% 可答), 与 guide 入口一致;
+# 双向量 -q 问题路对池内原题命中 sim~0.99。
 
 
-def _suggest_scope(module: str) -> str:
-    """模块池全部问题 → 提示词「可提问范围」约束（逐条列, 硬约束不超池）。"""
-    qs = guide_pool.scope_questions(module)
-    return ("可提问范围(只能生成与以下问题方向类似的问题, 不得自由发挥、不得超出):\n"
-            + "\n".join(f"- {q}" for q in qs))
-
-
-def _pool_fallback(module: str) -> list:
-    """池内兜底: 随机 2 条, 必含 ≥1 条 rag 组（替换写死静态池, M6 ②）。"""
+def _pool_suggestions(module: str, n: int = 3) -> list:
+    """池内原题抽样: 必含 ≥1 条 rag 组 + 其余从主方向随机, 去重返回 n 条(≤3)。"""
     pool = guide_pool.pool_for(module)
     rag = pool.get("rag", [])
     others = [q for d in guide_pool.DIRECTIONS for q in pool.get(d, [])]
     picks = []
     if rag:
         picks.append(random.choice(rag))
-    if others:
-        picks.append(random.choice(others))
-    return picks[:2]
+    avail = [q for q in others if q not in picks]
+    picks.extend(random.sample(avail, k=min(n - len(picks), len(avail))))
+    return picks[:n]
 
 
 def gen_suggestions(answer: str, anchor: str = "", llm=None, module: str | None = None) -> list:
-    """结束引导(M6): LLM 生成 1~3 条建议, 必含 ≥1 条 RAG 方向(C5/D11), 约束在池内;
-    失败/形状异常 → 池内随机 2 条兜底。llm 注入用(测试); 默认 doubao 0.2 温度短调用。
+    """结束引导(2026-08-26): 直接返回池内原题 2~3 条(必含 ≥1 条 rag), 不做 LLM 改编。
+
+    池内原题保证 100% 可答(每道题在切片池有对应块, 双向量 -q 问题路可直接命中)。
+    不偏离范围、只是换提问方法由"池内抽样 + 不 LLM 生成"保证。llm 参数保留签名兼容(不再调用)。
     """
     module = module or (anchor if anchor in rag_core.MODULE_ANCHORS
                         else guide_pool.FALLBACK_MODULE)
-    try:
-        from langchain_core.messages import HumanMessage, SystemMessage
-        from core.gateway.factory import LLMFactory
-        if llm is None:
-            llm = LLMFactory.create(
-                "doubao", settings.TUTORING_GENERATE_MODEL, temperature=0.2,
-                extra_body={"thinking": {"type": "disabled"}},
-                request_timeout=20, max_retries=0,
-            )
-        system = _SUGGEST_SYSTEM + "\n\n" + _suggest_scope(module)
-        text = llm.invoke([
-            SystemMessage(content=system),
-            HumanMessage(content=f"上一轮回答（节选）：{answer[:400]}\n\n当前模块：{module}\n\n请生成建议："),
-        ]).content or ""
-        lines = [ln.strip().lstrip("1234567890.、）) ") for ln in text.strip().splitlines()
-                 if ln.strip()]
-        if 1 <= len(lines) <= 3:
-            return lines
-        # LLM 输出形状异常(0 条或 >3 条) → 池内兜底
-        return _pool_fallback(module)
-    except Exception as e:
-        logger.warning("RAG suggestions LLM 失败, 池内兜底: %s", e)
-        return _pool_fallback(module)
+    return _pool_suggestions(module)
 
 
 # ============ M6 ④ 问候识别(6.6): 固定欢迎 + 池内引导, 0 token ============
@@ -561,20 +529,14 @@ def guide(current_project: str | None = None) -> dict:
     """GET /api/rag/assistant/guide: 开始引导(M6 入口池, 非 SSE, 0 token)。
 
     current_project(可空, 后端 ?current_project= 透传): 选模块池; 未知/缺省 → FALLBACK。
-    从入口池取 3 条入门级问题(必含 ≥1 条 rag 方向入口题 + 其余随机), 不取难题。
+    从入口池随机取 3 条入门级问题(入口只保留可答的具体功能题, 不取难题/泛题)。
     返回 shape 不变: {"suggestions": [{"title", "direction"}]}。
     """
     module = current_project if current_project in rag_core.MODULE_ANCHORS \
         else guide_pool.FALLBACK_MODULE
     entry = guide_pool.entry_for(module)
-    rag_entries = [(d, q) for d, q in entry if d == "rag"]
-    others = [(d, q) for d, q in entry if d != "rag"]
-    picked = []
-    if rag_entries:
-        picked.append(random.choice(rag_entries))
-    for d, q in random.sample(others, k=min(2, len(others))):
-        picked.append((d, q))
-    suggestions = [{"title": q, "direction": d} for d, q in picked[:3]]
+    picked = random.sample(entry, k=min(3, len(entry)))
+    suggestions = [{"title": q, "direction": d} for d, q in picked]
     return {"suggestions": suggestions}
 
 

@@ -65,19 +65,18 @@ class TestGuidePool:
 
 
 class TestEntryPool:
-    def test_entry_nonempty_with_rag(self):
-        """入口池非空且含 ≥1 条 rag 方向入口题(guide 必含 rag 方向的来源)"""
+    def test_entry_nonempty(self):
+        """入口池非空(≥3 条, 全部可答的具体功能题)"""
         entry = guide_pool.entry_for("ai-tutoring")
         assert len(entry) >= 3
-        assert any(d == "rag" for d, _ in entry)
 
     def test_entry_questions_simple(self):
-        """入口问题是入门级(一看就懂能直接点): 短句式 + 无技术难点特征词"""
+        """入口问题是入门级(一看就懂能直接点): 短句式 + 无技术难点/泛词"""
         hard_kws = ("50~145", "LangGraph", "ActionMeta", "SSE", "Neo4j", "护栏",
-                    "P0", "JSON", "并发", "熔断", "提示词注入", "掌握度", "题型")
+                    "P0", "JSON", "并发", "熔断", "提示词注入", "掌握度", "题型", "底层")
         for d, q in guide_pool.entry_for("ai-tutoring"):
             assert len(q) <= 20, f"入口题过长, 用户看不懂: {q}"
-            assert not any(k in q for k in hard_kws), f"入口题偏难, 割裂距离: {q}"
+            assert not any(k in q for k in hard_kws), f"入口题偏难/泛, 割裂距离: {q}"
 
     def test_entry_scope_disjoint_from_scope(self):
         """entry 不进 scope_questions(主池 75 题不受影响; 入口是引导专用)"""
