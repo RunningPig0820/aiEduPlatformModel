@@ -92,3 +92,6 @@ edukg/state/
 edukg/cache/
 */state/*
 */cache/*
+
+# macOS
+.DS_Store
