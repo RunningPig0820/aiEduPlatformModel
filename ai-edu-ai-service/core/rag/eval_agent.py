@@ -28,7 +28,7 @@ from core.rag import query as rag_core
 
 logger = logging.getLogger(__name__)
 
-HIT_K = 3           # hit@k 的 k(2A 定稿: 源文档池 top-k)
+HIT_K = 5           # hit@k 的 k(2026-08-26: 3→5, 对齐生成上下文 top-5; 双向量后引导问题块精确命中 #1, 深度节块常落 4-5)
 
 # D1: 边界拒答评测类型(与 eval_dataset.VALID_TYPES 闭集一致; 断言=触发固定话术+0 token)
 BOUNDARY_TYPE = "边界拒答"
@@ -55,28 +55,32 @@ def calc_cost(usage: dict) -> float:
 # ============ 3.2 hit@k 计算(纯函数, 可单测) ============
 
 
-def hit_at_k(recall: List[dict], expected_references: List[str], k: int = HIT_K) -> float:
-    """预期引用命中召回 top-k 的比例。
+def _match_file(expected: str, files) -> bool:
+    """expected 引用是否命中某个召回块的 file(双向子串匹配)。
 
-    expected_references: ["ai-tutoring/04-安全与防作弊", ...](节 key 前缀)
-    recall: orchestrate 输出 top-K, 每项含 section(如 "04")/file/anchor
-    判定: 预期引用的节号(0X) 是否出现在召回 top-k 的 section 集合中。
+    新格式(2026-08-26 双向量后): expected = 承载答案的源文件标识
+      - 完善文档(全量池 file): "01-模块定位与核心价值" / "05-数据落库与掌握度"
+      - 引导问题(切片池 file): "引导问题-05-操作流程-怎么防学生套答案"
+    旧格式兼容: "ai-tutoring/04-安全与防作弊" 内含节号 "04", 与 file="04" 双向匹配。
+    语义: 该来源文件是否进入召回 top-k(即答案上下文含该来源)。
+    """
+    e = expected.strip()
+    return any(e in str(f) or str(f) in e for f in files)
+
+
+def hit_at_k(recall: List[dict], expected_references: List[str], k: int = HIT_K) -> float:
+    """预期来源文件命中召回 top-k 的比例。
+
+    expected_references: 承载答案的源文件标识(完善文档/引导问题 file 名, 见 _match_file)
+    recall: orchestrate 输出 top-K, 每项含 file/anchor
+    判定: 预期来源的 file 是否出现在召回 top-k 中。
     返回: 命中比例 0~1(可多条引用部分命中)。
     """
     if not expected_references or k <= 0:
         return 0.0
     top_k = recall[:k]
-    hit_sections = {str(h.get("section")) for h in top_k}
-    expected_sections = {_ref_section(r) for r in expected_references}
-    if not expected_sections:
-        return 0.0
-    return len(expected_sections & hit_sections) / len(expected_sections)
-
-
-def _ref_section(ref: str) -> str:
-    """expected_references "ai-tutoring/04-安全与防作弊" → 节号 "04"。"""
-    part = ref.split("/")[-1] if "/" in ref else ref
-    return part.split("-")[0].strip()
+    hit_files = [str(h.get("file")) for h in top_k]
+    return sum(1 for e in expected_references if _match_file(e, hit_files)) / len(expected_references)
 
 
 # ============ D2: precision@k 纯函数 ============
@@ -87,18 +91,17 @@ def precision_at_k(recall: List[dict], expected_references: List[str],
     """召回 top-k 中相关块占比(D2, 可单测/可聚合)。
 
     与 hit_at_k 互补:
-      - hit_at_k: 预期引用中有多少被召回(分母 = 预期引用数, 看"该捞的捞到没")
+      - hit_at_k: 预期来源有多少被召回(分母 = 预期来源数, 看"该捞的捞到没")
       - precision_at_k: 召回的 top-k 里有多少是相关的(分母 = k, 看"捞上来的干不干净")
-    相关块判定同 hit_at_k(块的 section 命中预期引用节)。
+    相关块判定同 hit_at_k(块的 file 命中预期来源, 见 _match_file)。
     返回 0~1; k<=0 或预期空 → 0。
     """
     if k <= 0 or not expected_references:
         return 0.0
     top_k = recall[:k]
-    expected_sections = {_ref_section(r) for r in expected_references}
-    if not expected_sections or not top_k:
-        return 0.0
-    relevant = sum(1 for h in top_k if str(h.get("section")) in expected_sections)
+    expected = [e.strip() for e in expected_references]
+    relevant = sum(1 for h in top_k
+                   if any(_match_file(e, [str(h.get("file"))]) for e in expected))
     return relevant / k
 
 

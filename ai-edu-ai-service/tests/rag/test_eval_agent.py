@@ -226,15 +226,15 @@ class TestPrecisionAtK:
                  "authority": 1.0, "file": s, "anchor": s} for i, s in enumerate(sections)]
 
     def test_all_related(self):
-        """top3 全部命中预期节 → precision@3 = 3/3 = 1.0"""
+        """3 块全部命中预期来源 → precision@k = 3/HIT_K(默认 k=5)"""
         r = self._recall(["04", "07", "02"])
         assert eval_agent.precision_at_k(
-            r, ["ai-tutoring/04-安全", "ai-tutoring/07-流式", "ai-tutoring/02-一次完整答疑"]) == 1.0
+            r, ["ai-tutoring/04-安全", "ai-tutoring/07-流式", "ai-tutoring/02-一次完整答疑"]) == 3 / eval_agent.HIT_K
 
     def test_two_of_three_again(self):
-        """top3 含 2 个相关块 → precision@3 = 2/3(spec 场景)"""
+        """top-k 含 2 个相关块 → precision@k = 2/HIT_K(spec 场景)"""
         r = self._recall(["04", "02", "07"])
-        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全", "ai-tutoring/07-流式"]) == 2 / 3
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全", "ai-tutoring/07-流式"]) == 2 / eval_agent.HIT_K
 
     def test_none_related(self):
         r = self._recall(["01", "02", "06"])
@@ -251,7 +251,7 @@ class TestPrecisionAtK:
 
     def test_auto_fill_k(self):
         r = self._recall(["04", "02", "06"])
-        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全"]) == 1 / 3  # 默认 k=3
+        assert eval_agent.precision_at_k(r, ["ai-tutoring/04-安全"]) == 1 / eval_agent.HIT_K  # 默认 k=HIT_K
 
 
 class TestBoundaryRefusal:
