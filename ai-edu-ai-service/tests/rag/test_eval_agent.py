@@ -178,6 +178,7 @@ class TestRunEvalCase:
                                 "full": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
                                                    "distance": 0.1}], "confidence": 0.9},
                                 "slice": {"hits": [], "confidence": 0.0},
+                                "slice_q": {"hits": [], "confidence": 0.0},   # 双向量: summary/问题路
                                 "bm25": {"hits": [], "confidence": 0.0}})
         # 生成 mock 掉(doubao 不碰); 判分 mock 掉
         monkeypatch.setattr(rag_core, "generate",
@@ -273,6 +274,7 @@ class TestBoundaryRefusal:
                             lambda q, corpus=None, locked_categories=None: {
                                 "full": {"hits": [], "confidence": 0.1},
                                 "slice": {"hits": [], "confidence": 0.1},
+                                "slice_q": {"hits": [], "confidence": 0.1},
                                 "bm25": {"hits": [], "confidence": 0.1}})
         monkeypatch.setattr(rag_core, "orchestrate", lambda *a, **k: [])
         # 边界拒答不得进 generate/判分(0 token)
@@ -302,6 +304,7 @@ class TestBoundaryRefusal:
                             lambda q, corpus=None, locked_categories=None: {
                                 "full": {"hits": ["v"], "confidence": 0.9},
                                 "slice": {"hits": [], "confidence": 0.9},
+                                "slice_q": {"hits": [], "confidence": 0.9},
                                 "bm25": {"hits": ["b"], "confidence": 0.8}})
         # orchestrate 返回相关块(04)
         monkeypatch.setattr(rag_core, "orchestrate", lambda *a, **k: [{

@@ -95,11 +95,12 @@ async def rag_query(
             bm_pool = rag_core.select_corpus(blocks, corpus) if corpus else blocks
             dual = {"full": {"hits": [], "confidence": 0.0},
                     "slice": {"hits": [], "confidence": 0.0},
+                    "slice_q": {"hits": [], "confidence": 0.0},   # 双向量: summary/问题路
                     "bm25": rag_core.retrieve_bm25(request.question, bm_pool)}
 
         hits = rag_core.orchestrate(request.question, blocks, dual["full"], dual["bm25"],
                                     it, top_k=request.top_k, vec2_result=dual["slice"],
-                                    corpus=corpus)
+                                    vec3_result=dual["slice_q"], corpus=corpus)
 
         references = [
             RAGReference(**{k: h[k] for k in ("file", "file_path", "anchor", "authority", "summary")})

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class RAGQueryRequest(BaseModel):
     """RAG 问答请求 - 前端/后端调 `POST /api/tutoring/rag/query`"""
     question: str = Field(..., description="面试官问题(或任意项目相关提问)")
-    top_k: int = Field(default=6, ge=1, le=20, description="生成用召回块数")
+    top_k: int = Field(default=5, ge=1, le=20, description="生成用召回块数(双向量方案编排 top-5)")
     current_project: str = Field(default="ai-tutoring",
                                  description="当前上下文模块(调用方传入, intent LLM 倾向保持该模块)")
 

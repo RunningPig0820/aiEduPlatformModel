@@ -35,17 +35,20 @@ def main():
         dual = rag_core.retrieve_dual(args.question, corpus=corpus,
                                       locked_categories=it["locked_categories"])
         vec_note = (f"全量{len(dual['full']['hits'])}hits conf{dual['full']['confidence']:.2f} | "
-                    f"切片{len(dual['slice']['hits'])}hits conf{dual['slice']['confidence']:.2f} | "
+                    f"切片内容{len(dual['slice']['hits'])}hits conf{dual['slice']['confidence']:.2f} | "
+                    f"切片问题{len(dual['slice_q']['hits'])}hits conf{dual['slice_q']['confidence']:.2f} | "
                     f"BM25 {len(dual['bm25']['hits'])}hits")
     except Exception as e:
         bm_pool = rag_core.select_corpus(blocks, corpus) if corpus else blocks
         dual = {"full": {"hits": [], "confidence": 0.0}, "slice": {"hits": [], "confidence": 0.0},
+                "slice_q": {"hits": [], "confidence": 0.0},
                 "bm25": rag_core.retrieve_bm25(args.question, bm_pool)}
         vec_note = f"向量路失败 → 降级纯 BM25 ({e})"
     print(f"召回: {vec_note}")
 
     hits = rag_core.orchestrate(args.question, blocks, dual["full"], dual["bm25"], it,
-                                top_k=args.k, vec2_result=dual["slice"], corpus=corpus)
+                                top_k=args.k, vec2_result=dual["slice"],
+                                vec3_result=dual["slice_q"], corpus=corpus)
 
     print("-" * 70)
     if not hits:

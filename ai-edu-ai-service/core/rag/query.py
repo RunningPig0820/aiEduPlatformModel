@@ -34,7 +34,7 @@ DATA_FULL = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "rag"
 
 # 检索参数
 RRF_K = 60          # RRF 融合常数
-TOP_K = 6           # 生成用块数
+TOP_K = 5           # 生成用块数(双向量方案编排 top-5, 2026-08-26)
 BM25_K = 10         # BM25 召回数
 VEC_K = 12          # 向量召回数
 MAX_GEN_TEXT = 1200 # 生成时单块 text 截断(上下文长度保护)
@@ -422,15 +422,17 @@ def build_filter(module: str | None = None, categories: list | None = None) -> d
 
 
 def retrieve_vector(question: str, vector_type: str = "rag",
-                    module: str | None = None, categories: list | None = None) -> dict:
+                    module: str | None = None, categories: list | None = None,
+                    top_k: int = VEC_K) -> dict:
     """向量召回单元: COS query_vectors(rag 桶, 按 module 条件筛选) → hits + confidence。
 
     独立单元契约: 入参 question + vector_type + module(1.13 多模块, 向量层按模块过滤,
     防其他模块相似向量挤占 top-k), 出参 {hits, confidence}; 异常由编排器捕获。
     module 未传 → 默认 rag-system。categories 参数保留兼容, 不再过滤(2026-08-26 决策)。
+    top_k: 召回数(切片池双向量时 VEC_K+2, 补偿同块 -c/-q 双记录占位, task #78)。
     """
     filt = build_filter(module, categories)
-    hits = query_vector(question, top_k=VEC_K, vector_type=vector_type, filter_=filt)
+    hits = query_vector(question, top_k=top_k, vector_type=vector_type, filter_=filt)
     # confidence = 平均相似度(1 - 平均余弦距离); COS distance 越小越相似
     conf = 0.0
     if hits:
@@ -438,21 +440,46 @@ def retrieve_vector(question: str, vector_type: str = "rag",
     return {"hits": hits, "confidence": max(0.0, conf)}
 
 
+def _split_roles(result: dict) -> tuple:
+    """切片池双向量(2026-08-26, task #78): 按 key 后缀拆 content(-c)/question(-q) 两路。
+
+    同块 -c/-q 都命中时, 归一化后 key 相同但 rank 不同, orchestrate 两路各自贡献 RRF(互补)。
+    -c 缺省无后缀也归内容路(兼容全量池单向量, 防御)。
+    返回 (content_result, question_result), 各自 {hits, confidence}。
+    """
+    content = {"hits": [], "confidence": result["confidence"]}
+    question = {"hits": [], "confidence": result["confidence"]}
+    for h in result.get("hits", []):
+        key = h.get("key", "")
+        if key.endswith("-q"):
+            h["key"] = key[:-2]
+            question["hits"].append(h)
+        else:
+            h["key"] = key[:-2] if key.endswith("-c") else key
+            content["hits"].append(h)
+    return content, question
+
+
 def retrieve_dual(question: str, corpus: str | None = None,
                   locked_categories: list | None = None) -> dict:
-    """双池召回(1.13 Q3 + 多模块): 全量池向量 + 切片池向量 + BM25 → 三路供 RRF。
+    """双池召回(1.13 Q3 + 多模块): 全量池向量 + 切片池双向量 + BM25 → 各路供 RRF。
 
     向量层条件筛选(1.13 下推): 全量池/切片池都只按 module 过滤。
+    双向量(2026-08-26, task #78): 切片池每块 -c/-q 两路, 这里按 key 后缀拆成
+    slice(内容) + slice_q(summary/问题) 两路; 全量池单向量原样。
     module 未传 → 默认 rag-system。locked_categories 保留参数兼容, 不再过滤
     (2026-08-26 决策: LLM 判类别不准, 类别过滤误伤相关块)。
     corpus(模块 anchor): 本地 BM25 只打该模块语料池(与编排层 select_corpus 一致)。
     """
-    full = retrieve_vector(question, vector_type="rag-full", module=corpus)   # 全量池: 只筛 module
-    slice_ = retrieve_vector(question, vector_type="rag-slice", module=corpus)  # 切片池: 只筛 module
+    full = retrieve_vector(question, vector_type="rag-full", module=corpus)   # 全量池: 单向量
+    # 切片池双向量: 向量 top-k 多取 2(VEC_K+2), 补偿同块 -c/-q 双记录占位
+    slice_ = retrieve_vector(question, vector_type="rag-slice", module=corpus,
+                             top_k=VEC_K + 2)
+    content, question_ = _split_roles(slice_)
     blocks = _load_all_blocks()
     pool = select_corpus(blocks, corpus) if corpus else blocks
     bm = retrieve_bm25(question, pool)
-    return {"full": full, "slice": slice_, "bm25": bm}
+    return {"full": full, "slice": content, "slice_q": question_, "bm25": bm}
 
 
 def _tokenize(text: str) -> list:
@@ -547,10 +574,13 @@ def select_corpus(blocks: list, anchor: str | None) -> list:
 
 def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict,
                 strategy: dict, top_k: int = TOP_K, corpus: str | None = None,
-                vec2_result: dict | None = None) -> list:
+                vec2_result: dict | None = None,
+                vec3_result: dict | None = None) -> list:
     """编排器: RRF 融合 × authority 权威度 × 页面锚定加权 × 类别过滤 → top-K 完整命中。
 
-    三路 RRF(1.13 Q4): vec_result(全量池向量) + vec2_result(切片池向量, 可选) + bm25_result。
+    四路 RRF(2026-08-26 双向量, task #78): vec_result(全量池向量) + vec2_result(切片内容
+    -c, 可选) + vec3_result(切片 summary/问题 -q, 可选) + bm25_result。vec2/vec3 的 key
+    已由 _split_roles 归一化为块 key, 同块两路命中各自贡献 RRF(互补)。
     category 过滤(1.13 Q5): strategy.locked_categories 非空时, 只保留切片池命中该类别块
     (先 module 选池、再类别过滤两级; 全量池不过滤, 无类别锁定全保留)。
     corpus(可选, A3/C2): 模块 anchor, 给定时先按 module 过滤语料池再融合; None → 全池。
@@ -559,23 +589,27 @@ def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict
     pool = select_corpus(blocks, corpus) if corpus else blocks
     keymap = _assign_idx(pool)
 
-    # 三路 rank: 全量向量(COS 返回 key) + 切片向量(可选) + BM25
+    # 四路 rank: 全量向量 + 切片内容(-c) + 切片 summary(-q) + BM25
     vec_keys = [h["key"] for h in vec_result["hits"]]
     vec2_keys = [h["key"] for h in vec2_result["hits"]] if vec2_result else []
+    vec3_keys = [h["key"] for h in vec3_result["hits"]] if vec3_result else []
     bm_keys = [h["key"] for h in bm25_result["hits"]]
 
     vec_rank = {k: r for r, k in enumerate(vec_keys)}
     vec2_rank = {k: r for r, k in enumerate(vec2_keys)}
+    vec3_rank = {k: r for r, k in enumerate(vec3_keys)}
     bm_rank = {k: r for r, k in enumerate(bm_keys)}
     locked = set(strategy.get("locked_sections", []))
 
     scored = []
-    for key in set(vec_rank) | set(vec2_rank) | set(bm_rank):
+    for key in set(vec_rank) | set(vec2_rank) | set(vec3_rank) | set(bm_rank):
         rrf = 0.0
         if key in vec_rank:
             rrf += 1.0 / (RRF_K + vec_rank[key])
         if key in vec2_rank:
             rrf += 1.0 / (RRF_K + vec2_rank[key])
+        if key in vec3_rank:
+            rrf += 1.0 / (RRF_K + vec3_rank[key])
         if key in bm_rank:
             rrf += 1.0 / (RRF_K + bm_rank[key])
         block = keymap.get(key)
@@ -685,7 +719,8 @@ def rag_query(question: str, top_k: int = TOP_K) -> dict:
     dual = retrieve_dual(question, corpus=corpus,
                          locked_categories=it["locked_categories"])
     hits = orchestrate(question, blocks, dual["full"], dual["bm25"], it,
-                       top_k=top_k, vec2_result=dual["slice"], corpus=corpus)
+                       top_k=top_k, vec2_result=dual["slice"],
+                       vec3_result=dual["slice_q"], corpus=corpus)
 
     references = [
         {k: h[k] for k in ("file", "file_path", "anchor", "authority", "summary")}

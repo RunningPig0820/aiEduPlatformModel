@@ -235,7 +235,8 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     dual = rag_core.retrieve_dual(question, corpus=corpus,
                                   locked_categories=it["locked_categories"])
     hits = rag_core.orchestrate(question, blocks, dual["full"], dual["bm25"], it,
-                                top_k=top_k, vec2_result=dual["slice"], corpus=corpus)
+                                top_k=top_k, vec2_result=dual["slice"],
+                                vec3_result=dual["slice_q"], corpus=corpus)
 
     recall = [
         {"key": h["key"], "score": h["score"], "authority": h["authority"],

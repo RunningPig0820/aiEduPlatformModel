@@ -632,6 +632,23 @@ LLM 语义判断意图类别 → 闭集映射锁节；LLM 失败/非闭集 → A
 
 **注**：md 文件头 `> summary:` 仍是历史翻译版（视图），jsonl 由 md_to_jsonl 覆盖为标题；`gen_summaries.py` 是 1.5 旧流程，不参与当前"改归改"链路。
 
+### 1.13.6 双向量检索（问题路 + 内容路，2026-08-26 落地）
+
+> **动机**（数据证据）：切片池 294 块中引导问题 90 块是"问题+答案"结构；评测 query 与引导问题标题同形。实测 query vs 纯问题标题 sim **1.0** / 标题+答案混合 0.80~0.86 / 纯答案 text 0.59~0.76——**向量化"问题"比向量化"答案内容"准得多**。
+
+**方案（用户决策：单索引双记录，不新建索引）**：同一个 `rag-slice` 索引内，切片池每块入两条记录，key 后缀 role 区分（不加 metadata，避开 10 字段上限）：
+- `...#{idx}-c` = embed(summary+text) 内容路
+- `...#{idx}-q` = embed(summary) summary/问题路
+
+**已完成（2026-08-26）**：
+- [x] `build_index.py`：slice 池每块 embed 两次写 -c/-q（294→588 条）；full 池保持单向量（整篇文档非问答结构）；控制台无需新建索引
+- [x] `query.py`：`_split_roles` 按 key 后缀拆两路并归一化为块 key；`retrieve_vector` 加 top_k；`retrieve_dual` 切片池 top_k=VEC_K+2（补偿同块双记录占位）返回 {full,slice,slice_q,bm25}；`orchestrate` 加 vec3_result 四路 RRF
+- [x] `TOP_K` 6→5（编排 top-5）；`RAGQueryRequest.top_k` 默认同步 5
+- [x] 调用方（api/rag.py、assistant.recall、eval_agent、rag_query CLI）+ 测试同步
+- [x] 重入 slice 池 588 条；实测两条问题路 sim 0.99（对比混合 0.85）、编排 #1
+
+**SOP**：凡"问题+答案"结构切片（引导问题类）适用双向量；纯文档类保持单向量（full 池）。新模块语料就绪时，引导问题 summary=标题（问题）→ 双向量自动生效。`-c`/`-q` 两路权重/融合常数届时按评测调。
+
 ---
 
 ## 2. AI答疑 评测集（5 条）

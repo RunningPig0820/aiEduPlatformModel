@@ -117,8 +117,11 @@ async def recall(question: str, anchor: str | None = None,
 
     strategy = {"locked_sections": [], "strategy": "retrieve",
                 "locked_categories": locked_categories or []}
+    # 双向量(2026-08-26, task #78): 切片池 -c/-q 拆两路, orchestrate 四路 RRF
+    vec2_content, vec2_question = rag_core._split_roles(vec2)
     hits = rag_core.orchestrate(question, blocks, vec, bm25, strategy,
-                                top_k=top_k, corpus=corpus, vec2_result=vec2)
+                                top_k=top_k, corpus=corpus,
+                                vec2_result=vec2_content, vec3_result=vec2_question)
     return {
         "vec": vec,
         "vec2": vec2,

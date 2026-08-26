@@ -2,6 +2,10 @@
 阶段3 索引构建 - 纯 COS 向量桶写入(rag-1318177119/rag-full|rag-slice, 双池)
 
 每块 embedding 文本 = summary + "\n" + text(summary 引导命中, text 供细节)。
+双向量(task #78, 2026-08-26): **切片池(slice)每块写两个 key**, 同索引 rag-slice, key 后缀 role 区分:
+  - `-c` = embed(summary+text) 内容路
+  - `-q` = embed(summary)      summary/问题路(query 是问题形态, 匹配"问题"侧更准)
+  全量池(full)整篇文档非问答结构, 保持单向量。控制台无需新建索引; 不加 metadata(10 字段上限)。
 metadata 10 字段(≤COS 向量索引上限): version/module/category/source/authority/section/file/file_path/anchor/summary
 (text 不进 metadata, 20KB 限制, 检索后按 key 反查 jsonl)。
 
@@ -134,7 +138,19 @@ def main():
             "anchor": t["anchor"],
             "summary": b["summary"],
         }
-        payloads.append({"key": key, "data": {"float32": embed(text)}, "metadata": metadata})
+        if args.pool == "slice":
+            # 双向量(task #78): 每块写两个 key, 同索引 rag-slice, key 后缀 role 区分(不加 metadata)
+            #   -c 内容路 embed(summary+text), -q summary/问题路 embed(summary)
+            content = {"key": key + "-c",
+                       "data": {"float32": embed(b["summary"] + "\n" + b["text"])},
+                       "metadata": metadata}
+            question = {"key": key + "-q",
+                        "data": {"float32": embed(b["summary"])},
+                        "metadata": metadata}
+            payloads.extend([content, question])
+        else:
+            # 全量池(整篇文档, 非问答结构)保持单向量
+            payloads.append({"key": key, "data": {"float32": embed(text)}, "metadata": metadata})
 
     for i in range(0, len(payloads), BATCH_PUT):
         client.put_vectors(Bucket=bucket, Index=index, Vectors=payloads[i:i + BATCH_PUT])
