@@ -6,8 +6,8 @@
 > 检索规则：只答接口/参数/降级/对账翻转/代码真实行为；**不答"为什么这么设计/选型权衡"**。
 
 ## 处理方案
-- `处理方案/readme.md`：代码层切片处理说明
+- `处理方案/readme.md`：代码层切片处理说明（完整流程见其中）
 - `处理方案/提示词/代码深读-分析文档-提示词.md`（源目录 `3.代码/处理方案/提示词/`）
-- `脚本/`：切割脚本留档（slice_corpus/export_slices_md/gen_summaries/slice_full/md_to_jsonl/recover_slices）
+- 切割脚本：顶层 `../脚本代码/`（slice_corpus/export_slices_md/gen_summaries/slice_full/md_to_jsonl/recover_slices，跨来源通用）
 
 
