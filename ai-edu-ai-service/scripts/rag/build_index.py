@@ -5,8 +5,10 @@
 双向量(task #78, 2026-08-26): **切片池(slice)每块写两个 key**, 同索引 rag-slice, key 后缀 role 区分:
   - `-c` = embed(summary+text) 内容路
   - `-q` = embed(summary)      summary/问题路(query 是问题形态, 匹配"问题"侧更准)
-  全量池(full)整篇文档非问答结构, 保持单向量, embed(summary) 摘要向量(2026-08-27 改: 大文件整篇 text
-  超 8192 token 上限会被 dashscope 静默截断 → 全量池只 embed 摘要作文档级粗召回, 细节靠切片池)。控制台无需新建索引; 不加 metadata(10 字段上限)。
+  全量池(full)整篇文档非问答结构, 保持单向量, **条件式 embed**(2026-08-27 改):
+  - summary+全文 ≤ FULL_EMBED_MAX_CHARS(5000 字符) → embed(summary+全文) 保全文(完善文档 1.0 主答案/代码 0.8)
+  - 超限大文件(语雀 10~12K 字符) → 只 embed(summary) 摘要向量, 防整篇 text 超 8192 token 被 dashscope 静默截断。
+  控制台无需新建索引; 不加 metadata(10 字段上限)。
 metadata 10 字段(≤COS 向量索引上限): version/module/category/source/authority/section/file/file_path/anchor/summary
 (text 不进 metadata, 20KB 限制, 检索后按 key 反查 jsonl)。
 
@@ -43,6 +45,7 @@ BATCH_PUT = 20        # put_vectors 单批条数(服务端上限约束)
 BATCH_DELETE = 100    # delete_vectors 单批条数
 LIST_PAGE = 200       # list_vectors 分页大小
 WAIT_SECONDS = 10     # put 后异步生效等待(spike 实测 ~10s)
+FULL_EMBED_MAX_CHARS = 5000  # 全量池条件式阈值: ≤ 此字符 embed(summary+全文), 超限只 embed(summary) 防 8192 token 截断
 
 
 def make_key(vector_type: str, file_: str, anchor: str, idx: int) -> str:
@@ -149,10 +152,13 @@ def main():
                         "metadata": metadata}
             payloads.extend([content, question])
         else:
-            # 全量池(整篇文档, 非问答结构)单向量 = 摘要向量(2026-08-27 改)
-            # 大文件整篇 text 超 embedding 输入上限(8192 token)会被 dashscope 静默截断 → 只 embed summary
-            # 作文档级粗召回(全文细节由切片池 -c/-q 承担); text 留 jsonl 供 BM25/反查, 不进向量。
-            payloads.append({"key": key, "data": {"float32": embed(b["summary"])}, "metadata": metadata})
+            # 全量池(整篇文档, 非问答结构)单向量 = 条件式(2026-08-27 改)
+            #   ≤ FULL_EMBED_MAX_CHARS → embed(summary+全文): 完善文档 1.0 主答案/代码 0.8 全文进向量可检索
+            #   >  FULL_EMBED_MAX_CHARS → embed(summary): 大语雀(10~12K 字符)超 8192 token 防静默截断, 摘要作文档级粗召回
+            # text 仍留 jsonl 供 BM25/反查/查看原文, 不进向量。
+            full_text = b["summary"] + "\n" + b["text"]
+            data = embed(full_text) if len(full_text) <= FULL_EMBED_MAX_CHARS else embed(b["summary"])
+            payloads.append({"key": key, "data": {"float32": data}, "metadata": metadata})
 
     for i in range(0, len(payloads), BATCH_PUT):
         client.put_vectors(Bucket=bucket, Index=index, Vectors=payloads[i:i + BATCH_PUT])
