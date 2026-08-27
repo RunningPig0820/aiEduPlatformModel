@@ -13,9 +13,10 @@ metadata 10 字段: version/module/category/source/authority/section/file/file_p
 (filterable metadata 单条 ≤2048B, 实测 2026-08-27——metadata.summary 按余量截断, 但 **embedding 仍用全量 summary**;
  text 不进 metadata, 检索后按 key 反查 jsonl 拿全文/全量摘要)。
 
-用法: cd ai-edu-ai-service && python scripts/rag/build_index.py --pool full|slice [--clear]
-输入: --pool full  → scripts/rag/data/rag_slices_full.jsonl(23 块整篇)
-      --pool slice → scripts/rag/data/rag_slices.jsonl(294 块切片)
+用法: cd ai-edu-ai-service && python scripts/rag/build_index.py --pool full|slice [--module ai-tutoring|question-analysis] [--clear]
+输入: --pool full  → scripts/rag/data/rag_slices_full{,-question-analysis}.jsonl
+      --pool slice → scripts/rag/data/rag_slices{,-question-analysis}.jsonl
+      --module     默认 ai-tutoring; question-analysis 用 qa 专属 jsonl(scripts/rag/question-analysis/ 生成)
 输出: rag-1318177119 / rag-full(全量池) 或 rag-slice(切片池); 语料 jsonl 留本地(BM25/反查)
 
 --clear: 该池 list_vectors 枚举全部 key → delete_vectors 清空 → 重写(幂等, 各池各清)。
@@ -41,6 +42,12 @@ logger = logging.getLogger(__name__)
 POOLS = {
     "full":  {"vector_type": "rag-full",  "data": "rag_slices_full.jsonl"},
     "slice": {"vector_type": "rag-slice", "data": "rag_slices.jsonl"},
+}
+# 模块 → jsonl 文件名(question-analysis 由 scripts/rag/question-analysis/ 生成)
+MODULE_DATA = {
+    "ai-tutoring": {"full": "rag_slices_full.jsonl", "slice": "rag_slices.jsonl"},
+    "question-analysis": {"full": "rag_slices_full-question-analysis.jsonl",
+                          "slice": "rag_slices-question-analysis.jsonl"},
 }
 BATCH_PUT = 20        # put_vectors 单批条数(服务端上限约束)
 BATCH_DELETE = 100    # delete_vectors 单批条数
@@ -90,12 +97,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool", choices=list(POOLS), required=True,
                     help="full=全量池(rag-full), slice=切片池(rag-slice)")
+    ap.add_argument("--module", choices=list(MODULE_DATA), default="ai-tutoring",
+                    help="语料模块(决定 jsonl): ai-tutoring(默认) / question-analysis")
     ap.add_argument("--clear", action="store_true", help="清空该池索引后重写(幂等重建)")
     args = ap.parse_args()
 
     cfg = POOLS[args.pool]
     vector_type = cfg["vector_type"]
-    data = os.path.join(os.path.dirname(__file__), "data", cfg["data"])
+    data = os.path.join(os.path.dirname(__file__), "data", MODULE_DATA[args.module][args.pool])
 
     bucket, index = _resolve_bucket_index(vector_type)
     logger.info("目标: bucket=%s index=%s (pool=%s, 双池)", bucket, index, args.pool)
