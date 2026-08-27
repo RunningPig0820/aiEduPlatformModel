@@ -95,6 +95,16 @@ docs/rag/question-analysis/
 - `切片数据/` 视图由 jsonl 导出（`export_slices_md.py`）
 - jsonl：切片池 `md_to_jsonl.py`（含 -q 问题路 / -c 内容路双写）+ 全量池 `slice_full.py`
 
+**切片注意事项（代码真相层 3.代码 专属，2026-08-27 评审沉淀）**：
+
+1. **切分层级**：代码真相文档按 **h2（`##`）切**（`slice_corpus.py` split_level=2），一节一个 chunk——业务场景/职责/调用链/代码事实/隐性坑/设计要点/对账 各一块。**禁止按固定字符粗暴切割**。
+2. **chunk 上限**：≤6000 字符（`MAX_CHARS_SPLIT`），超限按段落拆多块、**不丢尾部**；单节一般不会超限。
+3. **表格/代码块/mermaid 不切破**：切片器逐行 append（表格行不拆开）；人工再切时同样注意——切破表格 = "枚举值"与"出处/说明"分离，召回即断。
+4. **mermaid 向量不可读**：embedding 读不懂流程图流向，**关键链路信息必须同时存在于正文文本段落**（当前文档已满足：mermaid 只作人看，正文"调用链/降级分支"有文字描述）——新增流程图时保持此约定。
+5. **子块检索摘要靠 `gen_summaries.py` 生成**：代码真相层**不强制**每 `###` 手写 `> 检索摘要`（与 canonical/design 区分），切片后跑 `gen_summaries.py` 为每块自动生成"解决什么问题"一句话 summary（30 字内、走 embedding 参与召回）；不要手工回写 md 头（重复维护）。文档头 `> summary:` 已说明整篇解决什么问题，作块级 summary 兜底。
+6. **块元数据**：`doc_type=code_analysis` + `authority=0.8` + `source=代码` + `module=question-analysis`；块 anchor = 所在 h2 节标题。切片时确保 `file_path` 指向源文档（`3.代码/分析-XX-*.md`），前端"查看原文"可回源。
+7. **检索侧来源区分（入桶前的规则，非切片操作）**：code_analysis 只答**接口/参数/降级/对账翻转/代码真实行为**；**不答"为什么这么设计/选型权衡"**（那是 canonical 决策记录/选型对比职责，代码层缺设计背景）——RAG 系统 prompt 必须按 `doc_type` 做来源过滤/优先序，禁止用代码真相文档裸答业务设计权衡类问题。
+
 ### 第 ⑤ 步：索引入 COS
 
 - `build_index.py --pool full|slice`，module 标签 `question-analysis`
@@ -118,6 +128,7 @@ docs/rag/question-analysis/
 1. **改语料**：直接改 md（"切归切、改归改"，不重跑切片源头生成器）
 2. **重建 jsonl**：`md_to_jsonl.py`（切片池）+ `slice_full.py`（全量池）→ 核对块数
 3. **重入桶**：`build_index.py --clear` 幂等 → 验证桶计数 + 模块过滤查询
+   > 切片配置：3.代码 进 slice_corpus 的 LAYERS 用 `("3.代码/分析-*.md", 0.8, "代码", 2, "split")`——**split_level=2 按 h2 切**；gen_summaries.py 生成块级 summary（详见 `第④步·切片注意事项`）
 4. **新模块照此 SOP**：复制本结构，改模块 id / 语料源 / 完善文档标题 / guide_pool 条目；3.代码 用 `代码深读-分析文档-提示词.md`（改代码路径/主题清单/COS前缀），首轮直接按"业务描述与业务场景先行 + 真读代码 + 三端核对 + 元数据块"标准产出，不必再做第二轮改造
 
 ## 七、实际操作流程（本模块第一轮，2026-08-26~27，完整记录）
