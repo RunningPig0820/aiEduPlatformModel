@@ -9,6 +9,7 @@
 | `slice_corpus.py` | 语料 md → 切片池 jsonl（按 h2/h3 切） | `cd ai-edu-ai-service && venv/bin/python scripts/rag/slice_corpus.py --module question-analysis --sources 代码` |
 | `export_slices_md.py` | jsonl → 切片数据 md 人读视图 | `venv/bin/python scripts/rag/export_slices_md.py --module question-analysis` |
 | `gen_summaries.py` | 块级 summary 自动生成（LLM） | 切片后跑，为每块补"解决什么问题"一句话 |
+| `rag_query.py` | 检索 CLI（质量查询/索引验证） | 分片后跑代表性问题验证命中（`--module question-analysis`） |
 | `slice_full.py` | 全量池 jsonl（整篇一块） | 完善文档 1.0 用（全量池 rag-full，QT⑦ 前置待参数化） |
 | `md_to_jsonl.py` | 切片数据 md → jsonl | 引导问题等结构化块解析 |
 | `recover_slices.py` | 切片恢复工具 | 异常恢复用 |

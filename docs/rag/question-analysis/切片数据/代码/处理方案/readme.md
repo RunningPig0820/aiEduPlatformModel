@@ -1,7 +1,7 @@
 # 切片数据 / 代码 / 处理方案
 
 > 本来源（3.代码 分析文档）从源文档到**切片数据**的完整处理路径，按数据整理步骤记录。
-> **本次范围 = 分片（切片 jsonl + 人读视图），不做入桶**（QT⑦ 入桶/检索规则另行处理）。
+> **本次范围 = 分片（切片 jsonl + 人读视图 + 质量查询），不做入桶**（QT⑦ 入桶/检索规则另行处理）。
 > 脚本统一用 `../脚本代码/`（顶层，切割通用脚本留档；运行时源在 `ai-edu-ai-service/scripts/rag/`）。
 
 ## 步骤一：源头（语料就绪）
@@ -42,11 +42,26 @@ cd ai-edu-ai-service && venv/bin/python scripts/rag/export_slices_md.py --module
 - 输出：本目录 `../` 下 `代码/` 90 个块文件（每块带 summary/权威度/来源/锚点/模块/节 头）
 - 幂等：只清旧切片块文件，**保留 readme.md / README.md / 处理方案/ 骨架**
 
-## 步骤五：入桶（QT⑦，本次不做）
+## 步骤五：分片质量查询（切片后验证可检索性）
 
-> 本次范围停在**分片**（上述步骤一到四产出切片 jsonl + 视图）。入桶是 QT⑦ 的职责，此处仅留规则备忘，不执行：
+> 分片后**查询分片质量**——用 `rag_query.py` 跑代表性问题，验证切片块能被命中、命中块语义是否对题。质量差则回头改切片/补 summary，不急于入桶。
 
-- **切片池（rag-slice）**：本层 90 块（doc_type=code_analysis，0.8）→ `build_index.py --module question-analysis --pool slice`
+```bash
+cd ai-edu-ai-service && venv/bin/python scripts/rag/rag_query.py --module question-analysis "题型识别错了怎么办" --pool slice
+```
+
+- 脚本：`切片数据/脚本代码/rag_query.py`（检索 CLI，需先有索引；**无索引时用目录内 jsonl 直接核对**，见下）
+- 无索引时的替代质量检查（分片阶段，未入桶）：
+  1. **命中度粗查**：用关键词 `grep -n "关键词" docs/rag/question-analysis/切片数据/代码/*.md` 看该主题是否落在应有块（如"题型识别错了"→ 分析-04 业务场景/隐性坑块）——检验"问题的答案块存在"
+  2. **块语义抽读**：抽 3~5 块人读，确认 ①正文与锚点标题一致 ②表格/代码块没被切破 ③mermaid 链路在正文有文字复述（embedding 可读）
+  3. **长度检查**：块长度 300~1500 字为宜；过短（<100）无检索价值、过长（>6000）需段落拆（切片器已自动处理）
+- 质量达标标准：代表性问题（业务/接口/降级各 1 条）能定位到对应块，且块内容自包含可回答
+
+## 步骤六：入桶（QT⑦，本次不做）
+
+> 本次范围停在**分片**（上述步骤一到五产出切片 jsonl + 视图 + 质量核验）。入桶是 QT⑦ 的职责，此处仅留规则备忘，不执行：
+
+- **切片池（rag-slice）**：本层 60 块（doc_type=code_analysis，0.8，删低价值块后）→ `build_index.py --module question-analysis --pool slice`
 - **全量池（rag-full）**：完善文档 1.0 整篇（`slice_full.py`，待参数化）→ `--pool full`
 - **检索规则**：code_analysis 只答接口/参数/降级/对账翻转/代码真实行为；不答"为什么这么设计/选型权衡"（canonical 决策职责）——RAG 系统 prompt 按 doc_type 做来源过滤
 
