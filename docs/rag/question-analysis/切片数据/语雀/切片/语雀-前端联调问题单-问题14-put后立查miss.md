@@ -5,12 +5,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题14-put后立查miss.md
 > 类别：开发难点
-> 状态：✅ 已修复（方案定稿）
 
 ---
 
 ### 问题14：put 后立查 miss
-> 状态：✅ 已修复（方案定稿）
 > 检索摘要：COS 向量索引 put 后约 10s 异步生效，题型名向量入库后立即 query 查不到近邻；建锚不立查 + 留重试。
 
 | 属性 | 内容 |

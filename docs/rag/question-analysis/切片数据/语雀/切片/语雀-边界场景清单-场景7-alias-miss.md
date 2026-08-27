@@ -4,12 +4,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景7-alias-miss.md
 > 类别：开发难点
-> 状态：⚠️
 
 ---
 
 ### 场景7：alias miss（题型名不匹配）
-> 状态：⚠️
 > 检索摘要：analyze 返回原始题型名和掌握表 canonical 不一致，需要后端输出 canonical 做等值匹配，匹配失败静默展示未开始，容易造成学生困惑。
 
 | 属性 | 内容 |

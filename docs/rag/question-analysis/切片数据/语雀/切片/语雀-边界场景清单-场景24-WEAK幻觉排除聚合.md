@@ -4,12 +4,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景24-WEAK幻觉排除聚合.md
 > 类别：数据关联
-> 状态：✅
 
 ---
 
 ### 场景24：WEAK 幻觉排除聚合（LLM 幻觉不进题型库）
-> 状态：✅
 > 检索摘要：冷启动 LLM 猜测标记 WEAK，聚合 findResolved 排除 WEAK 防幻觉进题型库；analyze 对 WEAK 降级为候选待确认而非权威。
 
 | 属性 | 内容 |

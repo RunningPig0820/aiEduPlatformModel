@@ -5,12 +5,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题7-analyze冷调用慢.md
 > 类别：开发难点
-> 状态：⚠️ 待办
 
 ---
 
 ### 问题7：analyze 冷调用慢
-> 状态：⚠️ 待办
 > 检索摘要：analyze-question 冷调用 curl 实测约 5s，浏览器端偶发超 30s 被前端超时截断，根因是冷调用 LLM 推理慢且无缓存。
 
 | 属性 | 内容 |

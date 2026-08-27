@@ -4,12 +4,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景23-embedding维度绑定.md
 > 类别：开发难点
-> 状态：✅
 
 ---
 
 ### 场景23：embedding 维度绑定（索引维度建好后不可改）
-> 状态：✅
 > 检索摘要：COS 向量索引维度必须等于 embedding 输出维度，建好后不可改；text-embedding-v3 需显式 dimensions=768，spike 顺序必须先验证维度再建索引。
 
 | 属性 | 内容 |

@@ -5,12 +5,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题4-两层PENDING语义混用.md
 > 类别：开发难点
-> 状态：✅ 已修复（方案定稿）
 
 ---
 
 ### 问题4：两层 PENDING 语义混用
-> 状态：✅ 已修复（方案定稿）
 > 检索摘要：analyze 识别 PENDING 与 getMastery 掌握度 PENDING 语义相反，前端共用 status 变量导致状态展示全错，需分层判断（D14）。
 
 | 属性 | 内容 |

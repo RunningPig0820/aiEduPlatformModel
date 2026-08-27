@@ -4,12 +4,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景13-COS权限不足.md
 > 类别：开发难点
-> 状态：⚠️
 
 ---
 
 ### 场景13：COS 权限不足
-> 状态：⚠️
 > 检索摘要：子账号缺少 COS 桶操作权限，put/query 全部失败，需要提前配置对应 COS 权限。
 
 | 属性 | 内容 |

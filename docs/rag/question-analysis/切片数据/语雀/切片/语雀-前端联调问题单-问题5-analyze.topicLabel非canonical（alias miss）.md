@@ -5,12 +5,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题5-analyze.topicLabel非canonical（alias miss）.md
 > 类别：开发难点
-> 状态：⚠️ 待办
 
 ---
 
 ### 问题5：analyze.topicLabel 非 canonical（alias miss）
-> 状态：⚠️ 待办
 > 检索摘要：analyze 返回原始题型名与掌握表 canonical 名不一致，前端等号匹配 miss 静默显示"未开始"，学生困惑；需后端返回前过聚集 post-process。
 
 | 属性 | 内容 |

@@ -5,12 +5,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题13-vector-query返回字段错位.md
 > 类别：开发难点
-> 状态：✅ 已修复
 
 ---
 
 ### 问题13：vector query 返回字段错位
-> 状态：✅ 已修复
 > 检索摘要：COS `query_vectors` 实际返回 `(resp, data)`、命中在 `data["vectors"]`，非契约假设的 `hits`，Java 桥解析不到；契约需按 COS 实际返回对齐。
 
 | 属性 | 内容 |

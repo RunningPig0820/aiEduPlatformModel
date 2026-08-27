@@ -4,12 +4,10 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景11-embedding失败.md
 > 类别：开发难点
-> 状态：✅
 
 ---
 
 ### 场景11：embedding 失败
-> 状态：✅
 > 检索摘要：大模型 embedding 接口超时不可用，向量层抛出 500，Java 桥降级，主链路不受影响。
 
 | 属性 | 内容 |
