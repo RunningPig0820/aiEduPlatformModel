@@ -1,6 +1,6 @@
 # 分析-03-subject-classify学科门-架构与技术取舍
 
-> summary: 解答「学科门怎么设计才不误拦数学题」——K12 闭集 + 空值语义分离（other=明确非学科/空=不知道）+ 慢修复（关思考秒出）；宁漏不误是产品红线。
+> summary: subject-classify学科门架构与技术取舍
 > 权威度: 0.8 ｜ 来源: 面试切片 ｜ 锚点: 架构与技术取舍
 > 模块: question-analysis ｜ 节: 分析-03-subject-classify学科门
 > COS路径: rag-slices/interview/question-analysis/分析-03-subject-classify学科门-架构与技术取舍.md

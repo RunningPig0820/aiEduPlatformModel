@@ -1,6 +1,6 @@
 # 分析-03-subject-classify学科门-落地问题与复盘
 
-> summary: 解答「学科门落地踩坑与方案演进」——闭集从 5 值扩到 K12 十值，闭集外改回空不硬归 other，失败语义吞异常降级，空值语义分离。
+> summary: subject-classify学科门落地问题与复盘
 > 权威度: 0.8 ｜ 来源: 面试切片 ｜ 锚点: 落地问题与复盘
 > 模块: question-analysis ｜ 节: 分析-03-subject-classify学科门
 > COS路径: rag-slices/interview/question-analysis/分析-03-subject-classify学科门-落地问题与复盘.md

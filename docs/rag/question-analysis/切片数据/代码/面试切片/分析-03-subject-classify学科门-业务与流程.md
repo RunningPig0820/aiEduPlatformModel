@@ -1,6 +1,6 @@
 # 分析-03-subject-classify学科门-业务与流程
 
-> summary: 解答「怎么判断题目是不是数学题 / 学科门怎么防误判」——答疑只服务数学，进入 AI 决策前先筛非数学；宁漏不误（拿不准按 math 放行），失败/超时降级放行。
+> summary: subject-classify学科门业务与流程
 > 权威度: 0.8 ｜ 来源: 面试切片 ｜ 锚点: 业务与流程
 > 模块: question-analysis ｜ 节: 分析-03-subject-classify学科门
 > COS路径: rag-slices/interview/question-analysis/分析-03-subject-classify学科门-业务与流程.md
