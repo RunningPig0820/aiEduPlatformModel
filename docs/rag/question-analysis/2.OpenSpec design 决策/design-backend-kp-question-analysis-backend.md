@@ -1,5 +1,5 @@
 > summary: 题型分析后端技术设计：①analyze-question 独立端点（题目文本→题型名→关联知识点，纯分析不写 obs 浏览不产生学习信号，编排 understand→全候选遍历→前2候选 resolveReadOnly 冷启动最坏3次 LLM→PENDING+candidates 镜像校验）；②题目理解端口抽象 QuestionUnderstandingPort（Java LLM 默认，prompt 注入题型库 top20 收词约束命名）；③题型库别名合并（新表 t_kp_question_type_alias，kp_uri 重叠≥70% 判变体折叠，查询统一 findByTopicLabelOrAlias，canonical 只增不改）；④存疑挂起闭环三环（落 PENDING obs→学生 vote 转正 resolvePendingByStudentTopic→维护任务 rejudgePending）；⑤联调 4 bug 修复（非确定性移除缓存/WEAK 排除聚合防幻觉/candidates 恒空遍历兜底+镜像校验/vote 转正体现）；⑥图片题目多模态直看不经 OCR（question-understand 独立视觉端点方案B，模型写死视觉）；⑦封闭域约束选择 D8 本期未接线（KpPoolAssociateService 已交付，top-1 直接落 obs 信任模型，迭代接线即用）；⑧设计原则逻辑优先于数据准确（错误由 vote/维护重判/别名合并/管理端审核整理）——解决"题目文本→题型名→关联知识点"无独立 REST、题型库变体裂行稀释
-> 权威度: 0.8
+> 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-backend-kp-question-analysis-backend.md
 > 类别：业务流程
@@ -7,7 +7,8 @@
 # kp-question-analysis-backend 技术设计（RAG 结构化重构）
 
 ## 文档说明
-> 本文件为原始 OpenSpec design 的 RAG 结构化重构版本；业务逻辑 100% 来源于原始 design，**本文件独立完整，内容不拆分到外部 canonical 文档**。
+> 本文件为原始 design 设计稿的 RAG 结构化重构版本。
+> ⚠️重要：本文属于设计阶段素材，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度 0.8 的 canonical 真相源文档为准。本文件完整保留原始设计全部内容，不拆分到外部文档。
 
 ### 背景：现有能力与缺口
 > 状态：✅

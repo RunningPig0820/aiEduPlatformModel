@@ -255,7 +255,7 @@ docs/rag/question-analysis/
 | ⑬ | 6 design → **原来的文件/**(归档当证据源) | 原始素材不进 RAG，只做人肉溯源 |
 | ⑭ | 建 **spec信息补充提示词**(由 spec整理改名, `spec信息补充提示题.md`) + **spec文件整理提示词**(`spec文件整理.md`) | **双轨：spec 信息补充语雀方案 + spec 自身成文进池**——补充回答"为什么"(跨引用 canonical)，自身成文保留 100% 细节(Migration/Risks/OpenQuestions) |
 | ⑮ | 跑 **spec信息补充提示词** → 用 6 design 收敛事实**补充语雀方案**(双轨①: 决策 +D18~27 / 选型 +9~11 / 场景 +21~24 / 问题 +15~16 / 演进 阶段4 增量) | 收敛事实增量折入语雀 canonical(递增编号+证据)，回答"为什么"；但只留收敛事实，spec 完整细节会丢 |
-| ⑯ | 跑 **spec文件整理提示词** → 6 design 各自成文 `2.OpenSpec design 决策/design-*.md` 进切片池(双轨②: source=OpenSpec, 100% 保留信息) | **spec 自身成文**——保留 Migration/Risks/OpenQuestions 等补充丢失的细节；原始 design 归档 `原来的文件/` 仅人肉溯源，切片清单第三层定"双轨" |
+| ⑯ | 跑 **spec文件整理提示词** → 6 design 各自成文 `2.OpenSpec design 决策/design-*.md` 进切片池(双轨②: source=OpenSpec, **权威度 0.7 素材溯源库**, 100% 保留信息) | **spec 自身成文**——保留 Migration/Risks/OpenQuestions 等补充丢失的细节；**权威度固定 0.7（低于 canonical 0.8）只做溯源不作主回答源**；**用户拍板：同切片池 + 元数据规则，不物理隔离第三索引**（靠 authority=0.7 + source=OpenSpec 识别，检索优先真相源、主库无答案才降级 0.7 并提示「请核对代码确认落地」，QT⑦ 落地）；原始 design 归档 `原来的文件/` 仅人肉溯源 |
 
 ### Phase 5 目录重组（语料层分离）
 
@@ -270,4 +270,4 @@ docs/rag/question-analysis/
 3. **提示词先合并后剥离**：初版合并生成发现格式漂移 → 剥离独立 → 删总索引，迭代方向是"越独立越好"。
 4. **RAG 块级结构是后补的认知**：宽表不行 → 豆包格式(###+状态+检索摘要+附录)，这是语料质量的转折点。
 5. **spec 先价值评估再处置**：找问题地图 → 评估删 → 用户纠正恢复 → 归档 → 建增量桥，顺序是"先理解价值再动手删"。
-6. **spec 双轨：补充语雀方案 + 自身成文进池**：OpenSpec design 的 Context/Decisions = 语雀方案"为什么"的增量来源，也是自身 RAG 文档的信息主体——① 跑 `spec信息补充提示词` 把收敛事实折入语雀 canonical（决策/选型/场景/问题/演进，递增编号+证据）回答"为什么"；② 跑 `spec文件整理提示词` 把每份 design 各自成文 `2.OpenSpec design 决策/design-*.md`（100% 保留 Migration/Risks/OpenQuestions，summary 写充实作检索锚点）进池补细节。原始 design 归档 `原来的文件/` 仅人肉溯源。
+6. **spec 双轨：补充语雀方案 + 自身成文进池**：OpenSpec design 的 Context/Decisions = 语雀方案"为什么"的增量来源，也是自身 RAG 文档的信息主体——① 跑 `spec信息补充提示词` 把收敛事实折入语雀 canonical（决策/选型/场景/问题/演进，递增编号+证据）回答"为什么"；② 跑 `spec文件整理提示词` 把每份 design 各自成文 `2.OpenSpec design 决策/design-*.md`（**权威度 0.7 素材溯源库**，100% 保留 Migration/Risks/OpenQuestions，summary 写充实作检索锚点，文档说明带 ⚠️ 警告）进池补细节。**检索规则：优先 0.8 canonical 真相源，主库无答案才引用 0.7 素材库并提示「请核对代码确认落地」，禁止 ⚠️/❓ 当已上线**。原始 design 归档 `原来的文件/` 仅人肉溯源。

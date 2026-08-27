@@ -1,5 +1,5 @@
 > summary: 掌握度信号题型化技术设计：①mastery_signals 语义从知识点翻转为题型（topic_label 输出鸡兔同笼/相遇问题/牛吃草，不输出知识点——否则污染后端题型库→掌握度/派生覆盖度/图谱点亮全脏）；②字段改名 kp_label→topic_label（Java 已 @JsonAlias 兼容旧名，关键防回归=structured.py _schema_instructions 纠错提示词必须同步改名，否则 schema 与纠错提示词脱节→Pydantic 校验失败→反复纠错→掉兜底→mastery_signals 静默丢失）；③mastery_snapshot 脱钩（题型与知识点快照不同源，保留字段 Java 契约不动降级背景参考，question_kps 仍参考快照）；④题型名稳定规范（prompt 约束+few-shot 锚定鸡兔同笼/相遇问题/牛吃草，后端只字面归一化全角半角/空白/去语气词不做同义词聚类，稳定性负担在 prompt 端）；⑤question_kps 与 signal 枚举不变（mastered/practicing/struggling→Java 映射 75/50/25）
-> 权威度: 0.8
+> 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-python-ai-tutoring-topic-mastery-signal.md
 > 类别：数据关联
@@ -7,7 +7,8 @@
 # 掌握度信号题型化 技术设计（RAG 结构化重构）
 
 ## 文档说明
-> 本文件为原始 OpenSpec design 的 RAG 结构化重构版本；业务逻辑 100% 来源于原始 design，**本文件独立完整，内容不拆分到外部 canonical 文档**。
+> 本文件为原始 design 设计稿的 RAG 结构化重构版本。
+> ⚠️重要：本文属于设计阶段素材，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度 0.8 的 canonical 真相源文档为准。本文件完整保留原始设计全部内容，不拆分到外部文档。
 
 ### 背景：掌握度信号需配合题型化翻转
 > 状态：✅

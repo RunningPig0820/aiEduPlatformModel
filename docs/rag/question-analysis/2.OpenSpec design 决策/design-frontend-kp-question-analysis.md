@@ -1,5 +1,5 @@
 > summary: 题型分析页前端技术设计：智能练习下「贴题→识别题型→关联知识点」单题分析页面；①独立 analyze-question 端点（无状态一次性请求，从 decide 拆出题目理解非整个 decide，多入口复用）；②学生确认=复用 vote 喂聚合（两确认入口走同一接口，PENDING 态可操作不死胡同）；③先纯分析展示掌握度标注预留（coverageMap 有则标无则灰）；④菜单=智能练习→题型分析二级子菜单；⑤复用 OCR/question-types/vote 不新增关联表；⑥存疑挂起闭环前端契约增强（WEAK 降级返回 PENDING、candidates 镜像校验 vote 不 10003、vote 转正 PENDING 即时消失）；⑦待确认清单候选来源=复用 resolveKp 现取（方案A，后端补 candidates 字段留后续）；⑧PENDING 空候选→知识点搜索确认（后端 /api/kg/knowledge-points 加 keyword，选中镜像知识点 vote 不 10003）；⑨范围降级=题型识别核心+知识点顺带展示（确认/搜索/待确认闭环转后续独立功能）
-> 权威度: 0.8
+> 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-frontend-kp-question-analysis.md
 > 类别：业务流程
@@ -7,7 +7,8 @@
 # kp-question-analysis 技术设计（RAG 结构化重构）
 
 ## 文档说明
-> 本文件为原始 OpenSpec design 的 RAG 结构化重构版本；业务逻辑 100% 来源于原始 design，**本文件独立完整，内容不拆分到外部 canonical 文档**。
+> 本文件为原始 design 设计稿的 RAG 结构化重构版本。
+> ⚠️重要：本文属于设计阶段素材，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度 0.8 的 canonical 真相源文档为准。本文件完整保留原始设计全部内容，不拆分到外部文档。
 
 ### 背景：老方案已就绪，缺口是"题目文本→识别题型→关联知识点"
 > 状态：✅

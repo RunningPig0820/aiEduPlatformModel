@@ -1,5 +1,5 @@
 > summary: Python 侧向量桥技术设计：①vector_type 必填多索引路由（topic→topic-index 本期建，question/rag 配置占位不建，未知 400/缺失 422，映射放 Python Java 不感知 COS）；②embedding 复用 dashscope text-embedding-v3 显式 dimensions=768（默认 1024 坑，索引维度建好不可改，qwen3.7 同为 768 可换模型不重建），余弦距离越小越相似；③vector_store.py 唯一核心模块（embed/put_vector/query_vector/_resolve_index，CosVectorsClient 单例懒加载，put 后 ~10s 异步生效，query 返回 (resp,data) 命中在 data["vectors"] 非 hits，ReturnMetaData 大写 M）；④失败语义=错误冒泡（与 question-understand 空结果降级相反），embedding 失败与 COS 读写失败日志 tag 分开——支撑后端题型动态聚集，Java 桥失败回退字符规则+原样落库
-> 权威度: 0.8
+> 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-python-question-type-mastery-python.md
 > 类别：架构设计
@@ -7,7 +7,8 @@
 # question-type-mastery-python 技术设计（RAG 结构化重构）
 
 ## 文档说明
-> 本文件为原始 OpenSpec design 的 RAG 结构化重构版本；业务逻辑 100% 来源于原始 design，**本文件独立完整，内容不拆分到外部 canonical 文档**。
+> 本文件为原始 design 设计稿的 RAG 结构化重构版本。
+> ⚠️重要：本文属于设计阶段素材，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度 0.8 的 canonical 真相源文档为准。本文件完整保留原始设计全部内容，不拆分到外部文档。
 
 ### 背景：向量操作走 Python 桥
 > 状态：✅

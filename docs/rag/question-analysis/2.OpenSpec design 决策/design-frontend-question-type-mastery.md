@@ -1,5 +1,5 @@
 > summary: 掌握度页前端技术设计：①掌握度主体=题型（承接翻转）；②全入口题目采集唯一证据源（AI 答疑唯一产生信号，题型分析页只记题不产生信号）；③掌握信号唯一来源=AI 答疑且打折（直接答对100×打折/提示后答对50×打折/答错0，第1题70/第2题80/第3题起100）；④信号跟题目走（PENDING 题型照常采先落题目表）；⑤题型名定时向量聚类 per 学生（alias 收敛 canonical，误差可容忍，全局题型库后续独立）；⑥掌握程度=累计平均（new=old×n/(n+1)+score×1/(n+1)，一次作答算一次，打折作用于 score 不作用于结果）；⑦展示=列式列表（题型/来源/掌握%/训练数/操作-查看题目）；⑧getMastery 契约 BREAKING（masteryLevel 0/25/50/75→0-100 连续百分比，新增 source/trainCount，前端分桶保留四档视觉）；⑨两层 PENDING 拆枚举（analyze-status/mastery-status/kp-status）；⑩题型↔知识点本期断联（知识点总览仅展示不标熟练度）；验收 4 条——定名「题型掌握」、后端分页（?page=&size=→{studentId,page,size,total,items}）、摘要卡点击筛选、时间列用 updatedAt
-> 权威度: 0.8
+> 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-frontend-question-type-mastery.md
 > 类别：数据存储
@@ -7,7 +7,8 @@
 # question-type-mastery 技术设计（RAG 结构化重构）
 
 ## 文档说明
-> 本文件为原始 OpenSpec design 的 RAG 结构化重构版本；业务逻辑 100% 来源于原始 design，**本文件独立完整，内容不拆分到外部 canonical 文档**。
+> 本文件为原始 design 设计稿的 RAG 结构化重构版本。
+> ⚠️重要：本文属于设计阶段素材，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度 0.8 的 canonical 真相源文档为准。本文件完整保留原始设计全部内容，不拆分到外部文档。
 
 ### 背景：掌握度 = 题型，数据底盘零散
 > 状态：✅

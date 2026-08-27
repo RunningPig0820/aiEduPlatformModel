@@ -1,5 +1,5 @@
 > summary: 后端掌握度数据底盘技术设计：①题目表 t_student_question_record（事实源）+掌握表 t_student_topic_mastery（聚合结果）两表分离可重算聚合；②掌握度=累计平均正确率替代 max 单调不减；③信号映射 直接答对1.0/求助后答对0.5/答错0 × per-题型前几题打折（70/80/100）；④题型名向量动态涌现零锚点（编辑距离归并已移除，聚集依据=题型名向量单信号，题目向量不落库）；⑤向量存储走 Python 桥（vector_type 必填多索引，COS 无 Java SDK）；⑥getMastery 契约 BREAKING 四档→连续百分比；⑦信号跟题目走（PENDING 照常采）；⑧两域解耦+聚合手动触发+域B查表只读——解决无题库零锚点也能算可追溯正确率
-> 权威度: 0.8
+> 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-backend-question-type-mastery-backend.md
 > 类别：架构设计
@@ -7,7 +7,8 @@
 # question-type-mastery-backend 技术设计（RAG 结构化重构）
 
 ## 文档说明
-> 本文件为原始 OpenSpec design 的 RAG 结构化重构版本；业务逻辑 100% 来源于原始 design，**本文件独立完整，内容不拆分到外部 canonical 文档**。
+> 本文件为原始 design 设计稿的 RAG 结构化重构版本。
+> ⚠️重要：本文属于设计阶段素材，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度 0.8 的 canonical 真相源文档为准。本文件完整保留原始设计全部内容，不拆分到外部文档。
 
 ### 背景：掌握度数据底盘零散
 > 状态：✅
