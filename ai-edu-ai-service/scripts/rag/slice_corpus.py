@@ -1,5 +1,5 @@
 """
-1.5 切片脚本 - 按 `docs/rag/ai-tutoring/切片清单.md` + `tasks.md 1.5A` 定稿逻辑切块
+1.5 切片脚本 - 按 `docs/rag/<模块>/切片清单.md` + `tasks.md 1.5A` 定稿逻辑切块
 
 规则(2026-08-24 定稿):
 - 完善文档(权威1.0): 整文件一块(一节=一个问题答案, 不细切)
@@ -9,16 +9,18 @@
 - 坑档案(0.8): 按 h3 每坑一块
 
 每块含 summary 占位(由 gen_summaries.py 用 LLM 填充"解决什么问题"一句话)。
-输出: scripts/rag/data/rag_slices.jsonl  (每行 {text, summary, tags})
+输出: scripts/rag/data/rag_slices-{module}.jsonl  (每行 {text, summary, tags})
 
-用法: cd ai-edu-ai-service && python scripts/rag/slice_corpus.py
+用法: cd ai-edu-ai-service && python scripts/rag/slice_corpus.py [--module question-analysis]
+      --module 模块闭集 id(ai-tutoring 默认); 支持 --sources 只切指定来源(逗号分隔), 默认全层
 """
+import argparse
 import json
 import os
 import re
 
-CORPUS = "/Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag/ai-tutoring"
-OUT = os.path.join(os.path.dirname(__file__), "data", "rag_slices.jsonl")
+ROOT = "/Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag"
+OUT_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 MIN_CHARS = 60        # 低于此长度的块(纯标题/空)丢弃
 MAX_CHARS_FILE = 12000   # 整文件块(完善文档=一个问题的完整答案, 含追问与防御, 不截断)
@@ -43,10 +45,10 @@ DISCARD_HEADS = {"Risks / Trade-offs", "Risks", "Migration Plan", "Open Question
 DISCARD_PREFIX = ("Risk", "Open Question", "Migration", "Non-Goals")
 
 
-def find_files(pattern: str):
-    """glob 匹配 CORPUS 下文件(支持多级路径, 如 切片数据/引导问题/*.md)。"""
+def find_files(corpus: str, pattern: str):
+    """glob 匹配 corpus 下文件(支持多级路径, 如 切片数据/引导问题/*.md)。"""
     import glob
-    return sorted(glob.glob(os.path.join(CORPUS, pattern)))
+    return sorted(glob.glob(os.path.join(corpus, pattern)))
 
 
 def section_of(path: str) -> str:
@@ -58,7 +60,7 @@ def section_of(path: str) -> str:
 
 
 def _tags(path: str, authority: float, source: str, anchor: str,
-          module: str = "ai-tutoring") -> dict:
+          module: str = "ai-tutoring", corpus: str = "") -> dict:
     """块 metadata; module = 模块锚点闭集 id(三端定稿: ai-tutoring/knowledge-graph/question-analysis/rag-system)。
     默认 ai-tutoring 向后兼容; 多模块切片时按闭集 id 传(select_corpus 按 tags.module 选池, 不依赖目录名)。"""
     return {
@@ -67,8 +69,8 @@ def _tags(path: str, authority: float, source: str, anchor: str,
         "source": source,
         "authority": authority,
         "file": os.path.basename(path).replace(".md", ""),
-        # 相对语料根 docs/rag/ai-tutoring/ 的路径(前端定位源文件展示内容; 1.6A 新增)
-        "file_path": os.path.relpath(path, CORPUS).replace(os.sep, "/"),
+        # 相对语料根 docs/rag/<module>/ 的路径(前端定位源文件展示内容; 1.6A 新增)
+        "file_path": os.path.relpath(path, corpus).replace(os.sep, "/"),
         "anchor": anchor,
     }
 
@@ -95,7 +97,7 @@ def chunk_paragraphs(text: str, cap: int) -> list:
 
 
 def slice_file(path: str, authority: float, source: str, split_level: int, mode: str,
-               module: str = "ai-tutoring") -> list:
+               module: str = "ai-tutoring", corpus: str = "") -> list:
     """切片单文件 → 块列表; module = 模块闭集 id(默认 ai-tutoring, 多模块切片时传 rag-system 等)。"""
     with open(path, encoding="utf-8") as f:
         lines = f.read().splitlines()
@@ -127,7 +129,7 @@ def slice_file(path: str, authority: float, source: str, split_level: int, mode:
         if len(text) > MAX_CHARS_FILE:
             text = text[:MAX_CHARS_FILE] + "\n\n[已截断]"
         anchor = header_anchor or title
-        tags = _tags(path, authority, source, anchor, module)
+        tags = _tags(path, authority, source, anchor, module, corpus)
         tags["category"] = category  # 9 类闭集标签(检索按类别筛选)
         return [{"text": text, "summary": summary, "tags": tags}]
 
@@ -139,7 +141,7 @@ def slice_file(path: str, authority: float, source: str, split_level: int, mode:
             return []
         if len(text) > MAX_CHARS_FILE:
             text = text[:MAX_CHARS_FILE] + "\n\n[已截断]"
-        return [{"text": text, "summary": "", "tags": _tags(path, authority, source, title, module)}]
+        return [{"text": text, "summary": "", "tags": _tags(path, authority, source, title, module, corpus)}]
 
     # mode="split": 按标题切, 块起点 = level<=split_level; OpenSpec 过滤 discard 段
     blocks, cur_anchor, cur_lines = [], None, []
@@ -177,21 +179,38 @@ def slice_file(path: str, authority: float, source: str, split_level: int, mode:
         if len(text) > MAX_CHARS_SPLIT:
             # 段落拆块(同锚点, md 导出由冲突序号区分文件名; summary 同节共享)
             for chunk in chunk_paragraphs(text, MAX_CHARS_SPLIT):
-                out.append({"text": chunk, "summary": "", "tags": _tags(path, authority, source, anchor, module)})
+                out.append({"text": chunk, "summary": "", "tags": _tags(path, authority, source, anchor, module, corpus)})
         else:
-            out.append({"text": text, "summary": "", "tags": _tags(path, authority, source, anchor, module)})
+            out.append({"text": text, "summary": "", "tags": _tags(path, authority, source, anchor, module, corpus)})
     return out
 
 
-def main():
+def main() -> int:
+    ap = argparse.ArgumentParser(description="语料切片 → rag_slices-{module}.jsonl")
+    ap.add_argument("--module", default="ai-tutoring",
+                    help="模块闭集 id: ai-tutoring/question-analysis/knowledge-graph/rag-system")
+    ap.add_argument("--sources", default="",
+                    help="只切指定来源(逗号分隔, 如 代码,语雀), 默认全部")
+    args = ap.parse_args()
+    module = args.module
+    want = {s.strip() for s in args.sources.split(",") if s.strip()}
+
+    corpus = os.path.join(ROOT, module)
+    if not os.path.isdir(corpus):
+        print(f"[错误] 语料根不存在: {corpus}")
+        return 1
+
     all_blocks = []
     for pattern, authority, source, split_level, mode in LAYERS:
-        for path in find_files(pattern):
-            blocks = slice_file(path, authority, source, split_level, mode)
+        if want and source not in want:
+            continue
+        for path in find_files(corpus, pattern):
+            blocks = slice_file(path, authority, source, split_level, mode, module, corpus)
             all_blocks.extend(blocks)
             print(f"  {os.path.basename(path):45s} → {len(blocks):3d} 块")
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    OUT = os.path.join(OUT_DIR, f"rag_slices-{module}.jsonl")
+    os.makedirs(OUT_DIR, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         for b in all_blocks:
             f.write(json.dumps(b, ensure_ascii=False) + "\n")
@@ -202,7 +221,8 @@ def main():
     print(f"\n总块数: {len(all_blocks)}")
     print("按来源:", srcs)
     print(f"输出: {OUT}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

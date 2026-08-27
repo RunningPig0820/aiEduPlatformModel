@@ -1,24 +1,25 @@
 """
-1.5 切片数据 md 落盘 - 将 rag_slices.jsonl 的块导出为可读 md 文件
+1.5 切片数据 md 落盘 - 将 rag_slices-{module}.jsonl 的块导出为可读 md 文件
 
-切好的块按 md 格式输出到 `docs/rag/ai-tutoring/切片数据/`：
+切好的块按 md 格式输出到 `docs/rag/<模块>/切片数据/`：
 - 按来源/文件夹组织: 完善文档 / 语雀 / OpenSpec / 代码 / 坑档案
 - 每块一个 md 文件: 文件名 = <file>-<锚点>.md (完善文档整文件一块, 即 <file>.md)
 - 文件头带 summary + 标签(权威度/来源/锚点/节), 正文随块
 
 用途: 人可读审查切片质量 + 向量入库前校验(jsonl 为索引入口, md 为审查视图)。
 
-用法: cd ai-edu-ai-service && python scripts/rag/export_slices_md.py
-输入: scripts/rag/data/rag_slices.jsonl
-输出: docs/rag/ai-tutoring/切片数据/
+用法: cd ai-edu-ai-service && python scripts/rag/export_slices_md.py [--module question-analysis]
+输入: scripts/rag/data/rag_slices-{module}.jsonl
+输出: docs/rag/<模块>/切片数据/
 """
+import argparse
 import json
 import os
 import re
 import shutil
 
-DATA = os.path.join(os.path.dirname(__file__), "data", "rag_slices.jsonl")
-OUT_DIR = "/Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag/ai-tutoring/切片数据"
+ROOT = "/Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag"
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 # 来源 -> 输出子文件夹(路径里已含编号, 输出目录用纯名)
 SOURCE_DIR = {
@@ -67,14 +68,36 @@ def block_filename(b: dict) -> str:
     return f"{t['file']}-{slug(t['anchor'])}.md"
 
 
-def main():
+def main() -> int:
+    ap = argparse.ArgumentParser(description="切片数据 md 落盘(人读审查视图)")
+    ap.add_argument("--module", default="ai-tutoring",
+                    help="模块闭集 id: ai-tutoring/question-analysis/knowledge-graph/rag-system")
+    args = ap.parse_args()
+    module = args.module
+
+    DATA = os.path.join(DATA_DIR, f"rag_slices-{module}.jsonl")
+    OUT_DIR = os.path.join(ROOT, module, "切片数据")
+    if not os.path.isfile(DATA):
+        print(f"[错误] jsonl 不存在: {DATA}（先跑 slice_corpus.py --module {module}）")
+        return 1
+
     with open(DATA, encoding="utf-8") as f:
         blocks = [json.loads(line) for line in f if line.strip()]
 
-    # 清空重建, 保证幂等(旧文件不残留)
-    if os.path.isdir(OUT_DIR):
-        shutil.rmtree(OUT_DIR)
-    os.makedirs(OUT_DIR)
+    # 清理旧切片块文件, 保留骨架(readme.md / README.md / 处理方案/)——幂等且不误删人工文档
+    KEEP = {"readme.md", "README.md", "处理方案"}
+    for name in os.listdir(OUT_DIR) if os.path.isdir(OUT_DIR) else []:
+        p = os.path.join(OUT_DIR, name)
+        if name in KEEP:
+            continue
+        if os.path.isdir(p):
+            for sub in os.listdir(p):
+                sp = os.path.join(p, sub)
+                if sub in KEEP or os.path.isdir(sp):
+                    continue
+                os.remove(sp)
+        else:
+            os.remove(p)
 
     written = 0
     by_source = {}
