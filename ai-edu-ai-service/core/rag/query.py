@@ -29,8 +29,15 @@ logger = __import__("logging").getLogger(__name__)
 
 # 语料 jsonl 副本(1.6 调整: 向量桶 role mode 不收普通对象, 留本地)
 # 双池(1.13): rag_slices.jsonl = 切片池(294 块), rag_slices_full.jsonl = 全量池(23 块整篇)
-DATA = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "rag", "data", "rag_slices.jsonl")
-DATA_FULL = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "rag", "data", "rag_slices_full.jsonl")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "rag", "data")
+DATA = os.path.join(DATA_DIR, "rag_slices.jsonl")          # 兼容旧引用 = ai-tutoring 切片池
+DATA_FULL = os.path.join(DATA_DIR, "rag_slices_full.jsonl")  # ai-tutoring 全量池
+# 多模块 jsonl(2026-08-27): ai-tutoring + question-analysis 共用 rag-full/rag-slice 索引,
+# 语料按模块加载(MODULE_DATA 全读, 模块靠 tags.module 区分 + select_corpus 过滤)。
+MODULE_DATA = {
+    "ai-tutoring": ("rag_slices.jsonl", "rag_slices_full.jsonl"),
+    "question-analysis": ("rag_slices-question-analysis.jsonl", "rag_slices_full-question-analysis.jsonl"),
+}
 
 # 检索参数
 RRF_K = 60          # RRF 融合常数
@@ -427,8 +434,19 @@ def _load_full_blocks() -> list:
 
 
 def _load_all_blocks() -> list:
-    """双池合并语料(切片池 + 全量池), BM25/keymap 用。池前缀在 _key_of 区分。"""
-    return _load_blocks() + _load_full_blocks()
+    """双池合并语料(所有模块的切片池 + 全量池), BM25/keymap 用。池前缀在 _key_of 区分。
+
+    2026-08-27 多模块: 从只加载 ai-tutoring 改为加载 MODULE_DATA 全部模块(ai-tutoring + question-analysis),
+    否则 qa 向量命中后 keymap/BM25 无 qa 块 → orchestrate `block is None` 被丢弃。缺失文件跳过容错。
+    """
+    blocks = []
+    for slice_name, full_name in MODULE_DATA.values():
+        for name in (slice_name, full_name):
+            p = os.path.join(DATA_DIR, name)
+            if os.path.exists(p):
+                with open(p, encoding="utf-8") as f:
+                    blocks.extend(json.loads(line) for line in f if line.strip())
+    return blocks
 
 
 # ============ 召回单元 (1.6B, 独立) ============
