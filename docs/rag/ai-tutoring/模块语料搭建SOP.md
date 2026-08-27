@@ -1,7 +1,7 @@
 # 模块语料搭建 SOP（通用）
 
 > 用途：**新模块/新功能从零搭建 RAG 语料的可复用步骤清单**。参考 AI答疑模块完整流水线（`每模块流水线-tasks.md`）+ 双池架构（`双池检索方案.md`）+ 目录结构（`docs/rag/ai-tutoring/`），提炼为通用流程。
-> 适用：knowledge-graph / question-type-knowledge / org-center / rag-system 等已有雏形模块，以及任何新功能。
+> 适用：knowledge-graph / question-analysis / rag-system 等已有雏形模块，以及任何新功能。
 > 状态：2026-08-26 沉淀。
 
 ---
