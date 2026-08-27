@@ -1,6 +1,7 @@
 # 切片数据 / 代码 / 处理方案
 
-> 本来源（3.代码 分析文档）从源文档到切片数据的完整处理路径，按数据整理步骤记录。
+> 本来源（3.代码 分析文档）从源文档到**切片数据**的完整处理路径，按数据整理步骤记录。
+> **本次范围 = 分片（切片 jsonl + 人读视图），不做入桶**（QT⑦ 入桶/检索规则另行处理）。
 > 脚本统一用 `../脚本代码/`（顶层，切割通用脚本留档；运行时源在 `ai-edu-ai-service/scripts/rag/`）。
 
 ## 步骤一：源头（语料就绪）
@@ -41,10 +42,13 @@ cd ai-edu-ai-service && venv/bin/python scripts/rag/export_slices_md.py --module
 - 输出：本目录 `../` 下 `代码/` 90 个块文件（每块带 summary/权威度/来源/锚点/模块/节 头）
 - 幂等：只清旧切片块文件，**保留 readme.md / README.md / 处理方案/ 骨架**
 
-## 步骤五：检索侧规则（入桶/查询时生效）
+## 步骤五：入桶（QT⑦，本次不做）
 
-- code_analysis 只答**接口/参数/降级/对账翻转/代码真实行为**；不答"为什么这么设计/选型权衡"（canonical 决策职责）——RAG 系统 prompt 按 doc_type 做来源过滤
-- 全量池：完善文档 1.0 整篇（`slice_full.py`，待参数化）| 切片池：本层 90 块 + 语雀/坑档案/引导问题
+> 本次范围停在**分片**（上述步骤一到四产出切片 jsonl + 视图）。入桶是 QT⑦ 的职责，此处仅留规则备忘，不执行：
+
+- **切片池（rag-slice）**：本层 90 块（doc_type=code_analysis，0.8）→ `build_index.py --module question-analysis --pool slice`
+- **全量池（rag-full）**：完善文档 1.0 整篇（`slice_full.py`，待参数化）→ `--pool full`
+- **检索规则**：code_analysis 只答接口/参数/降级/对账翻转/代码真实行为；不答"为什么这么设计/选型权衡"（canonical 决策职责）——RAG 系统 prompt 按 doc_type 做来源过滤
 
 ## 其它脚本（旁路工具，暂未用）
 
