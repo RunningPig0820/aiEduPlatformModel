@@ -56,9 +56,13 @@ WAIT_SECONDS = 10     # put 后异步生效等待(spike 实测 ~10s)
 FULL_EMBED_MAX_CHARS = 5000  # 全量池条件式阈值: ≤ 此字符 embed(summary+全文), 超限只 embed(summary) 防 8192 token 截断
 
 
-def make_key(vector_type: str, file_: str, anchor: str, idx: int) -> str:
-    """块唯一 key: {池前缀}/{file}/{anchor}#{chunk_idx}, 池前缀防两池 (file,anchor) 冲突。"""
-    return f"{vector_type}/{file_}/{anchor}#{idx}"
+def make_key(vector_type: str, module: str, file_: str, anchor: str, idx: int) -> str:
+    """块唯一 key: {池前缀}/{module}/{file}/{anchor}#{chunk_idx}。
+
+    2026-08-27 加 module: 多模块共用 rag-full/rag-slice 索引, 跨模块同名文件(如两模块的
+    完善文档 01-08)若键不含 module 会冲突覆盖——module 段保证键跨模块唯一。
+    """
+    return f"{vector_type}/{module}/{file_}/{anchor}#{idx}"
 
 
 def make_version(blocks: list) -> str:
@@ -135,7 +139,7 @@ def main():
         group = (t["file"], t["anchor"])
         idx = counters.get(group, 0)
         counters[group] = idx + 1
-        key = make_key(vector_type, t["file"], t["anchor"], idx)
+        key = make_key(vector_type, t.get("module", "ai-tutoring"), t["file"], t["anchor"], idx)
         # 注意: COS 向量索引 metadata 单条 ≤10 entries(实测), 现 10 字段恰好上限。
         # doc_type 与 module 同值冗余已去掉(2026-08-26); 新增字段需先删一个。
         metadata = {

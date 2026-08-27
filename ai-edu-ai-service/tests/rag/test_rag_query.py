@@ -106,7 +106,7 @@ class TestOrchestrate:
         monkeypatch.setattr(rag_core, "_llm_category", lambda q: "难点")
         strategy = rag_core.classify("怎么防学生套答案")
         # 向量路: 返回与 BM25 相同的 04 块(模拟两路都命中)
-        vec = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
+        vec = {"hits": [{"key": "rag-slice/ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.1}],
                "confidence": 0.9}
         bm = rag_core.retrieve_bm25("怎么防学生套答案", BLOCKS)
         hits = rag_core.orchestrate("怎么防学生套答案", BLOCKS, vec, bm, strategy, top_k=5)
@@ -120,7 +120,7 @@ class TestOrchestrate:
         """text 反查: 命中块 text 从 jsonl 反查(不依赖向量路 metadata)"""
         strategy = {"locked_sections": [], "strategy": "retrieve"}
         vec = {"hits": [], "confidence": 0.0}
-        bm = {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "bm25_score": 8.0}],
+        bm = {"hits": [{"key": "rag-slice/ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "bm25_score": 8.0}],
               "confidence": 0.8}
         hits = rag_core.orchestrate("防套答案", BLOCKS, vec, bm, strategy, top_k=1)
         assert hits[0]["text"].startswith("防套答案")  # text 按 key 从语料反查到
@@ -130,8 +130,8 @@ class TestOrchestrate:
         """打分排序: 两路同命中时 authority 高者在前(完善1.0 > 语雀0.7)"""
         strategy = {"locked_sections": [], "strategy": "retrieve"}
         both = [
-            {"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.05},
-            {"key": "rag-slice/语雀-答疑理念/答疑理念#0", "distance": 0.06},
+            {"key": "rag-slice/ai-tutoring/04-安全与防作弊/04-安全与防作弊#0", "distance": 0.05},
+            {"key": "rag-slice/ai-tutoring/语雀-答疑理念/答疑理念#0", "distance": 0.06},
         ]
         vec = {"hits": both, "confidence": 0.9}
         bm = {"hits": [{"key": h["key"], "bm25_score": 8.0} for h in both], "confidence": 0.8}
@@ -159,7 +159,7 @@ class TestRagAPI:
 
     def _dual_hit(self, q):
         """双池召回 mock: 全量池命中 04 块, 切片/BM25 空"""
-        return {"full": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+        return {"full": {"hits": [{"key": "rag-slice/ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
                                    "distance": 0.1}], "confidence": 0.9},
                 "slice": {"hits": [], "confidence": 0.0},
                 "bm25": {"hits": [], "confidence": 0.0}}
@@ -216,7 +216,7 @@ class TestRagAPI:
         monkeypatch.setattr(rag_core, "retrieve_dual",
                             lambda q, corpus=None, locked_categories=None:
                                 (calls.update({"q": q}) or {
-                                    "full": {"hits": [{"key": "rag-slice/04-安全与防作弊/04-安全与防作弊#0",
+                                    "full": {"hits": [{"key": "rag-slice/ai-tutoring/04-安全与防作弊/04-安全与防作弊#0",
                                                        "distance": 0.1}],
                                              "confidence": 0.9},
                                     "slice": {"hits": [], "confidence": 0.0},
@@ -317,7 +317,7 @@ class TestMultiModule:
         bm_keys = [h["key"] for h in dual["bm25"]["hits"]]
         assert bm_keys, "BM25 应有命中"
         assert all("f1" not in k for k in bm_keys)  # ai-tutoring 块被模块筛掉
-        assert any("rag-slice/f2" in k for k in bm_keys) or any("rag-full/f3" in k for k in bm_keys)
+        assert any("rag-slice/rag-system/f2" in k for k in bm_keys) or any("rag-full/rag-system/f3" in k for k in bm_keys)
 
 
 class TestDeicticAnchor:

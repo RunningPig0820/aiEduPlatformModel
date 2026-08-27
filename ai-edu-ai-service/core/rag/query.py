@@ -582,13 +582,14 @@ def retrieve_bm25(question: str, blocks: list) -> dict:
 
 
 def _key_of(b: dict) -> str:
-    """块 → 向量 key(与 build_index 同规则: {池前缀}/{file}/{anchor}#{idx})。
+    """块 → 向量 key(与 build_index 同规则: {池前缀}/{module}/{file}/{anchor}#{idx})。
 
-    池前缀 = rag-{tags.pool}(rag-full/rag-slice), 与 COS 索引 key 对齐, 防两池 (file,anchor) 冲突。
+    池前缀 = rag-{tags.pool}(rag-full/rag-slice), 与 COS 索引 key 对齐, 防两池 (file,anchor) 冲突;
+    2026-08-27 加 module 段: 多模块共用索引, 跨模块同名文件(完善文档 01-08)键必须含 module 防覆盖。
     """
     t = b["tags"]
     pool = t.get("pool", "slice")
-    return f"rag-{pool}/{t['file']}/{t['anchor']}#{t.get('_idx', 0)}"
+    return f"rag-{pool}/{t.get('module', 'ai-tutoring')}/{t['file']}/{t['anchor']}#{t.get('_idx', 0)}"
 
 
 def _assign_idx(blocks: list) -> dict:

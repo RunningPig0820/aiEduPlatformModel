@@ -50,7 +50,7 @@ BLOCKS = [
 
 # orchestrate 输出形状(含 text/authority 等完整字段)
 HITS = [{
-    "key": f"rag-slice/{b['tags']['file']}/{b['tags']['anchor']}#0",
+    "key": f"rag-slice/{b['tags']['module']}/{b['tags']['file']}/{b['tags']['anchor']}#0",
     "score": round(1.0 - i * 0.1, 4),
     "authority": b["tags"]["authority"],
     "source": b["tags"]["source"],
