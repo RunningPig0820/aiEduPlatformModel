@@ -5,13 +5,11 @@
 > 模块: question-analysis
 > COS路径: rag-slices/question-analysis/OpenSpec/design-backend-kp-question-analysis-backend-D1-题目理解端口抽象.md
 > 类别：架构设计
-> 状态：✅
 
 ---
 
 ### D1：题目理解端口抽象，Java LLM 默认实现（题型名 → 空挂库锚）
 
-> 状态：✅
 > 检索摘要：题目理解端口抽象，Java LLM 默认实现，prompt 注入题型库收词约束命名降变体漂移，预留 Python 端点可替换。
 
 新增 domain 端口 `QuestionUnderstandingPort`：

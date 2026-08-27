@@ -14,7 +14,7 @@
 
 - 按 `###` 切，一个决策/小节一块（决策 D# 归一化；背景/目标非目标/风险/迁移/开放问题/验收反馈各自成块）
 - 100% 保留 Migration/Risks/OpenQuestions；`# ==== 分节 ====` 分隔线不作 chunk
-- 头部精简 6 行（summary 完整保留 + 权威度 0.7 + 模块 + COS路径 + 类别 + 状态）；机器元信息（entry_id/source_doc/status tag）由 QT⑥⑦ 摄入时从文件名+状态推导，md 头不写
+- 头部精简 5 行（summary 完整保留 + 权威度 0.7 + 模块 + COS路径 + 类别），正文保留 `> 检索摘要`；无 `> 状态`；机器元信息（entry_id/source_doc）由 QT⑥⑦ 摄入时从文件名推导，md 头不写
 - 块元数据 `authority=0.7 + source=OpenSpec`（同切片池，不物理隔离第三索引——靠元数据识别）
 
 ## 三、切片结果

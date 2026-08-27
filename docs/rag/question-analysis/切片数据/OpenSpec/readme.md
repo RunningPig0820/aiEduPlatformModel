@@ -16,12 +16,12 @@
 
 - 粒度：决策 `### D#/Decision#/决策#` → `design-{change}-D{n}-{短名}.md`（编号归一化 D{#}）；背景→Context、目标非目标→Goals-Non-Goals、风险/迁移/开放问题/验收反馈各自成块
 - 保真：决策正文/表格/流程图文本/代码块原样保留，**100% 保留 Migration/Risks/OpenQuestions**；只删 文档说明/草稿标记
-- 头部：精简 6 行（summary=源检索摘要**完整保留** / 权威度 0.7 / 模块 / COS路径 / 类别 9 视角闭集 / 状态），无 `｜来源/锚点/节`；机器元信息（entry_id/source_doc/status tag）QT⑥⑦ 摄入时从 文件名+状态+层配置 推导
+- 头部：精简 5 行（summary=源检索摘要**完整保留** / 权威度 0.7 / 模块 / COS路径 / 类别 9 视角闭集），无 状态/`｜来源/锚点/节`；机器元信息（entry_id/source_doc）QT⑥⑦ 摄入时从 文件名+层配置 推导，无 status tag
 
 ## 三、切片结果与质量检查
 
-- 本次结果：（待切）约 85 块（backend-kp 18 + backend-qtm 15 + frontend-kp 14 + frontend-qtm 20 + python-signal 8 + python-qtm 10）
-- 质量检查：按 ### 全切无缺、类别全在 9 视角闭集、权威度全 0.7、状态标记（✅/⚠️/❓）保留、风险/迁移/开放问题无删减、草稿/文档说明无残留
+- 本次结果：**91 块**（85 小节 + 6 个超长拆子块：backend-kp 24 + backend-qtm 15 + frontend-kp 14 + frontend-qtm 20 + python-signal 8 + python-qtm 10）
+- 质量检查：按 ### 全切无缺、类别全在 9 视角闭集、权威度全 0.7、每块正文带 `> 检索摘要`、无 `> 状态` 行、风险/迁移/开放问题无删减、草稿/文档说明无残留
 
 ## 四、检索规则（入桶/查询时生效）
 
