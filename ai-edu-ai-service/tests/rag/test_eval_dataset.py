@@ -155,14 +155,23 @@ class TestReferenceConsistency:
     """2.3 curation 一致性: expected_references 指向的节必须真实存在(完善文档)"""
 
     def test_all_references_point_to_real_docs(self):
-        """每个 expected_references 前缀(ai-tutoring/0X-...) 对应完善文档真实文件"""
+        """每个 expected_references 对应语料库真实文件(完善文档/引导问题切片/代码/... 任一来源)"""
         items = eval_dataset.load_dataset()
-        doc_names = {f.split("-")[0] for f in os.listdir(DOC_DIR) if f.endswith(".md")} if os.path.isdir(DOC_DIR) else set()
+        # 语料库真实 .md 文件名集合(完善文档 + 切片数据, 跳过 原来的文件/处理方案/readme)
+        corpus_root = os.path.join(PROJECT_ROOT, "docs", "rag", "ai-tutoring")
+        doc_names = set()
+        if os.path.isdir(corpus_root):
+            for root, _, files in os.walk(corpus_root):
+                if "原来的文件" in root or "处理方案" in root:
+                    continue
+                for f in files:
+                    if f.endswith(".md") and f != "readme.md":
+                        doc_names.add(f[:-3])
         if not doc_names:
-            pytest.skip("完善文档目录不存在")
+            pytest.skip("语料目录不存在")
         for i in items:
             for ref in i["expected_references"]:
-                # ref 形如 ai-tutoring/01-模块定位 → 节号 01
-                prefix = ref.split("/")[1] if "/" in ref else ref
-                section = prefix.split("-")[0]
-                assert section in doc_names, f"{ref} 指向不存在的节 {section}"
+                # ref 形如 "01-模块定位" / "引导问题-01-..." 或 "module/01-..." → 取文件名段;
+                # 匹配语义与 eval_agent._match_file 一致(双向子串, 短名如 04-安全与防作弊 命中 04-安全与防作弊（护栏）)
+                name = ref.split("/")[1] if "/" in ref else ref
+                assert any(name in doc or doc in name for doc in doc_names), f"{ref} 指向不存在的语料文件"
