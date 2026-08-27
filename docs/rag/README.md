@@ -19,7 +19,7 @@
 |------|------|------|
 | 知识图谱 | `knowledge-graph/knowledge-graph.md` | Neo4j 图谱 + GraphRAG |
 | AI答疑 | `ai-tutoring/ai-tutoring.md` | decide/generate/question-understand 链路 |
-| 题型知识点 | `question-analysis/question-type-knowledge.md` | 题型聚集 + 掌握度 |
+| 题型知识点 | `question-analysis/question-analysis.md` | 题型聚集 + 掌握度 |
 | 组织中心 | `org-center/org-center.md` | DDD 组织/权限 |
 | RAG问答系统 | `rag-system/rag-system.md` | 本项目自身（问题最多，重点） |
 
