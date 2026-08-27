@@ -4,7 +4,7 @@
 > 用途: 从原始技术素材（Design/ADR/会议纪要/研讨草稿/技术方案稿）增量更新 RAG 规范化 canonical 文档（决策记录/方案选型对比/演进时间线/边界场景清单/前端联调问题单），只提取收敛事实、不复制草稿
 > 权威度: 0.8
 > 模块: question-analysis
-> COS路径: rag-source/question-analysis/OpenSpec设计决策/处理方案/提示词/spec整理提示词.md
+> COS路径: rag-source/question-analysis/OpenSpec设计决策/处理方案/提示词/spec信息补充提示题.md
 > 类别：架构设计
 
 ## 角色说明
