@@ -9,8 +9,9 @@
   - summary+全文 ≤ FULL_EMBED_MAX_CHARS(5000 字符) → embed(summary+全文) 保全文(完善文档 1.0 主答案/代码 0.8)
   - 超限大文件(语雀 10~12K 字符) → 只 embed(summary) 摘要向量, 防整篇 text 超 8192 token 被 dashscope 静默截断。
   控制台无需新建索引; 不加 metadata(10 字段上限)。
-metadata 10 字段(≤COS 向量索引上限): version/module/category/source/authority/section/file/file_path/anchor/summary
-(text 不进 metadata, 20KB 限制, 检索后按 key 反查 jsonl)。
+metadata 10 字段: version/module/category/source/authority/section/file/file_path/anchor/summary
+(filterable metadata 单条 ≤2048B, 实测 2026-08-27——metadata.summary 按余量截断, 但 **embedding 仍用全量 summary**;
+ text 不进 metadata, 检索后按 key 反查 jsonl 拿全文/全量摘要)。
 
 用法: cd ai-edu-ai-service && python scripts/rag/build_index.py --pool full|slice [--clear]
 输入: --pool full  → scripts/rag/data/rag_slices_full.jsonl(23 块整篇)
@@ -141,6 +142,14 @@ def main():
             "anchor": t["anchor"],
             "summary": b["summary"],
         }
+        # COS filterable metadata 单条 ≤2048B, 且计数含 key 名 + JSON 结构(实测 2026-08-27: 值字节外约 +130B)。
+        # 按"非 summary 值字节 + 250B 安全量"截断 summary; embedding 仍用全量 b["summary"](data 侧), 全文/全量摘要经 key 反查 jsonl。
+        _other_bytes = sum(len(str(v).encode("utf-8")) for k, v in metadata.items() if k != "summary")
+        _budget = 2048 - _other_bytes - 250
+        _s = metadata["summary"]
+        while _s and len(_s.encode("utf-8")) > _budget:
+            _s = _s[:-1]
+        metadata["summary"] = _s
         if args.pool == "slice":
             # 双向量(task #78): 每块写两个 key, 同索引 rag-slice, key 后缀 role 区分(不加 metadata)
             #   -c 内容路 embed(summary+text), -q summary/问题路 embed(summary)
