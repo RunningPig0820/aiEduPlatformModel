@@ -101,25 +101,36 @@ venv/bin/python scripts/rag/export_slices_md.py
 - `category` = 9 类闭集标签（项目介绍/操作流程/数据关联/开发难点/业务流程/架构设计/业务视角/数据存储/未来演进）
 - 低价值块原则：空壳（只有标题）、纯证据引用表、重复内容 → 不切
 
-### 第 ⑤ 步：索引入 COS（双池）
+### 第 ⑤ 步：索引入 COS（双池，2026-08-27 更新：条件式 embed + metadata 2048B + 多模块共用索引）
 
 **目标**：全量池 + 切片池两个独立索引，入向量桶。
 
 **命令**：
 ```bash
-# 全量池（语雀5+完善文档8+代码10 = 23 块整篇）
-venv/bin/python scripts/rag/slice_full.py          # → rag_slices_full.jsonl
-venv/bin/python scripts/rag/build_index.py --pool full --clear
+# 全量池 jsonl（23 块整篇：语雀5+完善文档8+代码10）
+venv/bin/python scripts/rag/gen_full_summaries.py    # 23 条整篇重写文档级摘要(逐篇 doubao, 修复15字短句/切片拼接复读)
+venv/bin/python scripts/rag/slice_full.py            # → rag_slices_full.jsonl(slice_full 复用旧 summary; 或源文档头补 summary 后同步 jsonl)
+venv/bin/python scripts/rag/build_index.py --pool full [--clear]
 # 切片池（切片数据/ 全部）
-venv/bin/python scripts/rag/build_index.py --pool slice --clear
+venv/bin/python scripts/rag/build_index.py --pool slice [--clear]
 ```
+
+**全量池条件式 embed**（2026-08-27 改，防大文件超 8192 token 被静默截断）：
+- `summary+全文 ≤ FULL_EMBED_MAX_CHARS(5000)` → embed(summary+全文)（完善文档 1.0 主答案 / 代码 0.8 保全文）
+- 超限大文件（语雀 10~12K 字符）→ 只 embed(summary) 摘要向量
+- summary 来源：源文档头 `> summary:`（**方案B：源文档补详细版 → 同步 jsonl → 向量，三处一致**；大语雀只 embed summary 时 summary 就是向量本体，越长召回越全）
 
 **前置**：COS 控制台先建 `rag-full` / `rag-slice` 索引（768 float32 cosine）；`.env` 配 `COS_VECTORS_*`。
 
 **入桶字段**（每块）：
 - key：`rag-full|rag-slice/{file}/{anchor}#{idx}`（池命名空间防冲突）
-- metadata：`version / doc_type / module / category / source / authority / section / file / file_path / anchor / summary`
-- **text 不进 metadata**（20KB 限制），留在 jsonl，命中后按 key 反查
+- metadata 10 字段：`version / module / category / source / authority / section / file / file_path / anchor / summary`（doc_type 已去掉，10 字段恰好 COS 上限）
+- **text 不进 metadata**；**filterable metadata 单条 ≤2048B（实测 2026-08-27，非注释的 20KB）**——metadata.summary 按余量截断，但 **embedding 仍用全量 summary**；全文/全量摘要靠 key 反查 jsonl（产品运行时查看原文走 COS 对象存储 get_object(file_path)）
+- `--module ai-tutoring|question-analysis`（默认 ai-tutoring，build_index 引擎复用；MODULE_DATA 双模块 jsonl 映射）
+
+**⚠️ 多模块共用索引（2026-08-27）**：rag-full/rag-slice 被 ai-tutoring 与 question-analysis 共用，靠 metadata.module 过滤隔离——重建某模块时 **`--clear` 会清掉另一模块的向量**。当前各自增量 upsert（键按 file/anchor 区分无冲突）；若要单独重建某模块，先确认另一模块向量不在该索引（或做 module 级清理）。
+
+**2026-08-27 实操记录（ai-tutoring 第一轮入库修复）**：全量池 23 条 doubao 摘要重写(修复完善文档 15 字短句 + 语雀切片拼接复读) → 源文档 23 份补 `> summary` 详细版 → jsonl 同步源文档头(方案B) → 条件式 embed + metadata 2048B 截断修复 → `--pool full --clear` 重灌 rag-full 23 条 → list_vectors 验证 → 源文档同步 COS 普通桶(317 文件, upload_cos.py) → rag_query 自测(防套答案/掌握度口径/决策权 Java 三题, 全量池+切片池命中正常)。
 
 ### 第 ⑥ 步：评测
 
