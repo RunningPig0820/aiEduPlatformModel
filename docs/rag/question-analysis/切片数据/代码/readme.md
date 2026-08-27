@@ -8,5 +8,6 @@
 ## 处理方案
 - `处理方案/readme.md`：代码层切片处理说明
 - `处理方案/提示词/代码深读-分析文档-提示词.md`（源目录 `3.代码/处理方案/提示词/`）
+- `脚本/`：切割脚本留档（slice_corpus/export_slices_md/gen_summaries/slice_full/md_to_jsonl/recover_slices）
 
 
