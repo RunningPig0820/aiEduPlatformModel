@@ -3,6 +3,7 @@
 > 来源: 语雀 业务实施→AI答疑→方案设计→ai回答 (doc 279927616)
 > COS路径: rag-source/ai-tutoring/语雀/语雀-ai回答.md
 > 格式: lake, 已提取正文
+> summary: AI答疑现状盘点与方案讨论: 摸底已有技术底座(LLM Gateway 网关/6,757节点 Neo4j 知识图谱/Question·Learning 领域雏形)与真缺口(会话状态机/对话存储/知识点确认与图谱点亮/场景prompts/防作弊计数), 结论"管道已够、缺流程编排"; 核心决策=Java 管确定性状态机编排、Python 管智能动作(LLM 单次 prompt+JSON schema), 4个scene(intent/socratic/eval/kp_extract)实际收敛为 decide+generate 两端点(+subject-classify/question-understand), 结构化输出实际用 LangChain bind_tools function calling+四段降级; 对话存储定稿三层 Redis(活跃会话)+MySQL(业务日志)+COS(transcript 恒完整归档), Python 无状态(方案A, Java 每次传全量上下文避免双源); 28点需求砍为 MVP(分类+落库+图谱点亮)/阶段2题库增强/阶段3画像风控; 提出4个埋雷假设(答案出口策略/知识点确认卡位置/点亮规则写死Java/多学科降级)与5个待拍板决策点(答案出口/确认时机/点亮规则/学科范围/会话轮数)
 
 现状我已经摸了一遍。你给的这个 28 点清单很完整，但有几个关键事实会直接改变答案——你的地基比想象中厚，真
 正缺的东西反而很少。先给你看现状，再回答你的三个问题（技术栈、对话存哪、需求是否合理）。

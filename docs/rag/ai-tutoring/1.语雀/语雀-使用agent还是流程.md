@@ -3,6 +3,7 @@
 > 来源: 语雀 业务实施→AI答疑→方案设计→使用agent还是流程 (doc 279938375, 3976字)
 > COS路径: rag-source/ai-tutoring/语雀/语雀-使用agent还是流程.md
 > 核心结论: AI答疑是 Workflow（确定性编排），不是 LLM Agent。自适应学习才是 agent 的主场。
+> summary: 论证 AI答疑为何用 Workflow(确定性编排)而非 LLM Agent: 先区分①LLM Agent(LLM 自主决策下一步/动态规划路径)与②Workflow(Java 状态机定走向, 每步调一次 LLM 做单一认知动作); 刻意不用 Agent 三大原因=苏格拉底禁答案硬约束/业务规则(20轮·2次答案出口·掌握度·点亮)必须确定/成本与可测性(单步可测·预算可控); 指出自适应学习才是 agent 主场(执行问题 vs 决策问题, 决策循环=状态+工具+决策者), 但正确形态是"受限 agent+封闭动作集+Java 守门"而非自由 ReAct(教学法可控/成本可控/可审计), 并给架构对比(workflow 4scene vs 受限agent LangGraph)与三个诚实代价(成本翻倍/可测性/严禁答案难守); 建议混合演进(MVP workflow+结构化输出预留接口, 阶段2升级受限 agent)。⚠️最新代码逻辑: 4scene 实际收敛为 decide/generate 两端点 + ActionMeta type 闭集 + Java TutoringGuardrailService 审批(非 agent 自由调工具), MVP=L0 单次调用, 阶段2 L1/L2 LangGraph 迁移契约已预留
 
 ---
 

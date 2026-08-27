@@ -4,6 +4,7 @@
 > COS路径: rag-source/ai-tutoring/语雀/语雀-流程控制会让agent混乱.md
 > 核心结论: 状态 ≠ 内容；管"它能做什么"（工具集+护栏），不管"它怎么走"（顺序）。设计从状态机 7 → 会话生命周期 3。
 > **最新逻辑判断（2026-08-24 对账）**：本文"受限 agent + 护栏、状态机 7→3"方向**与最终落地一致**；仅 4 处需按代码修正（换题≠开新会话 ｜ 换题判定权回 Java ｜ Python 是 L0 两端点非 LangGraph ｜ 多会话护栏未强制），已在下文标注，详见 `方案-代码对账.md`。
+> summary: 论证答疑状态设计的核心原则"状态≠内容, 把题目从状态机里拿出去"——状态(7个固定模式: NEW/CLARIFYING/GUIDING/REVEALING/SUMMARIZING/ARCHIVED/TERMINATED)只答"会话在什么模式", 题目/步数/计数是数据字段不膨胀状态; 换题原设计=归档旧会话+开新会话(浏览器标签页模型)以保持状态机纯线性, 加 end_reason 字段区分完成/看过答案/放弃/轮次上限; 提出"管它能做什么(工具集+护栏), 不管它怎么走(顺序)"的受限 agent 思路, 状态机 7→3(会话生命周期 ACTIVE/ARCHIVED/TERMINATED + 护栏计数器 round_count/answer_request_count), Python 变封闭工具集 agent(evaluate_answer/next_hint/reveal_answer/switch_question…), Java 在工具执行点硬护栏(答案护栏≥2次/轮次护栏20轮/安全护栏/多会话); 测试策略改测护栏不测路径。⚠️最终代码落地: Python 非 LangGraph agent, MVP=L0 decide/generate 两端点+ActionMeta type闭集+Java TutoringGuardrailService 审批; 换题=计数重置事件会话保持 ACTIVE(非归档开新); 换题判定权回 Java(新图出现置 is_new_question→Python 短路 switch); 多会话护栏未强制(前端 localStorage 单 ACTIVE+reconcileSession 对账)
 
 ---
 

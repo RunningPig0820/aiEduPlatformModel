@@ -2,6 +2,7 @@
 > COS路径: rag-source/ai-tutoring/完善文档/06-图片题与OCR.md
 
 > 模块=ai-tutoring｜节=06｜问题表=操作｜权威度=高（正文）
+> summary: 图片题与 OCR(权威正文1.0): 学生拍题是高频入口, 数学题大量含公式+图形(受力分析图/实例图)传统 OCR 拆解必丢信息, 方案演进核心认识="答疑必须看到原图"; 方案口径已演进(早期"拍照→OCR 识别题目文本→学生确认→进答疑"OCR 主入口 → 2026-08 反转决策为"图像优先"不做传统 OCR 文本提取, 用视觉模型直接看图); 落地图像优先为主+OCR 兼容双通道: 主通道(前端选图/粘贴/拖拽→sendWithImage→Java 上传 COS tutoring/questions/{studentId}/{sessionId}/{时间戳}.ext→图片 URL 作消息 image_url 进 history→decide/generate 多模态 HumanMessage[text+image_url]→doubao 直接看图解题/判对; 图片格式白名单 jpg/jpeg/png/webp/bmp; 换题=学生发新图: Java 检测新图 URL 首次出现在 history→本轮置 is_new_question=true→Python 短路返回 switch 不调 LLM→Java 重置计数, 判定权在 Java[Python 无状态区分不了本轮刚换 vs 早几轮已换]); 视觉题目理解(独立端点 POST /question-understand 无会话: 看图→1~5 个题型名+顺带知识点, 失败→空 topic_labels Java 降级 PENDING 不视为错误, 前端 analyzeQuestionImage 走它做题型分析); 兼容通道 OCR(辅助/降级开关控制: POST /tutoring/ocr→Python recognize→{text,confidence} 结果必须经学生确认/修改 OcrConfirmModal 再进答疑, ocr.enabled 开关关闭时前端隐藏拍照入口[仅手打/粘贴]答疑核心不受阻, 定位=截屏/公式/手写题兜底文本化); 速度保证(全链路模型统一 doubao mini 关思考+20s 超时+关 SDK 重试: doubao mini 默认开思考=先写草稿再答, 实测开思考 50~145s 关思考看图 1.2s 是图片分析慢根因修复, 前端图片分析超时放宽 60s); 证据引用
 
 ## 为什么（语雀）
 
