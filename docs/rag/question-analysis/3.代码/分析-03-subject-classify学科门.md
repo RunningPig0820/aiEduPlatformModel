@@ -1,14 +1,16 @@
 # 分析-03 subject-classify 学科门（代码真相）
 
-> 来源：ai-edu-ai-service 深读（2026-08-27 真读代码）｜权威度 0.8 ｜ 模块=question-analysis
-> 解决提问：question-analysis.md「怎么判断题目是数学题？」「学科门怎么防误判？」（问题表·操作节/难点节）
+> summary: 解答「怎么判断题目是不是数学题 / 学科门怎么防误判」——K12 十值闭集 + 宁漏不误（None 放行）+ 关思考慢修复超时降级。
+> 权威度: 0.8
+> 模块: question-analysis
 > COS路径: rag-source/question-analysis/代码/分析-03-subject-classify学科门.md
+> 类别：操作流程
 
 ## 职责
 
 decide 之前的**前置学科判定**，只判学科不解题。"宁可放过，不可把数学题误判成别的学科"；拿不准 → math；图片无法辨认/非学科 → other。
 
-## 高层业务调用链
+## 高层业务调用链（学科门判定）
 
 ```mermaid
 flowchart TD
