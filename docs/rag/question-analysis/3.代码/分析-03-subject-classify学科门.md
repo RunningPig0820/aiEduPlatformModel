@@ -1,6 +1,6 @@
 # 分析-03 subject-classify 学科门（代码真相）
 
-> summary: 解答「怎么判断题目是不是数学题 / 学科门怎么防误判」——K12 十值闭集 + 宁漏不误（None 放行）+ 关思考慢修复超时降级。
+> summary: subject-classify 学科门(答疑只服务数学的前置判定): K12 十值闭集(math/physics/chemistry/biology/chinese/english/politics/geography/history/other), 闭集外→None 非 other(None=不知道 Java 按 math 放行, 宁漏不误数学题永不误拦); 模型写死 doubao temp0.3 关思考+20s 超时+重试0, try/except 全包裹绝不抛异常; Java 发起/换题两个触发点各判一次, 非 math 不建/不续会话不落库
 > 权威度: 0.8
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/代码/分析-03-subject-classify学科门.md
