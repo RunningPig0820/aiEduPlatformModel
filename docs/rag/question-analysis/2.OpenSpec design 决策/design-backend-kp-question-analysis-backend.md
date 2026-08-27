@@ -1,4 +1,4 @@
-> summary: 题型分析后端技术设计：①analyze-question 独立端点（题目文本→题型名→关联知识点，纯分析不写 obs 浏览不产生学习信号，编排 understand→全候选遍历→前2候选 resolveReadOnly 冷启动最坏3次 LLM→PENDING+candidates 镜像校验）；②题目理解端口抽象 QuestionUnderstandingPort（Java LLM 默认，prompt 注入题型库 top20 收词约束命名）；③题型库别名合并（新表 t_kp_question_type_alias，kp_uri 重叠≥70% 判变体折叠，查询统一 findByTopicLabelOrAlias，canonical 只增不改）；④存疑挂起闭环三环（落 PENDING obs→学生 vote 转正 resolvePendingByStudentTopic→维护任务 rejudgePending）；⑤联调 4 bug 修复（非确定性移除缓存/WEAK 排除聚合防幻觉/candidates 恒空遍历兜底+镜像校验/vote 转正体现）；⑥图片题目多模态直看不经 OCR（question-understand 独立视觉端点方案B，模型写死视觉）；⑦封闭域约束选择 D8 本期未接线（KpPoolAssociateService 已交付，top-1 直接落 obs 信任模型，迭代接线即用）；⑧设计原则逻辑优先于数据准确（错误由 vote/维护重判/别名合并/管理端审核整理）——解决"题目文本→题型名→关联知识点"无独立 REST、题型库变体裂行稀释
+> summary: 题型分析后端技术设计：analyze-question 独立端点、题型库别名合并、题目理解端口抽象、图片多模态直看与存疑挂起闭环，解决题目→题型→知识点无独立 REST、题型库变体裂行问题。
 > 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-backend-kp-question-analysis-backend.md
@@ -12,7 +12,7 @@
 
 ### 背景：现有能力与缺口
 > 状态：✅
-> 检索摘要：现有 resolve/vote/题型库聚合已收口，但 resolve 是 label 级需先知道题型名，题目理解只在答疑 Python decide 会话内无独立 REST；题型库聚合按 topic_label 逐字聚类致相似叫法裂成重复条目。
+> 检索摘要：题型分析后端：analyze-question 无独立 REST（resolve 是 label 级），题型库逐字聚类裂行稀释，需建题目→题型→知识点独立链路。
 
 - **现有能力**：`POST /api/kp/resolve`（题型名 label → TextbookKP URI，管线 ①镜像 → ②题型库年级匹配 → ③LLM 消歧 → ④PENDING，写 obs）、`POST /api/kp/vote`（学生确认落 STUDENT_VOTE 观测）、题型库聚合任务（凌晨扫 obs 建 CANDIDATE + LLM 归纳 ratio）、题型库分页 + 关联知识点接口。全部已收口（`kp-matching-lightup`）。
 - **缺口**：`resolve` 是 **label 级**，需先知道题型名；「题目文本 → 题型名」的题目理解只在答疑 Python `decide` 会话内（SSE 绑定），无独立 REST。
@@ -23,7 +23,7 @@
 
 ### 目标与非目标
 > 状态：✅
-> 检索摘要：目标=analyze-question 端点（题目文本→题型名→关联知识点，纯分析不写 obs）+ 题型库别名合并（收敛到 canonical + 同一 kp 分布）+ 题目理解端口抽象；非目标=管理端全局审核、题库域种子观测、批量扫题库、Python 独立题目理解端点、掌握度层变体合并。
+> 检索摘要：目标=analyze-question 端点+题型库别名合并+题目理解端口抽象；非目标=管理端审核/题库种子/批量扫题/Python 端点/掌握度变体合并。
 
 **Goals:**
 - `POST /api/kp/analyze-question { text }`：题目文本 → 识别题型名 → 返回关联知识点清单；**纯分析不写 obs**；PENDING 不报错、携带澄清候选。
@@ -39,7 +39,7 @@
 
 ### D1：题目理解端口抽象，Java LLM 默认实现（题型名 → 空挂库锚）
 > 状态：✅
-> 检索摘要：新增 domain 端口 QuestionUnderstandingPort，默认实现 KpQuestionAnalyzer（Java LLM）复用 LlmGateway.chat() + 新 prompt「识别题型名 1~5 个」；prompt 注入题型库已收词 top-N 约束命名降变体漂移；Java 而非 Python（用户拍板），端口预留 Python 独立端点。
+> 检索摘要：题目理解端口抽象，Java LLM 默认实现，prompt 注入题型库收词约束命名降变体漂移，预留 Python 端点可替换。
 
 新增 domain 端口 `QuestionUnderstandingPort`：
 
@@ -56,7 +56,7 @@ List<String> understand(String questionText, Integer grade);
 
 ### D2：analyze-question 纯分析，不写 obs（浏览不产生学习信号）
 > 状态：✅
-> 检索摘要：TutoringKpResolverImpl 抽 persistObs 开关——resolve(label, studentId) 保持写 obs（答疑语义），analyze-question 走 persistObs=false 只读解析；唯一例外=池约束 top-1 直接落 RESOLVED obs（最可能信号进数据喂聚合），学生确认 vote 覆盖纠正。
+> 检索摘要：analyze-question 走只读解析不写 obs，浏览不产生学习信号防污染聚合；池约束 top-1 例外直接落 obs 喂数据。
 
 `TutoringKpResolverImpl.doResolve` 抽出 `persistObs` 开关：`resolve(label, studentId)` 保持写 obs（答疑语义），analyze-question 走 `persistObs=false` 的只读解析（镜像/题型库权威命中不落 obs，浏览噪声不污染聚合）。
 
@@ -64,7 +64,7 @@ List<String> understand(String questionText, Integer grade);
 
 ### D3：题型库别名合并——kp 分布重叠 → canonical + 别名表
 > 状态：✅
-> 检索摘要：新表 t_kp_question_type_alias（V16 迁移）按 alias_label UNIQUE 存变体→canonical 映射；聚合建新 CANDIDATE 前先按 kp_uri 重叠≥70%（可配置）判变体：命中折叠进该条目+obs 统计合并，无相似才新建；查询统一改 findByTopicLabelOrAlias。
+> 检索摘要：题型库别名合并：kp 分布重叠≥70% 判变体折叠进 canonical + 别名表，查询统一走别名，canonical 只增不改。
 
 新表 `t_kp_question_type_alias`（learning 库，V16 迁移）：
 
@@ -91,13 +91,13 @@ List<String> understand(String questionText, Integer grade);
 
 ### D4：解析管线②/聚合/vote 的查询统一走别名
 > 状态：✅
-> 检索摘要：QuestionTypeRepository 增 findByTopicLabelOrAlias/findTopTopicLabels；别名命中与 canonical 命中等价返回 QuestionType 调用方无感知；canonical 名只增不改（合并只加别名不改主题名避免破坏引用）。
+> 检索摘要：解析/聚合/vote 查询统一走别名，别名命中与 canonical 等价，canonical 名只增不改。
 
 `QuestionTypeRepository` 增 `findByTopicLabelOrAlias(String)`、`findTopTopicLabels(int)`（D1 词表用）。别名命中与 canonical 命中等价返回 `QuestionType`，调用方无感知。**canonical 名只增不改**（合并只加别名、不改主题名，避免破坏既有引用）。
 
 ### D5：analyze-question 接口契约
 > 状态：✅
-> 检索摘要：POST /api/kp/analyze-question { text } → {topicLabel, status, confidence, knowledgePoints, candidates}；编排=understand→全候选遍历命中权威→前 2 候选 resolveReadOnly（LLM 预算最坏 3 次）→无权威则 PENDING+candidates（镜像校验保证 vote 不 10003）；WEAK 降级不冒充 RESOLVED。
+> 检索摘要：analyze-question 契约：编排=理解→全候选遍历→前2候选消歧（LLM 预算收敛）→PENDING+candidates 镜像校验；WEAK 降级不冒充 RESOLVED。
 
 `POST /api/kp/analyze-question { text }` → `ApiResponse<QuestionAnalysisDTO>`：
 
@@ -136,13 +136,13 @@ List<String> understand(String questionText, Integer grade);
 
 ### D6：越权与安全
 > 状态：✅
-> 检索摘要：analyze-question 用 TutoringAuth.requireStudent(session)（未登录→10004，非 STUDENT→20004），与 api.md「需要登录（STUDENT）」契约一致；取不到年级降级纯 LLM 题目理解；findTopTopicLabels 只读不越权。
+> 检索摘要：analyze-question 需 STUDENT 登录（未登录 10004/非学生 20004），无管理功能暴露，findTopTopicLabels 只读。
 
 `analyze-question` 用 `TutoringAuth.requireStudent(session)`（未登录 → 10004，非 STUDENT → 20004），与 api.md「需要登录（STUDENT）」契约一致。取不到年级时降级纯 LLM 题目理解（无年级锚，resolve 已有降级）。无管理功能暴露。`findTopTopicLabels` 只读不越权。
 
 ### D7：存疑挂起闭环 + 联调修复
 > 状态：✅
-> 检索摘要：存疑挂起闭环三环全通——analyze 存疑落 PENDING obs 挂起来（upsertPendingIfAbsent 去重）→学生 vote 转正 resolvePendingByStudentTopic→维护任务 rejudgePending LLM 重判转 WEAK/共现转正；联调 4 bug 修复（非确定性/关联错误/candidates 恒空/vote 未体现）。
+> 检索摘要：存疑挂起闭环三环：落 PENDING obs→学生 vote 转正→维护任务重判；联调 4 bug（非确定性/WEAK 幻觉/候选恒空/vote 转正）已修复。
 
 产品闭环「存疑挂起来 → 学生选择/后续任务补充」三环全通：
 
@@ -163,7 +163,7 @@ analyze 存疑 PENDING
 
 ### D8：封闭域约束选择——题目 → 学段知识点池 → LLM 从池选（恒非空）【本期未接线】
 > 状态：⚠️
-> 检索摘要：本期 analyze 不接池约束（前端范围降级：题库 miss→PENDING 空可接受）；池约束已抽到 KpPoolAssociateService（组件已交付有测试），迭代启动时 analyze ② 处接线即用；核心=封闭域从池选恒非空+年级锚定+确定性。
+> 检索摘要：封闭域池约束选择：LLM 只能从学段知识点池选，恒非空+年级锚定+确定性；本期未接线（组件已交付）。
 
 > **本期 analyze **不接池约束选择**（前端范围降级：题库 miss → PENDING，空可接受；题库↔知识点关联转「题库和知识点」独立迭代）。池约束编排已抽到 `KpPoolAssociateService`（组件 `KpConstrainedAssociator`/`findLabelsByStage`/粗筛/`keyword` 已交付、有测试），迭代启动时在 analyze ② 处接线即用。**
 
@@ -199,14 +199,14 @@ analyze 存疑 PENDING
 
 ### D9：知识点池获取 + keyword 搜索兜底
 > 状态：✅
-> 检索摘要：KgKnowledgePointRepository.findLabelsByStage(stage) 按学段取知识点 label 池（D8③用）；POST /api/kg/knowledge-points 支持 keyword 参数（WHERE label LIKE %keyword% 在 stage 过滤内）→ 前端 KpSearchSelector 空候选时手动搜教材知识点确认。
+> 检索摘要：知识点池按学段取 label（findLabelsByStage），knowledge-points 支持 keyword 搜索，空候选时学生手动确认知识点。
 
 - `KgKnowledgePointRepository.findLabelsByStage(stage)`：按学段取知识点 label 池（D8 ③ 用，全量教材知识点）。
 - `POST /api/kg/knowledge-points` 支持 `keyword` 参数：`WHERE label LIKE CONCAT('%', #{keyword}, '%')`（在 stage 过滤内）→ 前端 `KpSearchSelector` 空候选时手动搜教材知识点确认（选中 kpLabel 走 vote，镜像天然可 vote）。
 
 ### D13：图片题目多模态直看（Python 拍板方案 B）
 > 状态：✅
-> 检索摘要：图片题默认走多模态视觉模型直接看图（不经 OCR，OCR 仅前端失败兜底）；新增 stateless 端点 question-understand 模型 Python 侧写死（TUTORING_DECIDE_MODEL=doubao-seed-2-0-mini-260428）；不经 /api/llm/chat 避免路由到非视觉模型。
+> 检索摘要：图片题多模态视觉模型直看（不经 OCR），独立 question-understand 端点模型写死视觉，非视觉风险隔离。
 
 图片题目默认走**多模态视觉模型直接看图**（不经 OCR，OCR 仅前端失败兜底）。Python 已拍板方案 B：新增 stateless 端点 `POST /api/tutoring/question-understand`，**模型 Python 侧写死**（TUTORING_DECIDE_MODEL = `doubao-seed-2-0-mini-260428`，Java 不指定模型，模型是 Java 黑盒；方舟开通 ID 若不同，改 Python `question_understand.py` 一行，Java 无感）。
 
@@ -226,7 +226,7 @@ Java POST /api/kp/analyze-question/image (multipart)
 
 ### D12：前端范围降级
 > 状态：✅
-> 检索摘要：前端本期降级为「贴题→识别题型（核心）+ 知识点顺带参考（有则展示无则不强求）」，知识点关联的确认/搜索/待确认闭环转后续独立功能「题型↔知识点关联完善」；后端零改动（现有 analyze-question 严格超集）。
+> 检索摘要：前端本期降级：贴题→识别题型核心，知识点顺带展示不强求，确认/搜索/待确认闭环转后续独立功能。
 
 前端本期降级为「**贴题 → 识别题型（核心）+ 知识点顺带参考（有则展示，无则不强求）**」，知识点关联的确认/搜索/待确认闭环转后续独立功能「题型↔知识点关联完善」。
 
@@ -234,7 +234,7 @@ Java POST /api/kp/analyze-question/image (multipart)
 
 ### D11：设计原则——逻辑优先于数据准确，数据可后整理
 > 状态：✅
-> 检索摘要：先打通「题目→关联→确认→沉淀」逻辑闭环，不因数据残缺/不准阻塞实现；恒非空返回「池内最相近」允许出错；各类数据错误对应整理机制（vote 纠正/维护重判/别名合并/管理端审核）。
+> 检索摘要：设计原则：先打通逻辑闭环，不因数据残缺阻塞；错误由 vote 纠正/维护重判/别名合并/管理端审核后整理。
 
 **原则**：先打通「题目 → 关联 → 确认 → 沉淀」逻辑闭环，**不因数据残缺/不准阻塞实现**。恒非空返回「池内最相近」允许出错——错误由后续机制整理，而非阻止流程。镜像/题型库残缺是冷启动常态，飞轮转起来后自然收敛。
 
@@ -253,14 +253,14 @@ Java POST /api/kp/analyze-question/image (multipart)
 
 ### D10：P1/P2 增强（非本次必须）
 > 状态：✅
-> 检索摘要：聚合手动触发 POST /api/kp/aggregation/run（ADMIN）即时验证题型库沉淀（现状凌晨 3:17 定时看不到效果）；管理端审核页面（P2 独立功能点）学生题型↔年级知识点对照 LLM 批量分析+人工校准喂题型库。
+> 检索摘要：P1/P2 增强：聚合手动触发即时验证沉淀、管理端审核页（P2）后续。
 
 - **聚合手动触发**：`POST /api/kp/aggregation/run`（ADMIN）→ `aggregationService.aggregate()`。联调时即时验证题型库沉淀（现状凌晨 3:17 定时，看不到效果）。
 - **管理端审核页面**（P2，独立功能点，后续）：学生题型 ↔ 年级知识点对照，LLM 批量分析关联 + 人工校准 → 喂题型库（`kp-pending-review`）。
 
 ### 风险与权衡
 > 状态：✅
-> 检索摘要：风险覆盖 LLM 题目理解幻觉、kp 重叠阈值误并、别名表增长、analyze 不写 obs 冷启动空、candidates 冷启动波动、WEAK→PENDING 频率、学段池过大、粗筛漏召回、掌握度层变体分裂。
+> 检索摘要：列举 analyze-question 链路运行风险（LLM 幻觉/阈值误并/冷启动波动/池过大等）与缓解手段，明细见正文。
 
 - [LLM 题目理解幻觉题型名] → 下一步 resolve 兜底（PENDING 不报错）+ 学生确认；题型库命中才算可靠；prompt 注入词表收敛命名。
 - [kp 重叠阈值误并（两个真实不同题型共享大量知识点）] → 阈值 70% 保守 + 可配置；合并只加别名、不动 canonical 名，误并可后续拆。
@@ -274,7 +274,7 @@ Java POST /api/kp/analyze-question/image (multipart)
 
 ### 迁移计划
 > 状态：✅
-> 检索摘要：迁移六步——V16 迁移建别名表（Flyway 关闭需手动执行）→domain 端口/实体/仓储→infra 实现（KpQuestionAnalyzer/别名 PO/Mapper）→application（KpQuestionAnalysisAppService/聚合加别名合并）→interface 加 analyze-question 端点→回滚（新增端点/表无破坏性，关端点删别名表即可）。
+> 检索摘要：迁移：V16 别名表→domain 端口→infra 实现→application 编排→analyze 端点；回滚关端点删别名表即可，无破坏性变更。
 
 1. V16 迁移：`t_kp_question_type_alias`（learning 库，含 UNIQUE(alias_label) + FK(question_type_id) + 索引）。**Flyway 关闭，需手动执行**（同 kp-matching-lightup 教训）。
 2. domain：`QuestionUnderstandingPort`、`QuestionTypeAlias` 实体、仓储接口 `findByTopicLabelOrAlias`/`findTopTopicLabels`/别名 upsert。
@@ -285,7 +285,7 @@ Java POST /api/kp/analyze-question/image (multipart)
 
 ### 开放问题
 > 状态：❓
-> 检索摘要：开放项——Python decide 后续是否拆独立题目理解端点（端口已预留等 Python 侧有空，D1）；kp 重叠合并阈值（70%）是否需按科目/题型规模配置化微调（先固定常量接大数据后再议）。
+> 检索摘要：开放项：Python 拆独立题目理解端点（端口已预留）、kp 重叠阈值是否配置化。
 
 - Python decide 后续是否拆独立题目理解端点（端口已预留，等 Python 侧有空，D1）。
 - kp 重叠合并阈值（70%）是否需按科目/题型规模配置化微调——先固定常量，接大数据后再议。

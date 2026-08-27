@@ -1,4 +1,4 @@
-> summary: 后端掌握度数据底盘技术设计：①题目表 t_student_question_record（事实源）+掌握表 t_student_topic_mastery（聚合结果）两表分离可重算聚合；②掌握度=累计平均正确率替代 max 单调不减；③信号映射 直接答对1.0/求助后答对0.5/答错0 × per-题型前几题打折（70/80/100）；④题型名向量动态涌现零锚点（编辑距离归并已移除，聚集依据=题型名向量单信号，题目向量不落库）；⑤向量存储走 Python 桥（vector_type 必填多索引，COS 无 Java SDK）；⑥getMastery 契约 BREAKING 四档→连续百分比；⑦信号跟题目走（PENDING 照常采）；⑧两域解耦+聚合手动触发+域B查表只读——解决无题库零锚点也能算可追溯正确率
+> summary: 后端掌握度数据底盘技术设计：两表分离、累计平均正确率、题型名向量动态涌现、Python 向量桥与 getMastery 契约变更，解决无题库零锚点也能算可追溯正确率。
 > 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-backend-question-type-mastery-backend.md
@@ -12,7 +12,7 @@
 
 ### 背景：掌握度数据底盘零散
 > 状态：✅
-> 检索摘要：掌握度=题型已确立但数据底盘是零散观测——信号是逐轮三档 max 单调不减、题型名是 LLM 自由文本、后端零题目状态、无题库零锚点，COS 向量无 Java SDK。
+> 检索摘要：掌握度数据底盘零散：无题目记录、题型名自由文本裂行、无题库零锚点、向量无 Java SDK，需建可追溯正确率底盘。
 
 - **信号形态**：`decide` 逐轮输出三档信号（mastered/practicing/struggling），`applyMasteryAndErrors` 取 **max 单调不减**（答错不降分，置信度视角）。算不出「练了几道、答对几道」的正确率。
 - **题型名是 LLM 自由文本**：`t_student_topic_mastery` 的 key 是 `TopicKeyNormalizer.normalize(label)`（字符串级）。「一元二次方程」和「解一元二次方程」裂成两行。聚合 merge（kp_uri 重叠 ≥0.7）只影响题型库，**不回流掌握表**。
@@ -23,7 +23,7 @@
 
 ### 目标与非目标
 > 状态：✅
-> 检索摘要：目标=建立题目→题型掌握完整数据底盘（采集→题型名归一→累计平均聚合）、可追溯、掌握表 key 源头归一；非目标=题型↔知识点关联、相似题存储、题库建设、全局题型库、定时任务。
+> 检索摘要：目标=建题目→题型掌握数据底盘（采集→归一→累计平均聚合），非目标=题型知识点关联/相似题/题库/定时任务。
 
 **Goals:**
 - 建立「题目 → 题型掌握」完整数据底盘：采集 → 题型名归一 → 累计平均聚合。
@@ -42,7 +42,7 @@
 
 ### Decision 1：两张表——题目表（事实源）+ 掌握表（聚合结果）
 > 状态：✅
-> 检索摘要：新建题目记录表作事实源、掌握表作聚合结果，两表隔离「题目证据」与「聚合值」，改折扣/信号重算聚合即可，题目证据不丢。
+> 检索摘要：题目表（事实源）+掌握表（聚合结果）两表分离，改折扣/信号重算聚合即可，题目证据不丢。
 
 ```
 t_student_question_record        t_student_topic_mastery（改造）
@@ -61,7 +61,7 @@ t_student_question_record        t_student_topic_mastery（改造）
 
 ### Decision 2：掌握度 = 累计平均正确率（替代 max 单调不减）
 > 状态：✅
-> 检索摘要：掌握度算法从 max 单调不减改为累计平均正确率，可解释、稳定、不抖动，「某题型练 10 道对 6 道 = 64%」业务含义通透。
+> 检索摘要：掌握度算法替换 max 单调不减，采用累计平均正确率，实现可解释真实正确率统计，规避掌握度虚高。
 
 ```
 new = old × n/(n+1) + score × 1/(n+1)     // n = train_count
@@ -75,7 +75,7 @@ train_count += 1
 
 ### Decision 3：掌握信号映射——直接答对/引导后答对/答错，Python 零改动
 > 状态：✅
-> 检索摘要：直接答对 1.0、求助后答对 0.5、答错 0.0，× per-题型前几题打折（第1题70%/第2题80%/第3题起100%）；Java 从 roundCount/answerRequestCount 推断，Python 不新增字段。
+> 检索摘要：掌握信号映射：直接答对/求助后答对/答错分级打分，per-题型前几题打折，Java 从引导量推断 Python 零改动。
 
 ```
 直接答对（answer_request_count=0，学生未主动求助）→ score = 1.0
@@ -90,7 +90,7 @@ train_count += 1
 
 ### Decision 4：题型聚集 = 动态涌现（零锚点，核心）
 > 状态：✅
-> 检索摘要：无题库零锚点下 canonical 动态涌现——首条题建锚、后续题型名向量查最近邻归并、批量手动聚类补归并；聚集依据=字符规则先拦 + 题型名向量最近邻单信号，题目向量本期不落库。
+> 检索摘要：无题库零锚点下题型名动态涌现：首题建锚、向量最近邻归并，聚集依据=题型名向量单信号，题目向量不落库。
 
 **场景**：无题库、无预置分类。学生题目一条条来（AI 答疑），LLM 每次猜题型名（**弱标注**，会飘：鸡兔同笼/假设法/笼中鸡兔），没有预先定义的 canonical 池。
 
@@ -112,7 +112,7 @@ train_count += 1
 
 ### Decision 5：向量存储 = Python 桥（COS Vector Bucket，无 Java SDK 方案）
 > 状态：✅
-> 检索摘要：COS 向量检索无 Java SDK，向量操作全在 Python 侧（复用 Java↔Python 桥模式），Java 经 TopicVectorStore 端口 HTTP 调 Python，不碰 embedding API / COS SDK。
+> 检索摘要：COS 无 Java SDK，向量操作走 Python 桥，Java 经端口 HTTP 调用不碰 SDK/embedding，vector_type 必填路由。
 
 **前提**：COS 向量检索只有 Python/Go SDK（`CosVectorsClient`/`VectorService`），**无 Java SDK**——排除「Java 直调 SDK」。
 
@@ -129,7 +129,7 @@ train_count += 1
 
 ### Decision 6：embedding 模型 + 阈值——dashscope 优先，spike 已实测（distance 契约，后端收口）
 > 状态：✅
-> 检索摘要：embedding 用 dashscope text-embedding-v3（768 维），spike 实测 cosine distance 越小越相似，同型 ~0.077、异型 ≥0.33 有清晰间距，归并阈值保守默认 0.2（宁可拆不误并）。
+> 检索摘要：embedding 用 dashscope text-embedding-v3（768 维），归并阈值 distance≤0.2 保守，宁可拆不误并。
 
 - **模型**：dashscope text-embedding-v3（768 维，中文 50+ 语种，OpenAI 兼容）——Python gateway 已接 dashscope，**成本已确认**（免费 50 万 token + 0.5 元/百万 token，10 块钱够用很久）。**已交付**：独立封装在 `vector_store.py`（未动 gateway factory），复用 `DASHSCOPE_API_KEY`。
 - **备选**：ark doubao-embedding（火山，Python gateway 也接）；本地开源模型（text2vec/m3e，需 Python 部署）。
@@ -138,7 +138,7 @@ train_count += 1
 
 ### Decision 7：`getMastery` 契约变更（BREAKING，前端联调）
 > 状态：✅
-> 检索摘要：getMastery 的 masteryLevel 从 0/25/50/75 离散四档改 0-100 连续百分比，新增 source/trainCount，status 保留 RESOLVED/PENDING；加新字段不删旧，前端分桶保留四档视觉。
+> 检索摘要：getMastery 契约 BREAKING：masteryLevel 四档改 0-100 连续百分比，新增 source/trainCount，前端分桶保留四档视觉。
 
 ```
 GET /students/{id}/mastery
@@ -156,14 +156,14 @@ GET /students/{id}/mastery
 
 ### Decision 8：掌握信号跟题目走，不跟题型走
 > 状态：✅
-> 检索摘要：题型名未识别（PENDING）的题照常采集信号落题目表，题型归属确定（归一/后续人工）后再聚合进掌握表，不因题型待定丢信号。
+> 检索摘要：掌握信号跟题目走：PENDING 题型照常采信号落题目表，归属确定后再聚合，不因题型待定丢数据。
 
 - 题型名未识别（PENDING）的题**照常采集信号**，落题目表；题型归属确定（归一/后续人工）后再聚合进掌握表。
 - **为什么**：PENDING 是「题型暂时没认出」，不代表「题没做」——答对/答错信号是确定的，不能因题型待定就丢。
 
 ### Decision 9：两域解耦 + 手动触发（面试项目不做定时）
 > 状态：✅
-> 检索摘要：域A「题目→题型」（本期）与域B「题型→知识点」（保留不动）完全解耦互不阻塞；移除定时聚合任务，聚合/维护改按钮手动触发。
+> 检索摘要：采用两域解耦架构：域A负责题目-题型、域B负责题型-知识点，避免单一环节故障互相影响；聚合改手动触发。
 
 **本期只记录「题目→题型」**，与「题型→知识点」完全解耦：
 
@@ -184,7 +184,7 @@ GET /students/{id}/mastery
 
 ### Decision 10：域 B 独立化——题型↔知识点 = 查表只读 + 独立维护（去自动关联）
 > 状态：✅
-> 检索摘要：所有入口只到「题型」阶段，题型↔知识点关联由 ADMIN 维护接口独立维护、入口查表只读；停用 obs 自动涌现链路；PENDING 语义改为「canonical 未归属」。
+> 检索摘要：域B 题型↔知识点改查表只读+ADMIN 独立维护，停用 obs 自动关联涌现，PENDING 语义改 canonical 未归属。
 
 **目标**：所有入口只到「题型」阶段；题型↔知识点关联由**独立逻辑**维护，入口只读。业务不成熟期不做自动关联。
 
@@ -196,7 +196,7 @@ GET /students/{id}/mastery
 
 ### 风险与权衡
 > 状态：✅
-> 检索摘要：风险覆盖 embedding 区分度、阈值误并/漏并、向量冷启动、历史掌握度语义迁移、题目文本提取、getMastery BREAKING、Python 端 decide 信号粒度、向量端点不可用降级。
+> 检索摘要：列举掌握度数据底盘运行风险（embedding 区分度/阈值误并/冷启动/语义迁移等）与缓解手段，明细见正文表。
 
 - [embedding 对数学术语区分度不足] → spike 前置：候选模型对比真实题型名，区分度不达标换模型（混元优先）。
 - [阈值误合并/漏合并] → 阈值 = 粒度旋钮，spike 标定；误合并只影响个别题权重（累计百分比可容忍），漏合并后续人工/别名表补。
@@ -209,7 +209,7 @@ GET /students/{id}/mastery
 
 ### 迁移计划
 > 状态：✅
-> 检索摘要：迁移五步——spike 选型+阈值标定→表结构（新题目表+掌握表加列）→向量初始化（建索引+可选种子）→落库链路→聚合改写与接口；回滚=掌握表加列非删列、getMastery 旧字段保留、向量不接主链路。
+> 检索摘要：掌握度底盘迁移：spike 标定→表结构→向量初始化→落库链路→聚合改写，回滚无损（加列非删列、向量不接主链路）。
 
 1. **spike**（前置）：embedding 模型选型 + 阈值标定（50~100 真实题型名）。
 2. **表结构**：新建 `t_student_question_record`；`t_student_topic_mastery` 加 `source`/`train_count`（`mastery_level` 语义改累计平均）。
@@ -221,7 +221,7 @@ GET /students/{id}/mastery
 
 ### 开放问题
 > 状态：❓
-> 检索摘要：开放项——Python 向量链路 spike 已交付、embedding 模型+阈值已定（text-embedding-v3 + 0.2）、聚集粒度已定（相遇/行程默认拆分）；canonical 命名策略可调、原题链接用 session_id 跳答疑惑、掌握表改造 vs 新表倾向改造+平滑迁移。
+> 检索摘要：开放项：canonical 命名策略可调、原题链接用 session_id、掌握表改造 vs 新表；spike 已收口（embedding/阈值/聚集粒度）。
 
 - ✅ **Python 向量链路（spike）**：已交付——CosVectorsClient 建索引（768 维 cosine）/ put/query 跑通、权限已授权、近邻实测数据见 python-integration 第六节。
 - ✅ **embedding 模型 + 阈值**：已定——text-embedding-v3（768），distance 归并阈值默认 **0.2（保守）**。

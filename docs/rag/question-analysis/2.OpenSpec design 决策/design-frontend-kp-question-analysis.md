@@ -1,4 +1,4 @@
-> summary: 题型分析页前端技术设计：智能练习下「贴题→识别题型→关联知识点」单题分析页面；①独立 analyze-question 端点（无状态一次性请求，从 decide 拆出题目理解非整个 decide，多入口复用）；②学生确认=复用 vote 喂聚合（两确认入口走同一接口，PENDING 态可操作不死胡同）；③先纯分析展示掌握度标注预留（coverageMap 有则标无则灰）；④菜单=智能练习→题型分析二级子菜单；⑤复用 OCR/question-types/vote 不新增关联表；⑥存疑挂起闭环前端契约增强（WEAK 降级返回 PENDING、candidates 镜像校验 vote 不 10003、vote 转正 PENDING 即时消失）；⑦待确认清单候选来源=复用 resolveKp 现取（方案A，后端补 candidates 字段留后续）；⑧PENDING 空候选→知识点搜索确认（后端 /api/kg/knowledge-points 加 keyword，选中镜像知识点 vote 不 10003）；⑨范围降级=题型识别核心+知识点顺带展示（确认/搜索/待确认闭环转后续独立功能）
+> summary: 题型分析页前端技术设计：单题分析页面（贴题→识别题型→关联知识点）、复用 vote 确认喂聚合、存疑挂起闭环，范围降级为题型识别核心+知识点顺带展示。
 > 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-frontend-kp-question-analysis.md
@@ -12,7 +12,7 @@
 
 ### 背景：老方案已就绪，缺口是"题目文本→识别题型→关联知识点"
 > 状态：✅
-> 检索摘要：题型库聚合任务已消费学生确认、现有 ocr/question-types/vote/resolve 接口可复用；缺口=resolve 是 label 级需先知道题型名、题目理解只在答疑 decide SSE 会话内，无「题目文本→识别题型→关联知识点」独立 REST 接口。
+> 检索摘要：题型分析页前端：现有聚合/vote/接口可复用，缺口=题目→题型→知识点无独立 REST，需建单题分析页。
 
 - **老方案已就绪**（`kp-matching-lightup-frontend`）：题型库聚合任务（`KpQuestionTypeAggregationService`，凌晨 3:17 扫 obs → 沉淀 `QuestionType`/`QuestionTypeKp`）、题型库分页 + 关联知识点接口、`vote` 接口（落 `STUDENT_VOTE` 观测）、`resolve` 接口（label → 知识点解析，PENDING 返回 candidates）。
 - **聚合任务已消费学生确认**：`selectResolved()` = `WHERE kp_uri IS NOT NULL`（不看 source），学生 `vote` 落 `RESOLVED + STUDENT_VOTE` 观测（kp_uri 非空），天然进聚合 → 跨学生达阈值（≥3 学生 / ≥5 命中）沉淀题型库。
@@ -21,7 +21,7 @@
 
 ### 目标与非目标
 > 状态：✅
-> 检索摘要：目标=智能练习下题型分析页（贴题/拍题→单题分析→识别题型→关联知识点清单）+ 学生确认/纠正喂聚合 + 先纯分析展示；非目标=管理端全局审核、掌握度标注第一版、动老方案行为、聚合任务本身。
+> 检索摘要：目标=题型分析页（贴题→识别题型→关联知识点）+学生确认喂聚合+先纯分析；非目标=管理端审核/掌握度标注/动老方案/改聚合。
 
 **Goals:**
 - 智能练习下「题型分析」页：贴题/拍题 → 单题分析（识别题型 → 关联知识点清单）。
@@ -36,7 +36,7 @@
 
 ### 决策 1：单题分析 = 独立 `analyze-question` 端点（从 decide 拆出「题目理解」，非整个 decide）
 > 状态：✅
-> 检索摘要：新增 POST /api/kp/analyze-question {text} 返回 {topicLabel, status, confidence, knowledgePoints, candidates}；单题分析是无状态一次性请求 vs 答疑是多轮 SSE 会话，交互模型不同不该绑会话，独立端点多入口复用。
+> 检索摘要：单题分析=独立 analyze-question 端点（从 decide 拆出题目理解），无状态一次性请求，多入口复用。
 
 新增 `POST /api/kp/analyze-question { text }`，响应 `{ topicLabel, status, confidence, knowledgePoints: [{kpUri, kpLabel, gradeRange, ratio}] }`（PENDING 时 knowledgePoints 空 + candidates）。
 
@@ -44,7 +44,7 @@
 
 ### 决策 2：学生确认 = 复用 `vote` 接口，喂聚合任务（不新设计）
 > 状态：✅
-> 检索摘要：题型分析页「确认关联」直接复用 POST /api/kp/vote → 落 STUDENT_VOTE+RESOLVED 观测并即时转正该生该题型的 PENDING obs；两个确认入口（贴题结果确认/待确认清单确认）走同一 vote，接口不变纯前端交互。
+> 检索摘要：学生确认=复用 vote 喂聚合（落 STUDENT_VOTE+转正 PENDING），两确认入口走同一接口，接口不变。
 
 题型分析页「确认关联」直接复用 `POST /api/kp/vote { topicLabel, selectedLabel }` → 落 `STUDENT_VOTE + RESOLVED` 观测，并**即时转正该生该题型的 PENDING obs**（待确认清单随之消失）。聚合任务已消费该源（`selectResolved` 扫 kp_uri 非空），跨学生达阈值自动沉淀题型库。
 
@@ -58,7 +58,7 @@
 
 ### 决策 3：展示 = 先纯分析（题型 + 关联知识点清单），掌握度标注预留
 > 状态：✅
-> 检索摘要：单题分析结果展示「题型+关联知识点（kpLabel+年级分布+占比 ratio）」清单；掌握度标注第一版不做但数据层预留（analyze 返回 kpUri，前端可查 kp-coverage coverageMap 有则标无则灰）；PENDING 分支需处理有/无 candidates 两种。
+> 检索摘要：展示=先纯分析（题型+知识点清单），掌握度标注预留（数据到位自然亮），PENDING 需覆盖有/无候选。
 
 单题分析结果展示「题型 + 关联知识点（kpLabel + 年级分布 + 占比 ratio）」清单。掌握度标注（叠加「你已掌握/待巩固」）第一版不做，但前端数据层预留：`analyze-question` 返回 kpUri，前端可查 `kp-coverage` 的 `coverageMap` 有则标、无则灰，待数据到位自然点亮。
 
@@ -68,7 +68,7 @@
 
 ### 决策 4：菜单 = 智能练习（一级翻 active）→ 题型分析（二级子菜单）
 > 状态：✅
-> 检索摘要：菜单结构为「智能练习（一级，pending 翻 active，可折叠父项）→ 题型分析（二级页面 /student/practice/question-analysis）」，与「学习报告→掌握度/知识点总览」同构复用 Sidebar SubMenuItem。
+> 检索摘要：菜单=智能练习（一级）→题型分析（二级子菜单），与学习报告同构，可折叠父项。
 
 ```
 智能练习（一级，pending 翻 active，可折叠父项）
@@ -79,7 +79,7 @@
 
 ### 决策 5：复用与范围收敛
 > 状态：✅
-> 检索摘要：OCR 图片题复用 /api/tutoring/ocr；题型库浏览复用 /api/kp/question-types + /{id}/knowledge-points；本方案不新增题型→知识点关联表/任务，唯一后端新增是 analyze-question。
+> 检索摘要：复用 OCR/题型库/vote，不新增关联表/任务，唯一后端新增 analyze-question。
 
 - OCR（图片题）→ 复用 `POST /api/tutoring/ocr`。
 - 题型库浏览（聚合结果展示）→ 复用 `GET /api/kp/question-types` + `/{id}/knowledge-points`。
@@ -87,7 +87,7 @@
 
 ### 决策 6：存疑挂起闭环（后端已交付，联调后新增）
 > 状态：✅
-> 检索摘要：后端已交付「存疑挂起→学生选择/后续任务补充」闭环，前端契约增强无破坏性变更——权威命中 RESOLVED，存疑/冷启动 PENDING+candidates（可 vote）+自动落 PENDING obs 挂起来；学生 vote 转正沉淀题型库，不选由维护任务 LLM 重判。
+> 检索摘要：存疑挂起闭环前端契约增强：WEAK 降级 PENDING、candidates 镜像校验 vote 不 10003、vote 转正 PENDING。
 
 后端 `kp-question-analysis-backend` 已交付「存疑挂起 → 学生选择/后续任务补充」闭环，前端契约增强（**无破坏性变更**）：
 
@@ -110,7 +110,7 @@
 
 ### 决策 7：待确认清单候选来源 = 复用 `resolveKp` 现取（方案 A）
 > 状态：✅
-> 检索摘要：PendingKpAliasDTO 不含 candidates 字段，待确认清单展开时纯 PENDING 项调 resolveKp(topicLabel) 现取候选（复用既有接口零后端改动），WEAK 项自带 kpLabel 直接可确认；后端补 candidates 字段（方案 B）留后续。
+> 检索摘要：待确认清单候选来源=复用 resolveKp 现取（方案A 零后端改动），WEAK 项自带 kpLabel 直接确认。
 
 `PendingKpAliasDTO` **不含 candidates 字段**（仅 id/topicLabel/confidence/status/kpUri/kpLabel/…）。8.2 待确认清单确认交互的候选来源决策：
 
@@ -121,7 +121,7 @@
 
 ### 决策 8：PENDING 空候选 → 知识点搜索确认（后端加 keyword 搜索）
 > 状态：✅
-> 检索摘要：冷启动题型 analyze/resolve 返回空候选使 PENDING 空态成死胡同，后端给 /api/kg/knowledge-points 加可选 keyword 参数，前端 PENDING 空态+待确认清单空候选提供「搜索知识点」选择器，选中镜像知识点 vote 不 10003。
+> 检索摘要：PENDING 空候选→knowledge-points 加 keyword，学生搜索镜像知识点确认（机器猜不出学生自己指），vote 不 10003。
 
 实测冷启动题型（鸡兔同笼）analyze/resolve 均返回**空候选**，PENDING 空态是死胡同——学生无法主动确认。方案：**后端给 `POST /api/kg/knowledge-points` 加可选 `keyword`**（有 keyword 时跨学段按 label 搜索，无 keyword 保持原分页行为），前端 PENDING 空态 + 待确认清单空候选时提供「搜索知识点」选择器：
 
@@ -139,7 +139,7 @@
 
 ### 决策 9：范围降级——题型分析 = 题型识别 + 知识点顺带展示（确认/完善转后续）
 > 状态：✅
-> 检索摘要：题型分析页 = 贴题→识别题型（核心产出），知识点是 LLM 顺带判断的参考有则展示无则不强求；学生确认关联/候选搜索/待确认清单确认/题型↔知识点完善转后续独立功能；已实现代码保留不承诺。
+> 检索摘要：范围降级：题型分析=题型识别核心+知识点顺带展示，确认/搜索/待确认闭环转后续独立功能。
 
 **核心业务关系（本期定位）**：题目 ↔ 题型（题目归题型）；题型 ↔ 知识点（题型关联知识点）；掌握度 = 掌握哪些题型。
 
@@ -153,7 +153,7 @@
 
 ### 风险与权衡
 > 状态：✅
-> 检索摘要：风险覆盖 analyze-question 依赖 LLM 可用（PENDING+候选降级）、学生确认冷启动阈值（≥3生/≥5命中非即时生效）、candidates 冷启动波动、vote 10003（candidates 已镜像校验前端仍兜住）、PENDING 题型无知识点、WEAK→PENDING 频率变高。
+> 检索摘要：列举题型分析页运行风险（LLM 依赖/冷启动阈值/候选波动/vote 10003 等）与缓解手段，明细见正文。
 
 - [analyze-question 依赖 LLM 可用] → 题目理解走 LLM，服务不可用/低置信时返回 PENDING + candidates（同 resolve 契约），前端渲染空态 + 提示，不阻塞。
 - [学生确认冷启动阈值] → 单学生确认不立即生效（聚合需 ≥3 学生/≥5 命中）。缓解：前端「确认成功」提示 + 说明「已记录，将参与整理」，避免学生以为立即改全局。
@@ -164,7 +164,7 @@
 
 ### 迁移计划
 > 状态：✅
-> 检索摘要：迁移六步——后端 analyze-question 端点→前端 API 封装 analyzeQuestion→智能练习菜单翻 active 挂题型分析子菜单路由→题型分析页（贴题输入+结果清单+确认交互复用 vote）→联调→回滚（关路由即回退不碰后端）。
+> 检索摘要：迁移：analyze 端点→前端 API 封装→菜单路由→分析页→联调；回滚关路由即可不碰后端。
 
 1. 后端 `analyze-question` 端点（从 resolve 管线加「题目理解」前置，或独立复用识别能力）。
 2. 前端 API 封装：`analyzeQuestion(text)`。
@@ -175,7 +175,7 @@
 
 ### 开放问题
 > 状态：✅
-> 检索摘要：已全部关闭——菜单形态子菜单、结果展示先纯分析、后端 analyze-question 独立一次 LLM 题目理解、学生确认归属个人观测、聚合整理已存在消费 STUDENT_VOTE、pending-kps 确认选方案 a、candidates 镜像校验、WEAK 语义返回 PENDING、待确认清单候选来源选方案 A、PENDING 空候选走 keyword 搜索。
+> 检索摘要：开放项已全部关闭：菜单/展示/确认归属/候选来源（方案A）/空候选路径（keyword 搜索）均已定。
 
 > 已关闭：
 > - **菜单形态**：子菜单——智能练习（一级）→ 题型分析（二级），页面统一。

@@ -1,4 +1,4 @@
-> summary: Python 侧向量桥技术设计：①vector_type 必填多索引路由（topic→topic-index 本期建，question/rag 配置占位不建，未知 400/缺失 422，映射放 Python Java 不感知 COS）；②embedding 复用 dashscope text-embedding-v3 显式 dimensions=768（默认 1024 坑，索引维度建好不可改，qwen3.7 同为 768 可换模型不重建），余弦距离越小越相似；③vector_store.py 唯一核心模块（embed/put_vector/query_vector/_resolve_index，CosVectorsClient 单例懒加载，put 后 ~10s 异步生效，query 返回 (resp,data) 命中在 data["vectors"] 非 hits，ReturnMetaData 大写 M）；④失败语义=错误冒泡（与 question-understand 空结果降级相反），embedding 失败与 COS 读写失败日志 tag 分开——支撑后端题型动态聚集，Java 桥失败回退字符规则+原样落库
+> summary: Python 侧向量桥技术设计：vector_type 多索引必填路由、embedding 复用 dashscope（768 维）、向量读写封装与错误冒泡，支撑后端题型动态聚集，Java 桥失败回退字符规则+原样落库。
 > 权威度: 0.7
 > 模块: question-analysis
 > COS路径: rag-source/question-analysis/OpenSpec设计决策/design-python-question-type-mastery-python.md
@@ -12,7 +12,7 @@
 
 ### 背景：向量操作走 Python 桥
 > 状态：✅
-> 检索摘要：COS 向量检索无 Java SDK，向量操作走 Python 桥；本期唯一业务用途=题型动态聚集（相似题检索明确不做）；Python 现无 embedding 类，dashscope 已接可复用。
+> 检索摘要：COS 无 Java SDK，向量操作走 Python 桥；本期用途=题型动态聚集，embedding 复用 dashscope 已接配置。
 
 - 后端方案 `question-type-mastery-backend`（Decision 5）确定：COS 向量检索无 Java SDK（只有 Python/Go 的 `CosVectorsClient`），向量操作走 Python 桥。Java 经 `TopicVectorStore` 端口 HTTP 调 Python，不碰 embedding API / COS SDK。
 - 本期唯一业务用途 = **题型动态聚集**（把散题型名归一成 canonical）；**相似题检索明确不做**（后端 Non-Goal，题目向量本期不落库）。
@@ -24,7 +24,7 @@
 
 ### 目标与非目标
 > 状态：✅
-> 检索摘要：目标=新增 put/query 两向量端点支撑题型动态聚集、多索引 vector_type 必填路由、embedding 复用 dashscope、错误冒泡给 Java 降级；非目标=相似题存储、rag 索引、批处理、改 decide/generate/question-understand 及既有 gateway。
+> 检索摘要：目标=put/query 向量端点+vector_type 必填路由+embedding 复用 dashscope+错误冒泡；非目标=相似题/rag 索引/批处理/改既有链路。
 
 **Goals:**
 - 新增 2 个向量端点（put/query），支撑后端题型动态聚集。
@@ -40,7 +40,7 @@
 
 ### D1：多索引 + vector_type 必填路由（不做单索引 filter）
 > 状态：✅
-> 检索摘要：vector_type 是必填逻辑类型，Python 经 COS_VECTORS_INDEXES 映射到物理索引（topic→topic-index 本期建，question/rag 配置占位不建）；未知→400、缺失→422；映射放 Python，Java 不感知 COS 基础设施。
+> 检索摘要：vector_type 必填多索引路由，映射放 Python Java 不感知 COS；未知 400/缺失 422，topic 本期建、question/rag 占位。
 
 后端「题目索引/题型索引/RAG 索引后面都要」——若用单索引 + metadata filter，将来切多索引要改契约。**本期就按多索引设计**：`vector_type` 是**必填**的逻辑类型，Python 经 `COS_VECTORS_INDEXES` 映射到物理索引。
 
@@ -57,7 +57,7 @@ vector_type (逻辑名)  → 物理索引 (COS)
 
 ### D2：embedding 复用 dashscope OpenAI 兼容端点（不塞进 LLMFactory）
 > 状态：✅
-> 检索摘要：embedding 独立封装在 vector_store.py 不污染 gateway；text-embedding-v3 显式 dimensions=768（默认 1024），余弦距离；维度绑定约束——索引维度=embedding 输出维度且建好后不可改，spike 顺序必须先进验证维度再建索引。
+> 检索摘要：embedding 复用 dashscope text-embedding-v3 显式 768 维（默认 1024 坑），索引维度建好不可改，余弦距离。
 
 `LLMFactory` 全是 `BaseChatModel`（对话），embedding 是向量编码，语义不同——**独立封装在 `vector_store.py`**，不污染既有 gateway（符合「gateway 配置不动」承诺）。
 
@@ -71,7 +71,7 @@ vector_type (逻辑名)  → 物理索引 (COS)
 
 ### D3：`vector_store.py` = 唯一核心模块
 > 状态：✅
-> 检索摘要：vector_store.py 封装 embed/put_vector/query_vector/_resolve_index 四函数；CosVectorsClient 单例懒加载；put 返回 header dict 无 body、resp.status=None 正常；query 返回 (resp,data) 命中在 data["vectors"]；put 后 ~10s 异步生效。
+> 检索摘要：vector_store.py 唯一核心模块封装 put/query，CosVectorsClient 单例懒加载，写入 ~10s 异步生效、返回结构按 COS 实测对齐。
 
 ```
 core/tutoring/vector_store.py
@@ -89,7 +89,7 @@ core/tutoring/vector_store.py
 
 ### D4：配置（settings.py）
 > 状态：✅
-> 检索摘要：COS_VECTORS_* 配置——SECRET_ID/SECRET_KEY/REGION(ap-guangzhou)/BUCKET/INDEXES 路由表（topic→topic-index 本期，question/rag 占位）；DASHSCOPE_API_KEY 复用现成项无需新增。
+> 检索摘要：COS_VECTORS_* 配置（region/bucket/indexes 路由表），DASHSCOPE_API_KEY 复用无需新增。
 
 ```python
 # ============ COS 向量桶 ============
@@ -108,7 +108,7 @@ COS_VECTORS_INDEXES: dict = {               # 逻辑类型 → 物理索引
 
 ### D5：失败语义 = 错误冒泡（与 question-understand 相反）
 > 状态：✅
-> 检索摘要：向量端点错误冒泡不吞异常（与 question-understand 的空结果降级相反），因为 Java 桥侧已有降级策略（回退字符规则+原样落库）；embedding 失败与 COS 读写失败日志 tag 分开便于定位。
+> 检索摘要：向量端点错误冒泡不吞异常（与 question-understand 相反），Java 桥侧有降级；embedding 与 COS 失败日志分开。
 
 question-understand 是「绝不抛异常 → 空结果降级」（视觉识别弱，Java 有 PENDING 兜底）。**向量端点不复制此模式**：它是内部基础设施，Java 桥侧已有降级策略（回退字符规则 + 原样落库）。Python 正常抛 HTTP 错误码即可，但要**日志区分**：
 
@@ -116,7 +116,7 @@ question-understand 是「绝不抛异常 → 空结果降级」（视觉识别�
 
 ### 风险与权衡
 > 状态：✅
-> 检索摘要：风险覆盖 embedding 维度坑（默认 1024 需显式 768 且建后不可改）、CosVectorsClient 签名未知、query 是否支持 metadata filter 不确定、建索引方式、子账号权限不足、向量冷启动、端点不可用拖慢主链路。
+> 检索摘要：列举向量桥运行风险（维度绑定/签名未知/权限/冷启动/端点不可用）与缓解手段，明细见正文。
 
 - [embedding 维度坑：text-embedding-v3 默认 1024，需显式 768，且索引建好后不可改] → spike 第一步验证维度 + 建索引，`dimensions=768` 写死在常量。
 - [CosVectorsClient 初始化/put/query 签名未知] → spike 前置，官方 Python 示例跑通再写封装。
@@ -128,7 +128,7 @@ question-understand 是「绝不抛异常 → 空结果降级」（视觉识别�
 
 ### 迁移计划
 > 状态：✅
-> 检索摘要：迁移六步——spike 装 SDK 验证签名/建 topic-index/验证 768 维度/造近义题型名入库查 top-1→配置+依赖→核心模块（models/vector + vector_store）→端点→测试联调；回滚=停用向量端点即可，Java 桥降级不阻塞主链路。
+> 检索摘要：向量桥迁移：spike 验证→配置依赖→核心模块→端点→联调；回滚停用端点即可，Java 桥降级不阻塞主链路。
 
 1. **spike（前置）**：装 `cos-python-sdk-v5`，确认 `CosVectorsClient` 初始化 + `put_vectors`/`query_vectors` 签名；控制台建 `topic-index`（768 维 cosine）；`text-embedding-v3` 显式 768 验证维度；造 10 条近义题型名入库查 top-1 验证命中。
 2. **配置 + 依赖**：`requirements.txt` + `cos-python-sdk-v5`；`settings.py` + `COS_VECTORS_*`；`.env.example` 同步；`.env` 填真实值。
@@ -139,7 +139,7 @@ question-understand 是「绝不抛异常 → 空结果降级」（视觉识别�
 
 ### 开放问题（spike 已收口）
 > 状态：✅
-> 检索摘要：spike 已收口——CosVectorsClient 签名确认（CosConfig→CosVectorsClient，put/query 返回 (resp,data)）、控制台已建 topic-index（float32 768 cosine）、distance 语义 cosine 越小越近（同型 0.077/0.096、异型 0.332 边界）、子账号需授权 QcloudCOSFullAccess。
+> 检索摘要：spike 已收口：CosVectorsClient 签名/控制台建索引/距离语义/子账号权限均已验证。
 
 - ✅ **`CosVectorsClient` 签名**：`CosConfig(Region, SecretId, SecretKey)` → `CosVectorsClient(config)`；`put_vectors(Bucket, Index, Vectors)` / `query_vectors(Bucket, Index, QueryVector, TopK, Filter, ReturnDistance, ReturnMetaData, ...)` 返回 `(resp, data)`，命中在 `data["vectors"]`。
 - ✅ **建索引**：控制台已建 `topic-index`（`get_index` 实测 `dataType=float32, dimension=768, distanceMetric=cosine`）；SDK 另有 `create_index(Bucket, Index, DataType, Dimension, DistanceMetric, ...)` 可作备选。
