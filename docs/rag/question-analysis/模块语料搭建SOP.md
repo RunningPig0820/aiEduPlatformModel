@@ -154,11 +154,35 @@ docs/rag/question-analysis/
 3. 更新 `GUIDE_POOL["question-analysis"]` 后跑单测 `tests/` 引导相关用例（池结构校验 + 入口可命中），回归确认前端"开始引导"能渲染新问题；
 4. 第 ⑨ 步的 guide_pool 第 ① 版（30 题）→ 本步升级为问题列表 70 问全量。
 
-### 第 ⑤ 步：索引入 COS
+### 第 ⑤ 步：索引入 COS（2026-08-27 补全：summary 分级 + 分功能脚本 + 对象存储上传 + 多模块建向量）
 
-- `build_index.py --pool full|slice`，module 标签 `question-analysis`
-- 普通桶 `rag-source/question-analysis/...` + 切片视图 `rag-slices/question-analysis/...`
-- 入桶后更新 `向量桶入桶清单.md`（块数/来源分布/边界）
+**前置:源文档 summary 分级**（2026-08-27 定）：
+- 语雀 6（大文件 >5000 字符，**只 embed summary**）：详细版 790~1882 字（决策记录 D1~27 / 方案总揽 / 选型 / 演进 / 边界 / 术语）
+- 代码 10 + 完善文档 9（**embed summary+全文**）：锚点版 145~401 字（summary 只作召回锚，全文已进向量）
+- 分级依据：build_index 条件式 ≤5000 字符 embed(summary+全文)，超限只 embed(summary) 防 8192 token 截断
+
+**四步入库**（脚本按功能分文件夹 `scripts/rag/question-analysis/`）：
+
+1. **jsonl 生成**：
+   - 分库：`01_slice_jsonl.py` → `rag_slices-question-analysis.jsonl`（317 切片，兼容两种头格式）
+   - 全量库：`02_full_jsonl.py` → `rag_slices_full-question-analysis.jsonl`（25 源）
+2. **内容上传 COS 对象存储**（正文本源，查看原文 U4 走 get_object）：
+   - `upload_cos.py --root docs/rag/question-analysis` → 普通桶 `rag-source/question-analysis/...`（源）+ `rag-slices/question-analysis/...`（切片）+ `rag-slices/interview/question-analysis/...`（代码/坑档案面试向）
+3. **建向量**（共用索引，靠 module 过滤隔离）：
+   - `build_index.py --module question-analysis --pool full|slice`（**不带 --clear**，增量并入——rag-full/rag-slice 与 ai-tutoring 共用，clear 会清掉 ai-tutoring）
+4. **query.py 按模块加载 jsonl**（检索前置）：`core/rag/query.py` 现写死 ai-tutoring 的 rag_slices.jsonl / rag_slices_full.jsonl，需按模块加载 qa jsonl（否则向量命中后 keymap/BM25 无 qa 块 → 被丢弃）
+
+**元数据审计**（写入前必查）：
+- metadata 10 字段（version/module/category/source/authority/section/file/file_path/anchor/summary）
+- `module=question-analysis`（检索 `$eq module` 过滤）
+- filterable metadata ≤2048B（summary 按余量截断，embedding 用全量）
+- 键唯一性（rag-{pool}/{file}/{anchor}#{idx}，与 ai-tutoring 无冲突）
+
+**切片头两种格式**（01_slice_jsonl 兼容）：
+- 格式A（语雀/引导问题/OpenSpec）：summary/权威度/模块/COS路径/类别 各一行 → source 从路径推导、section 从文件名入口段切、anchor 取 `# 标题`
+- 格式B（代码/坑档案）：summary/来源｜锚点/节/COS路径/类别/target（含 `权威度｜来源｜锚点` 合并行），COS路径带 `interview/` 前缀
+
+入桶后更新 `向量桶入桶清单.md`（块数/来源分布/边界）
 
 ### 第 ⑥ 步：评测
 
@@ -365,6 +389,18 @@ docs/rag/question-analysis/
 | ㊱ | **坑档案双切片**（`切片数据/坑档案/切片/`，16 块）+ **类别 9 视角闭集**：立 `坑档案-切片-提示词.md`——**一坑一文件**（一个 J-QT# = 一个 chunk，不跨坑合并/3 块分组，与 ai-tutoring 同构），开发向（6 段原文+双证据）+ 面试向（过滤证据噪声、排查压 1-2 句定位思路、口述要点通顺改写禁编造、证据指针）同目录靠文件名 `-复盘`/`target` 区分；代码面试切片 `项目难点复盘`→`开发难点` 归一，**类别字段钉死 9 视角闭集**（项目介绍/操作流程/数据关联/开发难点/业务流程/架构设计/业务视角/数据存储/未来演进） | 坑档案每坑是独立故障案例，天然一坑一文件；双切片与代码层同范式（同一源文档出两套，服务不同消费方）；类别用 9 视角闭集防检索分类漂移 |
 | ㊲ | **引导问题问答切片 70 块**（`切片数据/引导问题/切片/`）+ **问题列表 tag 标签**：立 `引导问题-切片-提示词.md`——**一问题一文件**逐问作答（问题列表=问题矿，问答切片=答案库），答案按 9 视角映射表结合 完善文档+分析+坑档案 作答，5 行头（权威度 1.0 注释"合成问答≠原始证据"）+ 核心结论一句话可照讲 + 分层展开每点带依据 + 证据指针；问题列表 70 问加 `<!--tag:{视角}-->` 注释（guide_pool 映射/评测按视角统计） | 引导问题这层"问题已有要作答"——防编造第一铁律（只答语料有的、Non-Goal 如实标注、空答案兜底）；tag 标签让 run_eval 按 9 视角分开统计（架构类召回率/难点类召回率）；评审加固：附语料禁只给问题/文件名白名单/mermaid 只复用语料已有 |
 | ㊳ | **guide_pool 70 问同步**（引导功能开发第 1 步，2026-08-27）：问题列表 70 问（带 tag）按 tag 映射视角→组写入 `ai-edu-ai-service/core/rag/guide_pool.py` 的 `GUIDE_POOL["question-analysis"]`——intro=项目介绍 8 / operation=操作流程+业务流程 19 / data_relation=数据关联+数据存储 14 / difficulty=开发难点+架构+业务视角+未来演进 29 / rag=RAG 桥接子集 7（与主方向重复 scope_questions 去重），**70 唯一**，替换 QT⑤ 30 题底座；docstring 注明各模块底座池数据源（question-analysis=问题列表.md）；跑引导单测 37 通过；多模块按 `current_project` 选池、入口模板模块中文名动态生成 | 引导功能开发第一步——guide_pool 是前端"开始引导"的数据底座，问题列表落地后必须同步进代码才生效；多模块下每个模块一个池 + 入口模板不写死模块名（"能不能先介绍一下题型分析？"）；**剩余前端渲染 + 问答切片检索接入 ⏳（QT⑦⑧）** |
+
+### Phase 9 入库阶段: summary 分级 + 分功能脚本 + COS 对象存储上传（2026-08-27）
+
+> 语料梳理完成后进入入库: 源文档 summary 分级 → jsonl 生成脚本 → 内容上传 COS 对象存储 → 建向量。正文本源在 COS 对象存储(查看原文 U4), 本地 jsonl 只作 build_index 摄入 + BM25 多路召回底。
+
+| 步骤 | 做了什么 | 关键经验 |
+|---|---|---|
+| ㊴ | **源文档 summary 分级**: 25 份源文档(语雀 6/代码 10/完善文档 9)从短版升级——语雀 6 详细版(790~1882 字, 大文件只 embed summary 作向量本体), 代码/完善 19 锚点版(145~401 字, embed summary+全文时 summary 只作召回锚) | summary 长度分级依据 embed 策略: **只 embed summary 的大文件(语雀)越长越好**(向量全靠它); **embed summary+全文的小文件(代码/完善)几百字够**(全文已进向量, 长了冗余还顶 5000 阈值) |
+| ㊵ | **入库脚本按功能分文件夹**: `scripts/rag/question-analysis/`(README + 01_slice_jsonl.py 分库 + 02_full_jsonl.py 全量库) + `build_index.py --module`(默认 ai-tutoring 不破坏) | 各功能脚本独立(切片头格式/数据组成不同), 不硬塞进一个; build_index 引擎复用靠 --module 切 jsonl(MODULE_DATA 双模块映射) |
+| ㊶ | **内容上传 COS 对象存储**: `upload_cos.py --root docs/rag/question-analysis` → 357 文件(25 源 rag-source/ + 317 切片 rag-slices/ + 15 OpenSpec design 等带头文件)传普通桶, 6/6 对象验证存在 | **正文本源在 COS 对象存储**(查看原文 U4 走 get_object(file_path)), 本地 jsonl 不是内容展示源; 上传前先审计 COS路径头(缺失/重复/前缀错 342 文件 0 问题) |
+| ㊷ | **元数据审计**(建向量前): 342 块(25+317)字段数(10)/大小(≤2048B)/类型(module=question-analysis, authority 数值)/键唯一性全查通过 | COS filterable metadata 单条 ≤2048B(实测, 非注释的 20KB)——summary 大的(语雀 1703 字≈5KB)写前必审: 会被截断到预算内, 但 **embedding 仍用全量 summary**; 键 = rag-{pool}/{file}/{anchor}#{idx} 与 ai-tutoring 无冲突 |
+| ⏳ | **建向量 + query.py 模块化**(未做): `build_index.py --module question-analysis --pool full/slice`(不带 --clear) + `query.py` 按模块加载 qa jsonl | rag-full/rag-slice 与 ai-tutoring **共用索引**, 靠 metadata.module 过滤隔离——**不能 --clear**(会清掉 ai-tutoring 的 23+588), 只能增量 upsert; query.py 写死 ai-tutoring jsonl, 不模块化则 qa 向量命中后 keymap/BM25 无 qa 块被丢弃 |
 
 ### 顺序方法论总结
 
