@@ -5,9 +5,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景23-embedding维度绑定.md
 > 类别：开发难点
 > 状态：✅
-> entry_id: 场景23
-> source_doc: 语雀-边界场景清单.md
-> tags: ["场景23","掌握度底盘&题型分析","status_done"]
 
 ---
 

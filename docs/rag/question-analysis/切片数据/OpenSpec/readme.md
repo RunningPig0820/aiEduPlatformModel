@@ -1,10 +1,45 @@
 # 切片数据 / OpenSpec
 
-> 来源：`2.OpenSpec design 决策/design-*.md`（历史设计素材层，doc_type=design_spec，权威 0.7）
-> 切片口径：**按 ### 切**，100% 保留 Migration/Risks/OpenQuestions；块元数据 `authority=0.7 + source=OpenSpec`。
-> 切片文件：由 `export_slices_md.py` 从 jsonl 导出到本目录（QT⑥ 待执行）。
-> 检索规则：**素材溯源库，不作回答主来源**——仅右键先召回 1.0/0.8 真相源无答案才引用；引用必须提示「该信息来源于历史设计文档，请核对代码确认实际落地情况」，禁止把 ⚠️/❓ 当已上线功能。
+> 来源：`2.OpenSpec design 决策/design-*.md`（历史设计素材层，doc_type=design_spec，权威 **0.7**）
+> **本次范围 = 分片（按 ### 小节切片），不做 jsonl / 入桶**（QT⑥⑦ 等全部来源切完一起做）。
+> 切片方式：**提示词 + 大模型按 ### 切**（脚本导出方案已废弃，2026-08-27 与 代码/坑档案/引导问题/语雀 对齐）。
 
-## 处理方案
-- `处理方案/readme.md`：OpenSpec 层切片处理说明
-- `处理方案/提示词/`：spec 文件整理/补充提示词（源目录 `2.OpenSpec design 决策/处理方案/`）
+## 一、源头（语料就绪）
+
+- 源文档：`2.OpenSpec design 决策/design-*.md`（6 份 RAG 版，权威 0.7，素材溯源库；共 85 个 `###` 小节，每块自带 `> 状态` + `> 检索摘要`）
+- 原始草稿归档：`2.OpenSpec design 决策/原来的文件/`（证据源，不进库）
+- 生成提示词：`2.OpenSpec design 决策/处理方案/提示词/spec文件整理` + `spec信息补充提示词`（双轨：spec 自身成文进池 + 收敛事实折入语雀 canonical）
+
+## 二、切片（提示词 + 大模型按 ### 切）
+
+> 切片方式 2026-08-27 改为提示词 + 大模型：一个 `###` 小节 = 一个 chunk = 一个文件（决策 D#/背景/目标非目标/风险与权衡/迁移计划/开放问题/验收反馈）。提示词：`处理方案/提示词/OpenSpec-切片-提示词.md`。
+
+- 粒度：决策 `### D#/Decision#/决策#` → `design-{change}-D{n}-{短名}.md`（编号归一化 D{#}）；背景→Context、目标非目标→Goals-Non-Goals、风险/迁移/开放问题/验收反馈各自成块
+- 保真：决策正文/表格/流程图文本/代码块原样保留，**100% 保留 Migration/Risks/OpenQuestions**；只删 文档说明/草稿标记
+- 头部：精简 6 行（summary=源检索摘要**完整保留** / 权威度 0.7 / 模块 / COS路径 / 类别 9 视角闭集 / 状态），无 `｜来源/锚点/节`；机器元信息（entry_id/source_doc/status tag）QT⑥⑦ 摄入时从 文件名+状态+层配置 推导
+
+## 三、切片结果与质量检查
+
+- 本次结果：（待切）约 85 块（backend-kp 18 + backend-qtm 15 + frontend-kp 14 + frontend-qtm 20 + python-signal 8 + python-qtm 10）
+- 质量检查：按 ### 全切无缺、类别全在 9 视角闭集、权威度全 0.7、状态标记（✅/⚠️/❓）保留、风险/迁移/开放问题无删减、草稿/文档说明无残留
+
+## 四、检索规则（入桶/查询时生效）
+
+- design_spec 只做**补充溯源，不作回答主来源**：优先 0.8/1.0 真相源（语雀 canonical/完善文档/代码），主库无答案才允许引用 0.7 素材库；**引用必须提示「该信息来源于历史设计文档，请核对代码确认实际落地情况」**，禁止把 ⚠️/❓ 当已上线功能
+- 与 语雀 canonical 同切片池，不物理隔离第三索引——靠 `authority=0.7 + source=OpenSpec` 元数据识别素材层，检索时降级处理
+
+## 五、入桶 / jsonl（QT⑥⑦，本次不做）
+
+> 本次范围停在**分片**。jsonl 生成、入桶等**等全部来源（代码/坑档案/引导问题/语雀/OpenSpec）切完一起做**（QT⑥⑦ 落地），此处仅留规则备忘不执行。`slice_corpus.py` 解析 `> entry_id`/`> source_doc`/`> tags` 三行 → jsonl `tags`（entry_tags 子键）。
+
+## 目录结构
+
+```
+OpenSpec/
+├── readme.md              # 本文（处理说明 + 视图总览）
+├── 处理方案/
+│   ├── readme.md          # 处理路径说明
+│   └── 提示词/
+│       └── OpenSpec-切片-提示词.md   # 按 ### 切片提示词
+└── 切片/                   # 全部 OpenSpec 切片（readme.md + design-{change}-{小节}.md）
+```

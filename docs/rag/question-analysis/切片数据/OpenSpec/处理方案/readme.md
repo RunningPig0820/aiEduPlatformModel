@@ -4,18 +4,22 @@
 
 ## 一、源头
 
-- 源文档：`2.OpenSpec design 决策/design-*.md`（6 份 RAG 版，权威 0.7，素材溯源库）
+- 源文档：`2.OpenSpec design 决策/design-*.md`（6 份 RAG 版，权威 0.7，素材溯源库；85 个 `###` 小节）
 - 原始草稿归档：`2.OpenSpec design 决策/原来的文件/`（证据源，不进库）
 - 生成提示词：`2.OpenSpec design 决策/处理方案/提示词/spec文件整理` + `spec信息补充提示词`（双轨：spec 自身成文进池 + 收敛事实折入语雀 canonical）
 
-## 二、切片
+## 二、切片（2026-08-27 改：提示词 + 大模型按 ### 切）
 
-- 按 `###` 切，一个决策/小节一块；100% 保留 Migration/Risks/OpenQuestions
+> 脚本导出（export_slices_md.py）方案已废弃，与 代码/坑档案/引导问题/语雀 对齐改用 **提示词 + 大模型**。提示词：`提示词/OpenSpec-切片-提示词.md`。
+
+- 按 `###` 切，一个决策/小节一块（决策 D# 归一化；背景/目标非目标/风险/迁移/开放问题/验收反馈各自成块）
+- 100% 保留 Migration/Risks/OpenQuestions；`# ==== 分节 ====` 分隔线不作 chunk
+- 头部精简 6 行（summary 完整保留 + 权威度 0.7 + 模块 + COS路径 + 类别 + 状态）；机器元信息（entry_id/source_doc/status tag）由 QT⑥⑦ 摄入时从文件名+状态推导，md 头不写
 - 块元数据 `authority=0.7 + source=OpenSpec`（同切片池，不物理隔离第三索引——靠元数据识别）
 
-## 三、导出视图
+## 三、切片结果
 
-- `export_slices_md.py` 从 jsonl 导出到本目录（QT⑥）
+- 约 85 块（backend-kp 18 / backend-qtm 15 / frontend-kp 14 / frontend-qtm 20 / python-signal 8 / python-qtm 10），全落 `切片/`
 
 ## 四、检索侧规则
 

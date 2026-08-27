@@ -6,9 +6,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题5-analyze.topicLabel非canonical（alias miss）.md
 > 类别：开发难点
 > 状态：⚠️ 待办
-> entry_id: 问题5
-> source_doc: 语雀-前端联调问题单.md
-> tags: ["问题5","契约","status_todo"]
 
 ---
 

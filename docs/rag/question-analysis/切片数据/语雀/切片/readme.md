@@ -16,17 +16,18 @@
 | 语雀-前端联调问题单 | 按 问题# | 16 | `问题{编号}` |
 | 语雀-术语对照表 | 整表一块（词汇基准） | 1 | `glossary-all` |
 
-## 头部元标签（QT⑥⑦ 解析入 jsonl tags）
+## 头部元信息（精简 6 行）
 
-- `> summary` = 源条目 `> 检索摘要` 原样（≤2 句向量锚点）
+- `> summary` = 源条目 `> 检索摘要` **原样完整保留**（召回锚点，信息越全检索率越高）
 - `> 权威度: 0.8` ｜ `> 模块: question-analysis` ｜ `> COS路径: rag-slices/question-analysis/语雀/...`
 - `> 类别`：9 视角闭集（架构设计/数据存储/数据关联/业务视角/未来演进/开发难点/操作流程/业务流程/项目介绍）
-- `> 状态`：源条目状态（✅/⚠️/❓）
-- `> entry_id` / `> source_doc` / `> tags`：机器可解析检索元标签（tags = ID+大类+状态标签 status_done/suggest/todo/open）
+- `> 状态`：源条目状态（✅/⚠️/❓/已修复/待办）
 - `> WARNING`：仅冲突条目（3 处：选型2/总揽3/总揽12）
+
+> 机器元信息（entry_id/source_doc/status tag）**不在 md 头写**，QT⑥⑦ 摄入时从 文件名+状态+层配置 推导：entry_id←文件名段（`语雀-决策记录-D8-*`→D8、`语雀-演进时间线-阶段4-*`→阶段4、`语雀-方案总揽-1-*`→总揽-1）、source_doc←文件名前缀、status tag←状态行映射（status_done/suggest/todo/open）。
 
 ## 检索规则
 
 - doc_type=canonical，回答"为什么这么设计/权衡/演进"；与完善文档 1.0 主答案配合（1.0 优先，canonical 补决策依据）
-- 元过滤：`tags.entry_id == "D8"`、`tags.entry_tags 包含 status_suggest` 精准定位
+- 元过滤：`tags.entry_id == "D8"`、`tags.status == "status_suggest"` 精准定位
 - WARNING 条目检索时提示"以代码分析文档为准，请交叉核对"

@@ -5,9 +5,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景12-COS写入延迟.md
 > 类别：开发难点
 > 状态：✅
-> entry_id: 场景12
-> source_doc: 语雀-边界场景清单.md
-> tags: ["场景12","基础设施","status_done"]
 
 ---
 

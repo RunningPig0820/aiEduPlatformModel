@@ -5,16 +5,13 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-决策记录-D25-mastery_snapshot脱钩.md
 > 类别：数据关联
 > 状态：✅
-> entry_id: D25
-> source_doc: 语雀-决策记录.md
-> tags: ["D25","掌握度底盘&题型分析","status_done"]
 
 ---
 
 ### D25 mastery_snapshot 脱钩（题型与知识点快照不同源）
-
 > 状态：✅
 > 检索摘要：mastery_signals 不再优先复用掌握度快照候选，题型与知识点快照不同源；mastery_snapshot 保留在契约里降级为背景参考或不提。
+
 
 | 属性 | 内容 |
 |---|---|

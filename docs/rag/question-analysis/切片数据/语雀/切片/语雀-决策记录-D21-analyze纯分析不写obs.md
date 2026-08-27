@@ -5,16 +5,13 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-决策记录-D21-analyze纯分析不写obs.md
 > 类别：业务视角
 > 状态：✅
-> entry_id: D21
-> source_doc: 语雀-决策记录.md
-> tags: ["D21","掌握度底盘&题型分析","status_done"]
 
 ---
 
 ### D21 analyze-question 纯分析不写 obs（浏览不产生学习信号）
-
 > 状态：✅
 > 检索摘要：题型分析端点是只读解析，除封闭域池约束 top-1 直接落 RESOLVED obs 外不写观测，浏览行为不污染聚合统计。
+
 
 | 属性 | 内容 |
 |---|---|

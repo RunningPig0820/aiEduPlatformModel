@@ -5,9 +5,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景8-两层PENDING混用.md
 > 类别：开发难点
 > 状态：✅
-> entry_id: 场景8
-> source_doc: 语雀-边界场景清单.md
-> tags: ["场景8","数据异常","status_done"]
 
 ---
 

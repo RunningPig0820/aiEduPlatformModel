@@ -6,9 +6,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题13-vector-query返回字段错位.md
 > 类别：开发难点
 > 状态：✅ 已修复
-> entry_id: 问题13
-> source_doc: 语雀-前端联调问题单.md
-> tags: ["问题13","接口","status_done"]
 
 ---
 

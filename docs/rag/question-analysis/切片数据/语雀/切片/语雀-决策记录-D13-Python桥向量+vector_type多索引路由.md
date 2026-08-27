@@ -5,16 +5,13 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-决策记录-D13-Python桥向量+vector_type多索引路由.md
 > 类别：架构设计
 > 状态：✅
-> entry_id: D13
-> source_doc: 语雀-决策记录.md
-> tags: ["D13","架构层决策","status_done"]
 
 ---
 
 ### D13 Python 桥向量 + vector_type 多索引路由
-
 > 状态：✅
 > 检索摘要：Java 不直接调用 COS 与 Embedding，通过 HTTP 桥调用 Python 服务；vector_type 参数做多索引路由，支持后续扩展 question、rag 索引。
+
 
 | 属性 | 内容 |
 |---|---|

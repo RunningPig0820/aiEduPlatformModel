@@ -5,9 +5,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-边界场景清单-场景24-WEAK幻觉排除聚合.md
 > 类别：数据关联
 > 状态：✅
-> entry_id: 场景24
-> source_doc: 语雀-边界场景清单.md
-> tags: ["场景24","掌握度底盘&题型分析","status_done"]
 
 ---
 

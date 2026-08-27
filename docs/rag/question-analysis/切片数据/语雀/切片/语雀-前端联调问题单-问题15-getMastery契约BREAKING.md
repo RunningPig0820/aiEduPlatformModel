@@ -6,9 +6,6 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-前端联调问题单-问题15-getMastery契约BREAKING.md
 > 类别：开发难点
 > 状态：✅ 已修复（方案定稿）
-> entry_id: 问题15
-> source_doc: 语雀-前端联调问题单.md
-> tags: ["问题15","掌握度&题型分析","status_done"]
 
 ---
 

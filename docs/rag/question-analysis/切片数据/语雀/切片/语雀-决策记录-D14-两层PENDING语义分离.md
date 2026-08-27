@@ -5,16 +5,13 @@
 > COS路径: rag-slices/question-analysis/语雀/语雀-决策记录-D14-两层PENDING语义分离.md
 > 类别：数据存储
 > 状态：✅
-> entry_id: D14
-> source_doc: 语雀-决策记录.md
-> tags: ["D14","掌握度口径","status_done"]
 
 ---
 
 ### D14 两层 PENDING 语义分离
-
 > 状态：✅
 > 检索摘要：区分 analyze-question 与 getMastery 的 PENDING 语义，不再复用同一个状态字段；识别失败与掌握度未归属是两类业务状态。
+
 
 | 属性 | 内容 |
 |---|---|
