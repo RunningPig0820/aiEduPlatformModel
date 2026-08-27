@@ -1,0 +1,17 @@
+# 场景8 LLM 推断中断
+> summary: LLM 长任务中断怎么办？llmTaskLock 断点续传（--resume），推断 2-3 小时/匹配 1-2 小时可续，缓存键 SHA256 不重复调用。
+> 权威度: 0.8
+> 模块: knowledge-graph
+> COS路径: rag-slices/knowledge-graph/语雀/语雀-边界场景清单-场景8-LLM推断中断断点续传.md
+> 类别：操作流程
+> WARNING: 与方案-代码对账矛盾——#15 前置推断 CLI 无 --resume 参数，断点基于缓存文件（部分任务有），部分落地；#3 状态存储实际为 JSON 文件（output/progress/），未见 MySQL 状态表。
+
+| 属性 | 内容 |
+|---|---|
+| 触发条件 | 进程中断/网络失败/超时 |
+| 当前处理 | TaskState 检查点 + CachedLLM 缓存 + ProcessLock；重试策略（超时 2/格式 1/网络 3 次） |
+| 兜底 | 优雅退出（SIGINT/SIGTERM）；MySQL 状态表两层（chapter+subbatch） |
+| 风险 | 缓存文件损坏（备份+原子写） |
+| 证据 | 证据：edukg/core/llmTaskLock/README.md |
+
+> 证据：详见 `1.语雀/语雀-边界场景清单.md`（场景8）
