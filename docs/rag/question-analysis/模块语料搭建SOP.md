@@ -15,7 +15,7 @@
 | 模块主文档 | `question-analysis.md`（面试问题清单） |
 | 向量桶 module 标签 | `question-analysis`（build_index / 查询 Filter 用） |
 | 权威度分层 | 完善文档 1.0 / 代码 0.8 / 坑档案 0.8 / 语雀 0.7 / OpenSpec 0.7 |
-| guide_pool 池 | `GUIDE_POOL["question-analysis"]`（intro6/operation6/data_relation6/difficulty6/rag4） |
+| guide_pool 池 | `GUIDE_POOL["question-analysis"]`（intro/operation/data_relation/difficulty/rag，源 = `7. 引导问题/问题列表.md` 9 视角筛选；**问题列表落地后须同步进代码 `ai-edu-ai-service/core/rag/guide_pool.py`**） |
 
 ## 二、产出物总览（最终目录形态）
 
@@ -40,7 +40,9 @@ docs/rag/question-analysis/
 ├── 5.难点/坑档案.md                     # 8 坑（J-QT1~8，6 段复盘）
 │   └── 处理方案/readme.md + 提示词/坑-提示词.md  # 坑档案处理方案（坑边界:真实踩坑 vs 风险预判） + 坑深挖提示词（真挖三端 git log 第一铁律/六段复盘/双证据/坑编号）
 ├── 6.缺失补充/                          # 逻辑闭环缺口（可选）
-├── 7. 引导问题/引导问题.md              # 引导池源（30 题，4 方向 + rag 桥接）
+├── 7. 引导问题/问题列表.md             # 引导问题源清单（9 视角 70 问，纯问题不回答，guide_pool/评测集共用）
+│   └── 引导问题.md                        # 3 段问答表（引导/亮点/追问 + 防御，模块主文档口吻）
+│   └── 处理方案/readme.md + 提示词/问题列表-生成-提示词.md  # 处理方案（9 视角映射）+ 问题生成提示词（可回答性/口语化/递进追问）
 ├── 切片数据/                           # 导出的人读视图（含类别头）
 ├── 切片清单.md                         # 进库边界（四层 + 双池策略）
 ├── 模块语料搭建SOP.md                   # 本文
@@ -120,6 +122,15 @@ docs/rag/question-analysis/
 6. **块元数据**：`doc_type=code_analysis` + `authority=0.8` + `source=代码` + `module=question-analysis`；块 anchor = 所在 h2 节标题。切片时确保 `file_path` 指向源文档（`3.代码/分析-XX-*.md`），前端"查看原文"可回源。
 7. **检索侧来源区分（入桶前的规则，非切片操作）**：code_analysis 只答**接口/参数/降级/对账翻转/代码真实行为**；**不答"为什么这么设计/选型权衡"**（那是 canonical 决策记录/选型对比职责，代码层缺设计背景）——RAG 系统 prompt 必须按 `doc_type` 做来源过滤/优先序，禁止用代码真相文档裸答业务设计权衡类问题。
 
+### 第 ④-① 步：问题列表 → 代码 guide_pool 同步（写代码必做）
+
+**产出**：`7. 引导问题/问题列表.md`（9 视角 70 问）已验证可回答后，**必须同步进前端引导代码** `ai-edu-ai-service/core/rag/guide_pool.py`：
+
+1. **映射视角 → 组**：项目介绍→`intro` / 操作流程→`operation` / 数据关联→`data_relation` / 开发难点→`difficulty` / 业务流程+架构设计+业务视角+数据存储+未来演进→择优归入以上 4 组或新增组（guide_pool 主方向闭集 = intro/operation/data_relation/difficulty，rag 组是子集）；
+2. 只放**问题文本**，不写答案——答案走检索链路（完善文档 1.0 / 分析+坑 0.8）；
+3. 更新 `GUIDE_POOL["question-analysis"]` 后跑单测 `tests/` 引导相关用例（池结构校验 + 入口可命中），回归确认前端"开始引导"能渲染新问题；
+4. 第 ⑨ 步的 guide_pool 第 ① 版（30 题）→ 本步升级为问题列表 70 问全量。
+
 ### 第 ⑤ 步：索引入 COS
 
 - `build_index.py --pool full|slice`，module 标签 `question-analysis`
@@ -144,7 +155,7 @@ docs/rag/question-analysis/
 2. **重建 jsonl**：`md_to_jsonl.py`（切片池）+ `slice_full.py`（全量池）→ 核对块数
 3. **重入桶**：`build_index.py --clear` 幂等 → 验证桶计数 + 模块过滤查询
    > 切片配置：3.代码 进 slice_corpus 的 LAYERS 用 `("3.代码/分析-*.md", 0.8, "代码", 2, "split")`——**split_level=2 按 h2 切**；gen_summaries.py 生成块级 summary（详见 `第④步·切片注意事项`）
-4. **新模块照此 SOP**：复制本结构，改模块 id / 语料源 / 完善文档标题 / guide_pool 条目；3.代码 用 `代码深读-分析文档-提示词.md`（改代码路径/主题清单/COS前缀），首轮直接按"业务描述与业务场景先行 + 真读代码 + 三端核对 + 元数据块"标准产出，不必再做第二轮改造
+4. **新模块照此 SOP**：复制本结构，改模块 id / 语料源 / 完善文档标题 / guide_pool 条目；3.代码 用 `代码深读-分析文档-提示词.md`（改代码路径/主题清单/COS前缀），首轮直接按"业务描述与业务场景先行 + 真读代码 + 三端核对 + 元数据块"标准产出，不必再做第二轮改造。**7. 引导问题 新模块必做**：`问题列表.md`（9 视角）→ 映射进 `guide_pool.py` 的 `GUIDE_POOL[新模块id]`（只放问题文本）+ 跑引导单测 → 前端"开始引导"可见（见第④-①步）
 
 ## 七、实际操作流程（本模块第一轮，2026-08-26~27，完整记录）
 
@@ -162,7 +173,7 @@ docs/rag/question-analysis/
 ⑥ 代码深读(Explore agent) ──▶ 3.代码/分析-01~10.md（落地真相 + 文件:行号证据）             ✅
 ⑦ 方案 vs 代码 ──对账──▶ 方案-代码对账.md（6 处口径翻转）                                 ✅
 ⑧ 完善文档 9 节（为什么→方案→落地真相→追问防御→证据，直接全量入库；09 业务闭环补节）    ✅
-⑨ 坑档案 8 坑（J-QT1~8）→ 引导问题 30 题 → guide_pool 池 → 切片清单（双池策略）            ✅
+⑨ 坑档案 8 坑（J-QT1~8）→ 问题列表 70 问（9 视角）→ **同步进代码 `guide_pool.py`** → 切片清单（双池策略） ✅
 ⑩ 切片 jsonl（切片池 + 全量池）→ build_index 入桶 → 评测基线                              ⏳ QT⑥⑦⑧
 ```
 
