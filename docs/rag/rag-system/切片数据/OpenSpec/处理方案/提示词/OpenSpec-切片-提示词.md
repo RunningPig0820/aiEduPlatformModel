@@ -1,7 +1,7 @@
 # 任务：OpenSpec design 素材 →【按 ### 小节切片】
 
 ## 文件元信息
-> 用途: 读取 `2.OpenSpec design 决策/design-*.md`（历史设计素材层，doc_type=design_spec，权威 **0.7**），按 `###` 小节切成自包含 RAG 切片，输出到 `切片数据/OpenSpec/切片/`。
+> 用途: 读取 `2.OpenSpec design 决策/原来的文件/*.md`（23 份 RAG 版成文，历史设计素材层，doc_type=design_spec，权威 **0.7**），按 `###` 小节切成自包含 RAG 切片，输出到 `切片数据/OpenSpec/切片/`。
 > 权威度: 0.7 ｜ 模块: rag-system ｜ 类别：9 视角闭集（单切片一个类别）
 > 切片方式：**提示词 + 大模型按 ### 切**（脚本导出方案已废弃，与 代码/坑档案/引导问题/语雀 对齐）。
 
@@ -15,12 +15,33 @@
 - **⚠️ 切片阶段不做跨文档冲突比对，不自动生成 WARNING 标记**（本切片输入只有单份 design 文档，无外部文档上下文）；✅/⚠️/❓ 状态原样保留；WARNING 属于后续**人工对账环节**产出，不在本切片任务执行。
 
 ## 输入
-源文档（`docs/rag/rag-system/2.OpenSpec design 决策/`，2 份，**一份文档一批**，一次只喂 1 份；下表 `### 块数` 为参考**以文档实际解析为准，不硬卡死数字**，切片数当前记「待生成」）：
+源文档（`docs/rag/rag-system/2.OpenSpec design 决策/原来的文件/` 根目录 23 份 RAG 版，**一份文档一批**，一次只喂 1 份；下表 `### 块数` 为参考**以文档实际解析为准，不硬卡死数字**，切片数当前记「待生成」）：
 
-| 源文档 | ### 块数（参考） | 决策编号形式 | 设计文档主题 |
-|---|---|---|---|
-| `design-python-project-intro-rag.md` | 待生成 | D1~D11 | 项目介绍 RAG：双池检索/页面锚定/两道门/token 真算/引导问题=索引层入口 |
-| `design-python-rag-eval-agent.md` | 待生成 | D1~D7 | 评测 agent：hit@k + answer_quality（编造封顶 3 分，HIT_K=5） |
+| 源文档 | ### 块数（参考） | 设计文档主题 |
+|---|---|---|
+| `design-java-rag-project-intro-assistant.md` | 24 | 08-25 白盒链 D1~D12+契约 D-A~E+编排 M1-M8 |
+| `design-python-project-intro-rag.md` | 16 | 08-21 双池/页面锚定/两道门/token 真算 D1~D11 |
+| `design-python-rag-eval-agent.md` | 12 | 评测 agent：hit@k + answer_quality（编造封顶 3 分，HIT_K=5） |
+| `design-python-rag-project-intro-assistant.md` | 14 | 08-25 Python 白盒流水线 |
+| `design-frontend-rag-assistant-frontend.md` | 16 | 前端白盒 UI 交互 |
+| `spec-java-rag-project-intro-assistant-gateway.md` | 7 | Java 角色门/SSE 中继/trace_id |
+| `spec-java-rag-project-intro-assistant-pipeline.md` | 6 | Python 白盒链路 intent/rewrite/recall/rerank/generate |
+| `spec-java-rag-project-intro-assistant-resilience.md` | 8 | 分层超时/断连/降级/tokens_usage |
+| `spec-java-rag-project-intro-assistant-eval.md` | 7 | 评估集扩面/precision_at_k/is_quoted 校验 |
+| `spec-java-rag-project-intro-assistant-guardrails.md` | 9 | 模块全放行/范围门/clarify/is_quoted/引导池 |
+| `spec-python-project-intro-rag-rag-corpus.md` | 5 | 语料完善文档 8 节/切片/metadata |
+| `spec-python-project-intro-rag-rag-permission.md` | 2 | 页面权限标签/权限门前置校验 |
+| `spec-python-project-intro-rag-rag-retrieval.md` | 6 | 向量+BM25 双路/页面锚定/打分 |
+| `spec-python-project-intro-rag-rag-generation.md` | 4 | doubao 流式/强制引用/按页标注 |
+| `spec-python-project-intro-rag-rag-resilience.md` | 5 | 降级矩阵/重试策略/超时 |
+| `spec-python-rag-eval-agent-eval-agent.md` | 5 | 评测集/hit@k/判分 |
+| `spec-python-rag-eval-agent-eval-observability.md` | 3 | trace/报告/观测 |
+| `spec-python-rag-eval-agent-kb-organization.md` | 3 | 模块状态机/完善文档/切片索引 |
+| `spec-python-rag-project-intro-assistant-pipeline.md` | 6 | 08-25 Python 白盒 pipeline |
+| `spec-python-rag-project-intro-assistant-resilience.md` | 7 | 08-25 分层超时/断连/降级 |
+| `spec-python-rag-project-intro-assistant-eval.md` | 5 | 08-25 边界拒答评测/is_quoted 校验 |
+| `spec-python-rag-project-intro-assistant-guardrails.md` | 8 | 08-25 范围门/clarify/引导池 |
+| `spec-frontend-rag-assistant-frontend-rag-assistant-ui.md` | 12 | 引导 chips/白盒面板/召回可视化 UI |
 
 > 顶层 `## Context` / `## Goals / Non-Goals` / `## Risks / Trade-offs` / `## Migration Plan` / `## Open Questions` 各作为独立小节切（文件命名见下表 Context/Goals-Non-Goals/风险与权衡/迁移计划/开放问题）。
 
@@ -47,7 +68,7 @@
 6. **表格承载**：短表直接保留；宽横向大表优先拆竖向属性小表，无法拆保留在本小节内。
 7. **块大小**：800~1500 token；超长在同小节内按 `####` 子块拆（文件名加 `-2/-3`）——子块必须自包含、可独立回答一部分问题，**禁止按行数对半切碎片**；子块带完整头部元信息（summary/entry_id/tags 适配子块内容，entry_id 追加 `-2/-3`）；证据指针同时指向父小节 + 本块子上下文。
 8. **超小条目不合并**：一条决策/小节再短也独立成文件。
-9. **证据指针**：每块末尾 `> 证据：详见 \`2.OpenSpec design 决策/design-{change}.md\`（§{小节}）`；**仅当真实存在关联才追加 `｜ 语雀-决策记录.md D# ｜ 完善文档 0X-*.md`，无关联不要模板式占位抄写**（无 D# 对应就删掉那段）。
+9. **证据指针**：每块末尾 `> 证据：详见 \`2.OpenSpec design 决策/原来的文件/{原文档名}.md\`（§{小节}）`；**仅当真实存在关联才追加 `｜ 语雀-决策记录.md D# ｜ 完善文档 0X-*.md`，无关联不要模板式占位抄写**（无 D# 对应就删掉那段）。
 
 ## 明确丢弃（不输出）
 1. 原文件标题行 + 原文件头元信息（`> summary`/`> 权威度`/`> 模块`/`> COS路径` 等原始头）
@@ -73,7 +94,7 @@
 
 {小节正文：决策/表格/流程图文本/代码块，原文保留}
 
-> 证据：详见 `2.OpenSpec design 决策/design-{change}.md`（§{小节}）｜ 语雀-决策记录.md D# ｜ 完善文档 0X-*.md（仅真实存在才追加）
+> 证据：详见 `2.OpenSpec design 决策/原来的文件/{原文档名}.md`（§{小节}）｜ 语雀-决策记录.md D# ｜ 完善文档 0X-*.md（仅真实存在才追加）
 ```
 
 ## 类别规则（9 视角闭集，单切片一个类别）

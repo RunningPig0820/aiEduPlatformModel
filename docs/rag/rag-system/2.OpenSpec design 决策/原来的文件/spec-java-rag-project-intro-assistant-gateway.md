@@ -1,12 +1,20 @@
+> summary: Java 侧 RAG 项目介绍助手网关的完整能力规格：学生角色硬门（可信 session 取角色、非 STUDENT 固定 403 不消耗 token）、SSE 白盒事件中继（permission→intent→(clarify|switch)→rewrite→rerank→(boundary)→token→done 时序契约）、事件字段 camelCase 契约、trace_id 生成与断线补查、session_id 会话续接、显式关闭对话结算。
+> 权威度: 0.7
+> 模块: rag-system
+> COS路径: rag-source/rag-system/OpenSpec设计决策/spec-java-rag-project-intro-assistant-gateway.md
+> 类别：业务流程
+
 # rag-assistant-gateway Specification
 
-## Purpose
-
-Java 侧 RAG 项目介绍助手网关：从可信 session 取角色（仅 STUDENT 放行，非学生固定 403 不消耗 token），SSE 白盒事件中继（permission → intent → rewrite → rerank → token → done），trace_id 透传与断线补查，内部调用 Python 引擎。
+## 文档说明
+> 本文件为原始 spec 文档的 RAG 结构化重构版本。
+> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ## ADDED Requirements
 
 ### Requirement: 学生角色硬门
+> 状态：✅
+> 检索摘要：为什么角色门从可信session取角色而不信任前端body传参？非STUDENT是否固定403、不消耗token不产生trace？
 
 系统 SHALL 在 RAG 助手请求入口从可信源（`HttpSession` 或网关解析 Header）获取当前用户角色，禁止信任前端 body 传参；仅当角色明确为 `STUDENT` 时放行进入 RAG 流程，否则返回固定 403 拒绝响应。
 
@@ -26,6 +34,8 @@ Java 侧 RAG 项目介绍助手网关：从可信 session 取角色（仅 STUDEN
 - **THEN** 系统返回固定 403 响应体，同样不进入 RAG 流程
 
 ### Requirement: SSE 白盒事件中继
+> 状态：✅
+> 检索摘要：白盒SSE事件按什么时序透传前端？permission到done顺序能否重排或丢失？clarify/switch和boundary分支怎么早停？
 
 系统 SHALL 将 Python 引擎返回的 SSE 事件流按固定时序透传前端：`permission → intent → (clarify|switch) → rewrite → rerank → (boundary) → token* → done`，不得重排或丢失。Python 的 `meta`/`done` 内部字段由 Java 消费/重建，不透传原始事件。
 
@@ -45,6 +55,8 @@ Java 侧 RAG 项目介绍助手网关：从可信 session 取角色（仅 STUDEN
 - **THEN** 前端收到 `rerank`（可为空）后 `boundary` 事件（reason=low_confidence），无 token 流，随后 `done`
 
 ### Requirement: 事件契约字段
+> 状态：✅
+> 检索摘要：SSE各事件的camelCase字段契约是什么？permission含role/allowed/traceId，snake_case内部字段怎么映射成camelCase？
 
 系统 SHALL 为各 SSE 事件定义稳定 camelCase 契约字段，供前端渲染白盒阶段与引用面板。
 
@@ -59,6 +71,8 @@ Java 侧 RAG 项目介绍助手网关：从可信 session 取角色（仅 STUDEN
 - **THEN** Java 侧契约 DTO 用 `@JsonProperty` 映射 snake→camel，SSE 事件输出 camelCase（沿用 tutoring 契约纪律，`FAIL_ON_UNKNOWN_PROPERTIES=false`）
 
 ### Requirement: trace_id 透传与断线补查
+> 状态：✅
+> 检索摘要：trace_id由Java入口生成还是Python生成？怎么贯穿两侧日志、done事件返回，断线后凭trace_id怎么补查单轮结果？
 
 系统 SHALL 在每轮请求入口生成 `trace_id`（同源贯穿 Java/Python 日志），透传 Python 并在 `done` 事件返回；系统 SHALL 提供按 `trace_id` 查询单轮完整结果的接口，供前端断线后补查。
 
@@ -73,6 +87,9 @@ Java 侧 RAG 项目介绍助手网关：从可信 session 取角色（仅 STUDEN
 - **THEN** 系统返回该轮完整结果（answer/quotedKeys/tokensUsage/suggestions）或明确"trace 不存在"（超时保留窗口内）
 
 ### Requirement: 会话续接基础
+> 状态：✅
+> 检索摘要：前端怎么回传session_id携带锚点与轮次上下文？switch/clarify判定依据是什么、无会话状态时按什么处理？
+> 落地说明：Python 无状态（D-D），session_id 透传但不落库会话状态；锚点/轮次上下文由前端回传 history 承载，switch/clarify 判定基于 history 锚点 + current_project。
 
 系统 SHALL 支持前端回传 `session_id` 以携带当前锚点与轮次上下文到 Python，供 switch/clarify 判定。
 
@@ -87,6 +104,8 @@ Java 侧 RAG 项目介绍助手网关：从可信 session 取角色（仅 STUDEN
 - **THEN** 系统按全新会话处理，锚点取前端 `current_project`（缺失则全局模式）
 
 ### Requirement: 显式关闭对话
+> 状态：✅
+> 检索摘要：学生怎么主动关闭RAG助手对话？关闭返回累计token/轮数，closed后再ask返回什么固定话术、为什么不消耗token？
 
 系统 SHALL 提供 `POST /api/rag/assistant/sessions/{sessionId}/close` 供学生主动结束对话（角色门同上，仅 STUDENT）。关闭时：中止该会话在途生成流；将会话状态置为 closed（Redis）；返回会话累计 tokens_usage 与轮数。关闭后同一 `session_id` 再发起 ask → 返回固定话术"本轮对话已结束，可开启新对话"，不进入 RAG 流程、不消耗 token。
 
