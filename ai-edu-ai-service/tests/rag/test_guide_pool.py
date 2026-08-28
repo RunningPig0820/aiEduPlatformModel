@@ -51,8 +51,19 @@ class TestGuidePool:
 
     def test_scope_unknown_module(self):
         """未知模块 scope → FALLBACK 池(不崩)"""
-        assert guide_pool.scope_questions("rag-system") == \
+        assert guide_pool.scope_questions("unknown-module") == \
             guide_pool.scope_questions(guide_pool.FALLBACK_MODULE)
+
+    def test_scope_rag_system_own_pool(self):
+        """rag-system 已有独立池(77 问, 5 组), 不再兜底 ai-tutoring"""
+        qs = guide_pool.scope_questions("rag-system")
+        assert len(qs) == 77
+        assert qs[0] == "你们做的这个 RAG 问答系统是干什么的？解决什么痛点？"
+        assert set(guide_pool.GUIDE_POOL["rag-system"]) == \
+            {"intro", "operation", "data_relation", "difficulty", "rag"}
+        # 新增 RAG 通用考点入池
+        assert "为什么多路召回（向量+BM25）？两路各擅长什么？" in qs
+        assert "embedding 向量维度为什么选 768？维度选大/选小各有什么影响？" in qs
 
     def test_count_matches_source(self):
         """数据源对齐: 75 题全部入库(引导问题.md 编号 1~75)"""

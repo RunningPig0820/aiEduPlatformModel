@@ -1,8 +1,8 @@
 # 切片数据 / OpenSpec / 切片
 
-> OpenSpec design 素材全部按 `###` 小节切片（待生成）在此目录。一个决策/小节一个文件，正文带 `> 检索摘要` 作召回锚点，直接可入切片池 rag-slice（source=OpenSpec）。
-> 来源：`2.OpenSpec design 决策/design-*.md`（2 份 RAG 版），由 `../处理方案/提示词/OpenSpec-切片-提示词.md` 生成。
-> 状态：2026-08-28 建骨架（切片待生成）。
+> OpenSpec design 素材 16 份 RAG 版**按业务主题合并**（2026-08-28 完成，79 块）在此目录。一块=一个业务问题的完整答案（对齐 `业务主题清单.md` 20 主题），不再按 ### 结构拆；文件名 `{源文档前缀}-{主题编号}-{主题名}.md`，同主题跨文档块靠源文档前缀区分。正文带 `> 检索摘要` 作召回锚点。
+> 来源：`2.OpenSpec design 决策/原来的文件/` 16 份 RAG 版，口径：`../../业务主题清单.md` + `../处理方案/提示词/OpenSpec-切片-提示词.md`。
+> 状态：✅ 79 块（design-java 15 / design-python-intro-rag 14 / design-eval-agent 12 / design-assistant 8 / design-frontend 6 / spec-gateway 4 / spec-corpus 1 / spec-permission 2 / spec-eval-agent 1 / spec-observability 2 / spec-kb-org 2 / spec-pipeline 4 / spec-resilience 2 / spec-assistant-eval 1 / spec-guardrails 3 / spec-frontend-ui 6）。
 
 ## 组成
 
