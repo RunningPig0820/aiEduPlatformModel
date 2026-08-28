@@ -15,25 +15,18 @@
 - **⚠️ 切片阶段不做跨文档冲突比对，不自动生成 WARNING 标记**（本切片输入只有单份 design 文档，无外部文档上下文）；✅/⚠️/❓ 状态原样保留；WARNING 属于后续**人工对账环节**产出，不在本切片任务执行。
 
 ## 输入
-源文档（`docs/rag/rag-system/2.OpenSpec design 决策/原来的文件/` 根目录 23 份 RAG 版，**一份文档一批**，一次只喂 1 份；下表 `### 块数` 为参考**以文档实际解析为准，不硬卡死数字**，切片数当前记「待生成」）：
+源文档（`docs/rag/rag-system/2.OpenSpec design 决策/原来的文件/` 根目录 **16 份高价值 RAG 版**，**一份文档一批**，一次只喂 1 份；下表 `### 块数` 为参考**以文档实际解析为准，不硬卡死数字**，切片数当前记「待生成」）：
 
 | 源文档 | ### 块数（参考） | 设计文档主题 |
 |---|---|---|
-| `design-java-rag-project-intro-assistant.md` | 24 | 08-25 白盒链 D1~D12+契约 D-A~E+编排 M1-M8 |
-| `design-python-project-intro-rag.md` | 16 | 08-21 双池/页面锚定/两道门/token 真算 D1~D11 |
+| `design-java-rag-project-intro-assistant.md` | 24+4补充 | 08-25 白盒链 D1~D12+契约 D-A~E+编排 M1-M8（并入 Java 4 spec 独有内容） |
+| `design-python-project-intro-rag.md` | 16+3补充 | 08-21 双池/页面锚定/两道门/token 真算 D1~D11（并入 08-21 3 spec 独有内容） |
 | `design-python-rag-eval-agent.md` | 12 | 评测 agent：hit@k + answer_quality（编造封顶 3 分，HIT_K=5） |
 | `design-python-rag-project-intro-assistant.md` | 14 | 08-25 Python 白盒流水线 |
 | `design-frontend-rag-assistant-frontend.md` | 16 | 前端白盒 UI 交互 |
-| `spec-java-rag-project-intro-assistant-gateway.md` | 7 | Java 角色门/SSE 中继/trace_id |
-| `spec-java-rag-project-intro-assistant-pipeline.md` | 6 | Python 白盒链路 intent/rewrite/recall/rerank/generate |
-| `spec-java-rag-project-intro-assistant-resilience.md` | 8 | 分层超时/断连/降级/tokens_usage |
-| `spec-java-rag-project-intro-assistant-eval.md` | 7 | 评估集扩面/precision_at_k/is_quoted 校验 |
-| `spec-java-rag-project-intro-assistant-guardrails.md` | 9 | 模块全放行/范围门/clarify/is_quoted/引导池 |
+| `spec-java-rag-project-intro-assistant-gateway.md` | 7 | Java 角色门/SSE 中继/trace_id/source 代理 |
 | `spec-python-project-intro-rag-rag-corpus.md` | 5 | 语料完善文档 8 节/切片/metadata |
 | `spec-python-project-intro-rag-rag-permission.md` | 2 | 页面权限标签/权限门前置校验 |
-| `spec-python-project-intro-rag-rag-retrieval.md` | 6 | 向量+BM25 双路/页面锚定/打分 |
-| `spec-python-project-intro-rag-rag-generation.md` | 4 | doubao 流式/强制引用/按页标注 |
-| `spec-python-project-intro-rag-rag-resilience.md` | 5 | 降级矩阵/重试策略/超时 |
 | `spec-python-rag-eval-agent-eval-agent.md` | 5 | 评测集/hit@k/判分 |
 | `spec-python-rag-eval-agent-eval-observability.md` | 3 | trace/报告/观测 |
 | `spec-python-rag-eval-agent-kb-organization.md` | 3 | 模块状态机/完善文档/切片索引 |

@@ -244,3 +244,114 @@ intent SHALL 识别"问候/寒暄"(如"你好/Hi/在吗")为 `category="问候"`
 - intent LLM 类别闭集与 `locked_sections` 的映射是否沿用现有 `CATEGORY_SECTIONS`(项目介绍/操作/难点/数据关联/最危险),还是针对学生场景重构(spec 提到 ①②③④ 四方向)——建议沿用闭集,前端引导语对应即可。
 - `cache_hit_tokens` 是否真由 doubao/ark 返回——需实现期实测,取不到按"估算"。
 - 会话:**不做断线恢复**(仅 trace_id 单轮补查,用户确认);**不设轮数上限**(用户确认轮数无意义),改为上下文窗口保留**最近 3 轮**(默认,可配)。窗口大小的最终值待定。
+
+## 补充（原 spec-java-rag-project-intro-assistant-pipeline 独有内容）
+
+> 状态：⚠️ 设计补充（RAG 结构化 spec 独有内容）
+> 检索摘要：管道spec独有内容:rewrite事件字段、双池三路落地说明与rerank degraded标记、RRF Top-K默认K=3与rerank事件字段、doubao温度0.2与生成纪律、事件序列boundary位置与分支无流规则
+
+### Requirement: Query 改写透传（rewrite 事件字段）
+> 状态：⚠️ 构想未实现
+> 检索摘要：rewrite事件透传{originalQuestion,rewrittenQuery},前端展示"原始问题/改写后问题"对比,改写基于原问题+锚点+历史上下文
+
+目标 D2~D3 已定义 rewrite 在链路中的位置与"走新锚点 rewrite→recall→generate",但未定义 rewrite 事件的负载字段。本块独有:系统 SHALL 基于原始问题与当前上下文(锚点、历史)生成改写后检索式 query,并在 `rewrite` 事件中透传 `{originalQuestion, rewrittenQuery}` 供前端展示。
+- **Scenario 改写展示**:WHEN 学生问题含口语化表达 → THEN `rewrite` 事件返回改写后检索式,前端展示"原始问题 / 改写后问题"对比。
+
+### Requirement: 多路召回（落地说明 + rerank degraded 标记）
+> 状态：✅ 已落地（双池三路）
+> 检索摘要：当前实现为双池三路(rag-full全量向量+rag-slice切片向量+BM25本地关键词),各向量路2s超时降级,语义兼容并超越原双路设计;单路降级时rerank事件带degraded标记前端可展示"该步降级"
+
+目标 D7 已定义向量/Bm25 单路各 2s 硬超时与 `{hits:[], confidence:0}` 冒泡降级语义。本块独有:
+- **落地说明**:当前实现为**双池三路**(rag-full 全量向量 + rag-slice 切片向量 + BM25 本地关键词),各向量路 2s 超时降级;语义兼容并超越原双路设计。
+- **rerank degraded 标记**:单路超时/异常 → 该路降级为空并继续另一路,链路继续,`rerank` 事件携带 degraded 标记(前端可展示"该步降级")。
+
+### Requirement: RRF 精排 Top-K（K 默认值与 rerank 事件字段）
+> 状态：⚠️ 构想未实现
+> 检索摘要：RRF融合常数沿用RRF_K按综合分取Top-K默认K=3可配,rerank事件仅携带精排块blockId/title/summary/filePath/score,严禁把全量召回列表吐给前端
+
+目标 D4 已定义 RRF 精排 top-K 与阈值(0.75/0.5),但未定 K 默认值与事件字段。本块独有:系统 SHALL 对双路召回结果做 RRF 融合(融合常数沿用 `RRF_K`),按综合分取 Top-K(**默认 K=3,可配**),仅将精排后块回传;**严禁将全量召回原始列表吐给前端**。`rerank` 事件仅携带精排 Top-K 块(`blockId/title/summary/filePath/score`)。
+
+### Requirement: doubao 流式生成（模型参数与生成纪律）
+> 状态：⚠️ 构想未实现
+> 检索摘要：doubao强模型温度0.2 include_usage取usage按token事件流式输出,生成只基于检索上下文语料未覆盖不编造
+
+目标 D7/D8 已覆盖生成层超时与 usage 取流(include_usage)。本块独有:系统 SHALL 基于精排 Top-K 块与改写后 query 调用 doubao 流式生成答案(**强模型、温度 0.2、`include_usage` 取 usage**),按 token 事件流式输出;**生成只基于检索上下文,语料未覆盖不编造**。
+
+### Requirement: 白盒阶段事件序列（boundary 位置与分支无流规则）
+> 状态：⚠️ 构想未实现
+> 检索摘要：事件固定顺序intent→(clarify|switch)→rewrite→rerank→(boundary)→token*→done,clarify/switch分支无rewrite/recall/generate,boundary分支无token流rerank可为空
+
+目标 Risks 已冻结 `permission → intent → (clarify|switch) → rewrite → rerank → token → done` 时序,但未含 boundary 位置与分支无流规则。本块独有:系统 SHALL 按固定顺序产出 SSE 事件:`intent → (clarify|switch) → rewrite → rerank → (boundary) → token* → done`;`clarify`/`switch` 分支**无 rewrite/recall/generate**,`boundary` 分支**无 token 流**(rerank 可为空)。
+- **Scenario 正常流**:WHEN 链路完整 → THEN 事件顺序为 intent → rewrite → rerank → token* → done。
+- **Scenario 早停分支**:WHEN 澄清或切换触发 → THEN 对应分支事件后直接 done,无 rewrite/rerank/token 流;WHEN 范围门低置信度触发 → THEN rerank(可为空)后 boundary 事件 + done,无 token 流。
+
+## 补充（原 spec-java-rag-project-intro-assistant-resilience 独有内容）
+
+> 状态：⚠️ 设计补充（RAG 结构化 spec 独有内容）
+> 检索摘要：韧性spec独有内容:拒答/降级零usage语义、断连未关闭时Redis累计保留与续接、断线补查返回字段全集与超窗"trace不存在"
+
+### tokens_usage 透明计费（拒答/降级零 usage 场景）
+> 状态：⚠️ 构想未实现
+> 检索摘要：范围门拒答或超时降级时tokensUsage各字段为0(未调generate LLM)或仅含实际消耗,boundary路径recall消耗不计入usage展示或单列
+
+目标 D8 已定义 done.tokensUsage 四字段与 cache_hit 估算。本块独有:系统 SHALL 保证**拒答/降级路径的 usage 语义**——WHEN 范围门拒答或超时降级 → THEN `tokensUsage` 各字段为 0(未调 generate LLM)或仅含实际消耗(boundary 路径 recall 消耗**不计入 usage 展示或单列**)。
+
+### 会话累计 token（断连未关闭场景）
+> 状态：⚠️ 构想未实现
+> 检索摘要：前端断线未显式close时累计值保留在Redis(TTL内)不丢失,续接同sessionId继续累加
+
+目标 D12 已定义 close 结算与 Redis key(`rag:assistant:session:{sessionId}:usage`, TTL 24h)。本块独有:WHEN 前端断线(未显式 close)→ THEN 累计值**保留在 Redis(TTL 内),不丢失**;续接同 session_id 继续累加。
+
+### trace_id 生成与贯穿（断线补查返回字段与超窗语义）
+> 状态：⚠️ 构想未实现
+> 检索摘要：断线凭trace_id补查返回该轮完整结果(answer/quotedKeys/tokensUsage/suggestions),超出保留窗口返回明确的"trace不存在"
+
+目标 D8/D-B 已定义 trace_id 由 Java 生成透传 Python 并在 done 返回、permission 携带 trace_id。本块独有:WHEN 前端断线丢失结果凭 trace_id 查询 → THEN 系统返回该轮完整结果(`answer/quotedKeys/tokensUsage/suggestions`);**超出保留窗口 → 明确"trace 不存在"**(不静默返回空)。
+
+## 补充（原 spec-java-rag-project-intro-assistant-eval 独有内容）
+
+> 状态：⚠️ 设计补充（RAG 结构化 spec 独有内容）
+> 检索摘要：评估spec独有内容:评估集5类场景与ValueError格式校验、precision_at_k节号匹配、报告落盘reports/<version>.json与trace jsonl、报告字段judged/条数/版本与"暂无评估报告"
+
+### 评估集扩面（5 类场景 + 格式校验）
+> 状态：⚠️ 构想未实现
+> 检索摘要：RAG助手评估集覆盖5类(项目介绍/操作流程/数据关联/难点技术/边界拒答)每类≥1条每模块≥5条,缺字段/非法类型加载抛ValueError不静默
+
+目标 D10 已定义 `VALID_TYPES` 增加 `边界拒答`、每模块 ≥5 条。本块独有:系统 SHALL 扩充 RAG 助手评估集覆盖 **5 类场景**:项目介绍类、操作流程类、数据关联类、难点技术类、**边界拒答类**(每类 ≥1 条、每模块 ≥5 条);评估集含缺字段/非法类型用例 → **加载器抛 ValueError**(沿用 `eval_dataset.py` 格式校验,不静默)。
+
+### precision_at_k 指标（相关判定细节）
+> 状态：⚠️ 构想未实现
+> 检索摘要：precision_at_k相关判定沿用expected_references的节号匹配(非语义判断),计算相关块占比0~1纳入聚合指标展示
+
+目标 D10 已定义 `precision_at_k`(召回 top-k 中相关块占比,纯函数)。本块独有:相关判定**沿用 expected_references 的节号匹配**(非语义判断),计算相关块占比 0~1,纳入聚合指标展示。
+
+### baseline 报告可复现与对比（落盘路径）
+> 状态：⚠️ 构想未实现
+> 检索摘要：每次语料/参数/提示词变更后重跑--compare生成对比报告(hit@k/质量分/成本/耗时↑↓=),trace落jsonl聚合报告落reports/<version>.json结构与run_eval.py一致
+
+目标 Context 已提 `run_eval.py --compare` 版本对比。本块独有:系统 SHALL 复用 `run_eval.py` 的可复现执行与版本对比能力(`--compare`),**每次语料/参数/提示词变更后重跑评测生成对比报告**(对比 hit@k/质量分/成本/耗时 ↑/↓/=);**trace 落盘 jsonl、聚合报告落盘 `reports/<version>.json`**,结构与既有 `run_eval.py` 一致。
+
+### 评估报告白盒展示（字段全集与无报告语义）
+> 状态：⚠️ 构想未实现
+> 检索摘要：报告接口返回最新baseline(hit@3/质量分/avg耗时/avg成本/条数/版本/judged),尚未跑评测返回明确的"暂无评估报告"提示不报错
+
+目标 D10 已定义 `GET /api/rag/assistant/eval/report` 白盒展示。本块独有:接口返回最新报告**含 judged 字段**(hit@3、质量分、avg 耗时、avg 成本、**条数、版本、judged**);WHEN 尚未跑过评测 → THEN 返回明确的"暂无评估报告"提示,**不报错**。
+
+## 补充（原 spec-java-rag-project-intro-assistant-guardrails 独有内容）
+
+> 状态：⚠️ 设计补充（RAG 结构化 spec 独有内容）
+> 检索摘要：护栏spec独有内容:is_quoted全部未命中兜底标注文本、开始引导RAG定向5方向(定位/架构/数据流/评测/坑)与静态池兜底对齐Python 6引导方向
+
+### is_quoted 确定性硬匹配（全部未命中兜底）
+> 状态：⚠️ 构想未实现
+> 检索摘要：top-K块全部未命中时answer标注"基于现有知识库,引用未能精确匹配",quotedKeys为空不假装存在引用
+
+目标 D6 已定义 LCS 硬匹配、8 中/12 英窗口与 done 后补发 quoted_keys。本块独有:**全部未命中场景**——WHEN top-K 块全部未命中 → THEN answer 标注"基于现有知识库,引用未能精确匹配",`quotedKeys` 为空,**不假装存在引用**。
+
+### 问题提示（RAG 定向引导方向与静态池对齐）
+> 状态：⚠️ 构想未实现
+> 检索摘要：开始引导展示RAG定向引导chips(定位/架构/数据流/评测/坑)静态池0token非SSE,结束建议LLM失败静态池兜底对齐Python 6引导方向
+
+目标 D11 已定义开始/结束引导以底座池为唯一来源、必含 ≥1 条 RAG 方向。本块独有:
+- **开始引导 RAG 定向方向**:会话入口(未提问)前端展示 RAG 定向引导 chips——**定位/架构/数据流/评测/坑**(5 个方向,静态池、0 token、非 SSE 拉取 `GET /api/rag/assistant/guide`)。
+- **静态池兜底对齐 Python 6 引导方向**:suggestions LLM 调用失败 → 返回静态池预写建议(**对齐 Python 6 引导方向**),链路不中断。
