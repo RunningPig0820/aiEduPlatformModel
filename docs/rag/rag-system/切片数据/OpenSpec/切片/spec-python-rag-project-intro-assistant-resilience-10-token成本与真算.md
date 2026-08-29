@@ -9,7 +9,7 @@
 
 ## 文档说明
 > 本文件由 OpenSpec 设计素材（spec-python-rag-project-intro-assistant-resilience.md）按业务主题「token成本与真算」重切合并。
-> ⚠️设计阶段素材：真实实现以权威度 0.8 的 canonical 真相源 + 代码为准（代码已部分落地）；含 ✅已落地 / ⚠️构想未实现 / ❓待决策 内容，引用需核对代码。
+> 设计阶段素材：真实实现以权威度 0.8 的 canonical 真相源 + 代码为准（代码已部分落地）；含 已落地 / 构想未实现 / 待决策 内容，引用需核对代码。
 
 ### Requirement: tokens_usage 透明计费
 > 检索摘要：token 计费怎么透明——done 返回四字段 usage、cache_hit 取不到就估算标注？

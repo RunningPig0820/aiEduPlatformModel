@@ -20,7 +20,7 @@
 
 intent 为 LLM 结构化输出 + 规则兜底：模块锚点 anchor、类别 category、switch 判定 switchDetected、指代不明 ambiguous、候选 candidates、锁定节 lockedSections；LLM 失败回退关键词锚定（degraded 走 200）。
 
-⚠️【已定 08-25】意图识别层 = **LLM 结构化输出 + 关键词兜底**（`{anchor, category, switch_detected, ambiguous, candidates}`，失败回退 `_fallback_anchor`/`_deictic_anchor`，degraded 走 200）。证据：design-java D2；spec-pipeline。
+【已定 08-25】意图识别层 = **LLM 结构化输出 + 关键词兜底**（`{anchor, category, switch_detected, ambiguous, candidates}`，失败回退 `_fallback_anchor`/`_deictic_anchor`，degraded 走 200）。证据：design-java D2；spec-pipeline。
 
 ### 语义分析层透传 3 项
 
@@ -46,7 +46,7 @@ intent 为 LLM 结构化输出 + 规则兜底：模块锚点 anchor、类别 cat
 
 ### 问候识别与欢迎引导（D-E）
 
-⚠️【定稿 D-E】intent 将"你好/Hi/在吗"识别为 `category="问候"`、`ambiguous=false`，**不触发 clarify**（clarify 仅用于功能指代不明：ambiguous+candidates≥2；实联调发现"你好"被误判 ambiguous 弹澄清很怪）；走**欢迎话术 + 引导池建议**（0 生成 token，不 recall 不 generate），指向 ①项目介绍②操作③数据关联④难点。代码实现 `is_greeting` 关键词预检（你好/您好/hello/hi/哈喽/嗨/hey/在吗，**短句 ≤8 字才命中防误杀**，assistant.py:361,366-372）+ `WELCOME_MSG` 直返 done（assistant.py:580-586）。证据：design-java D-E；分析-05。
+【定稿 D-E】intent 将"你好/Hi/在吗"识别为 `category="问候"`、`ambiguous=false`，**不触发 clarify**（clarify 仅用于功能指代不明：ambiguous+candidates≥2；实联调发现"你好"被误判 ambiguous 弹澄清很怪）；走**欢迎话术 + 引导池建议**（0 生成 token，不 recall 不 generate），指向 ①项目介绍②操作③数据关联④难点。代码实现 `is_greeting` 关键词预检（你好/您好/hello/hi/哈喽/嗨/hey/在吗，**短句 ≤8 字才命中防误杀**，assistant.py:361,366-372）+ `WELCOME_MSG` 直返 done（assistant.py:580-586）。证据：design-java D-E；分析-05。
 
 ### 兜底（建议 #2）
 
@@ -68,7 +68,7 @@ intent 结构化输出兜底——复用 200 + degraded=true 惯例：LLM 失败
   - 方案C优劣（致命短板）：语义最强；但挂了链路全断，白盒整轮不可用。
 - 最终拍板：LLM 结构化输出 + 关键词规则兜底（D2）
 - 拍板理由：白盒展示"语义分析"必须真实发生；LLM 判意图 + 关键词兜底 = 语义与成本平衡，接口返回结构固定（`{locked_sections, strategy}` → 扩展为 `{anchor, category, switch, ambiguous, candidates, lockedSections}`），检索/生成只消费结果。
-- 落地对账：✅ 落地——`_INTENT_SYSTEM` 输出五字段（`query.py:139-187`）→ `_sanitize_intent` schema 校验（`query.py:190-214`）→ 失败回退模块关键词 `_fallback_module` + 节关键词 `_fallback_anchor`（`query.py:118-135`）→ 指代词兜底 `_deictic_anchor`（`query.py:275-290`）；LLM 失败 intent 事件带 degraded 走 200；两层锚定：anchor=模块级（选语料池）+ locked_sections=节级（加权 ×1.5，白盒链路写死 `locked_sections=[]` 被旁路，`assistant.py:118`）。结论=落地。
+- 落地对账：落地——`_INTENT_SYSTEM` 输出五字段（`query.py:139-187`）→ `_sanitize_intent` schema 校验（`query.py:190-214`）→ 失败回退模块关键词 `_fallback_module` + 节关键词 `_fallback_anchor`（`query.py:118-135`）→ 指代词兜底 `_deictic_anchor`（`query.py:275-290`）；LLM 失败 intent 事件带 degraded 走 200；两层锚定：anchor=模块级（选语料池）+ locked_sections=节级（加权 ×1.5，白盒链路写死 `locked_sections=[]` 被旁路，`assistant.py:118`）。结论=落地。
 
 ### 选型20：问候处理选型
 > 检索摘要：问候/寒暄（你好/Hi/在吗）识别为 category="问候"、ambiguous=false，不触发 clarify（实联调发现"你好"误判 ambiguous 弹澄清很怪），走欢迎话术 + 引导池建议，0 生成 token、不 recall 不 generate。
@@ -80,6 +80,6 @@ intent 结构化输出兜底——复用 200 + degraded=true 惯例：LLM 失败
   - 方案B优劣：`is_greeting` 关键词预检（你好/您好/hello/hi/哈喽/嗨/hey/在吗，短句 ≤8 字才命中防误杀，`assistant.py:361,366-372`）+ `WELCOME_MSG` 直返 done（`assistant.py:580-586`），带引导池建议（指向 ①项目介绍②操作③数据关联④难点），不 recall 不 generate，0 生成 token。
 - 最终拍板：独立欢迎引导（D-E）
 - 拍板理由：产品校准——问候语 `ambiguous=false` 不触发 clarify（clarify 仅用于功能指代不明：ambiguous+candidates≥2）；走固定欢迎话术 + 引导池建议（0 生成 token，复用 guide 静态池）。
-- 落地对账：✅ 落地——`is_greeting` 关键词预检（短句 ≤8 字防误杀）+ `WELCOME_MSG` + `_spread_pool_suggestions`（`assistant.py:375-380, 583-586`），0 token 直接 done。结论=落地。
+- 落地对账：落地——`is_greeting` 关键词预检（短句 ≤8 字防误杀）+ `WELCOME_MSG` + `_spread_pool_suggestions`（`assistant.py:375-380, 583-586`），0 token 直接 done。结论=落地。
 
 > 证据：详见 `1.语雀/语雀-方案选型对比.md`（§选型17/20）｜ 语雀-决策记录.md D2/D18/D-E ｜ 代码分析 分析-01~09

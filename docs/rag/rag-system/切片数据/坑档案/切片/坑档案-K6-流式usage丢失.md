@@ -17,7 +17,7 @@
 
 **4. 排查过程**：语雀-问题4 评审直接核流式代码定位（2026-08-24）：先查请求体有没有 `include_usage`（没有），再查解析器抓没抓结尾 usage chunk（没有）——是代码评审 + "OpenAI 兼容流式默认不返回 usage"的知识判断，不是线上日志。
 
-**5. 解决方案 & 改动点**：白盒引擎 `62e9794` 落地两个小改动——`ark_stream.py:128-129` 请求体加 `payload["stream_options"] = {"include_usage": True}` + `_parse_sse_lines` 识别流末尾 usage chunk 并 yield；`assistant.py:448` `stream_generate` 传 `include_usage=True`、`476-477` 消费 usage delta、`486-502` `assemble_usage` 组装 prompt/completion/cache_hit/total → `done.tokens_usage`（`assistant.py:514/651`），前端 CostBar 展示四字段。⚠️ **半修**：1.6C `/query`（`api/rag.py:130` generate 不带 return_usage、`models/rag.py:39-44` 无 usage 字段）与 embedding（`vector_store.py:87-103` 未抓 resp.usage）仍未采——见附录 A2。
+**5. 解决方案 & 改动点**：白盒引擎 `62e9794` 落地两个小改动——`ark_stream.py:128-129` 请求体加 `payload["stream_options"] = {"include_usage": True}` + `_parse_sse_lines` 识别流末尾 usage chunk 并 yield；`assistant.py:448` `stream_generate` 传 `include_usage=True`、`476-477` 消费 usage delta、`486-502` `assemble_usage` 组装 prompt/completion/cache_hit/total → `done.tokens_usage`（`assistant.py:514/651`），前端 CostBar 展示四字段。**半修**：1.6C `/query`（`api/rag.py:130` generate 不带 return_usage、`models/rag.py:39-44` 无 usage 字段）与 embedding（`vector_store.py:87-103` 未抓 resp.usage）仍未采——见附录 A2。
 
 **6. 面试口述要点**：讲"流式输出的 usage 统计是 RAG 成本展示的隐性坑"——usage 只在流末尾的专用 chunk 返回、默认不带；要做"结束后更新"必须显式请求 `include_usage` 并解析结尾 chunk（choices 为空带顶层 usage，schema 与中间 delta 不同）。踩坑收获：流式协议层"你不主动要、服务端就不给"的默认值，以及"结尾 chunk 与中间 chunk 不同 schema"。
 

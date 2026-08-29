@@ -17,6 +17,6 @@
 - **trace 快照（断线补查）**：`rag:assistant:trace:{traceId}`——每轮 done 的 **camel JSON 直接写**（`persistRound`），断线补查 `GET turns/{traceId}` 用 `CAMEL_MAPPER` 读回（依据：分析-08）。
 - **关闭标志**：`rag:assistant:session:{sessionId}:closed`——close 置 "1"（幂等），已关闭再 ask 短路固定话术"本轮对话已结束，可开启新对话"（0 token 不调 Python）（依据：分析-08）。
 - **真实对话质量**：`rag:assistant:eval:recent`——每轮 done 异步 LLM 打分（4 维度 0-5）累计 count/sum_quality/quoted_count/sum_latency，并入评估报告 realConversation 区段（依据：分析-08）。
-- **⚠️ 风险**：Redis 读-改-写非原子（多轮并发/多实例下可能丢计数，无 Lua/分布式锁）（依据：分析-08）。
+- **风险**：Redis 读-改-写非原子（多轮并发/多实例下可能丢计数，无 Lua/分布式锁）（依据：分析-08）。
 
 > 证据：详见 `7. 引导问题/问题列表.md`（第 50 问）｜ `4.完善文档/04-数据流转.md` ｜ `3.代码/分析-08-Java后端网关与SSE中继.md`

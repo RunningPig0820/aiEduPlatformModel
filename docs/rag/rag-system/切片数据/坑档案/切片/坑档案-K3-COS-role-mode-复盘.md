@@ -3,7 +3,7 @@
 > summary: COS role mode 拒普通对象复盘
 > 来源: 切片 ｜ 锚点: 坑点复盘与口述
 > 节: 坑档案 K3 COS 向量桶 role mode 拒收普通对象
-> COS路径: rag-slices/interview/rag-system/坑档案/坑档案-K3-COS-role-mode-复盘.md
+> COS路径: rag-slices/rag-system/坑档案/坑档案-K3-COS-role-mode-复盘.md
 > 类别：开发难点（9 视角闭集）
 > target: 面试项目问答
 

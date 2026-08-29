@@ -2,7 +2,7 @@
 > summary: Java网关与SSE中继业务与流程
 > 来源: 切片 ｜ 锚点: 业务与流程
 > 节: 分析-08-Java后端网关与SSE中继
-> COS路径: rag-slices/interview/rag-system/分析-08-Java后端网关与SSE中继-业务与流程.md
+> COS路径: rag-slices/rag-system/代码/分析-08-Java后端网关与SSE中继-业务与流程.md
 > 类别：业务流程
 > target: 面试项目问答
 

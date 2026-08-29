@@ -2,7 +2,7 @@
 > summary: Java网关SSE中继落地问题与复盘
 > 来源: 切片 ｜ 锚点: 落地问题与复盘
 > 节: 分析-08-Java后端网关与SSE中继
-> COS路径: rag-slices/interview/rag-system/分析-08-Java后端网关与SSE中继-落地问题与复盘.md
+> COS路径: rag-slices/rag-system/代码/分析-08-Java后端网关与SSE中继-落地问题与复盘.md
 > 类别：开发难点
 > target: 面试项目问答
 

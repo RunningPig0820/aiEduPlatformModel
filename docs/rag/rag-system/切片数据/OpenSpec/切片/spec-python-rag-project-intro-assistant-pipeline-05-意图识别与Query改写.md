@@ -9,7 +9,7 @@
 
 ## 文档说明
 > 本文件由 OpenSpec 设计素材（spec-python-rag-project-intro-assistant-pipeline.md）按业务主题「意图识别与Query改写」重切合并。
-> ⚠️设计阶段素材：真实实现以权威度 0.8 的 canonical 真相源 + 代码为准（代码已部分落地）；含 ✅已落地 / ⚠️构想未实现 / ❓待决策 内容，引用需核对代码。
+> 设计阶段素材：真实实现以权威度 0.8 的 canonical 真相源 + 代码为准（代码已部分落地）；含 已落地 / 构想未实现 / 待决策 内容，引用需核对代码。
 
 ### Requirement: intent 结构化输出（扩展既有 classify）
 > 检索摘要：intent 阶段怎么结构化识别——LLM 输出 anchor/candidates、失败回退关键词且不阻断链路？

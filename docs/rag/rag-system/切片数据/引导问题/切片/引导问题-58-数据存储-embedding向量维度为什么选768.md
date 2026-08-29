@@ -16,6 +16,6 @@
 - **落地事实**：`vector_store.py:26-28` 显式 `_EMBEDDING_MODEL="text-embedding-v3"`、`_EMBEDDING_DIMENSIONS=768`（模型默认 1024，必须与索引维度一致）；`build_index.py:121-122` 要求索引控制台预建 768/float32/cosine，脚本不建索引、缺失即报错退出（依据：分析-03）。
 - **为什么"一次锁死"**：COS 向量索引维度建好不可改，embedding 维度不匹配直接抛异常；换模型/换维度 = 全量重建索引，所以维度决策必须一次定准（依据：完善文档 05 追问段 / 分析-03 隐性坑4）。
 - **维度影响权衡**：维度越大语义表达力越强，但存储/成本越高、查询越慢；维度越小越省资源，但召回变糙。768 在"够表达 + 成本可控"之间取折中，并与 COS 预建索引对齐（依据：完善文档 05 追问段 / 完善文档 08）。
-- **⚠️ 落地缺口**：embedding 调用的 token 未抓 usage（`vector_store.embed()` 只返回向量、不读 `resp.usage.total_tokens`），embedding 侧成本单列落空——讲"embedding 成本"时要如实说明这半修点（依据：分析-03 / 分析-07 对账要点）。
+- **落地缺口**：embedding 调用的 token 未抓 usage（`vector_store.embed()` 只返回向量、不读 `resp.usage.total_tokens`），embedding 侧成本单列落空——讲"embedding 成本"时要如实说明这半修点（依据：分析-03 / 分析-07 对账要点）。
 
 > 证据：详见 `7. 引导问题/问题列表.md`（第 58 问）｜ `4.完善文档/05-技术实现.md`、`08-数据规模与指标.md` ｜ `3.代码/分析-03-索引与向量库.md`（vector_store.py:26-28、build_index.py:121-122）

@@ -23,19 +23,19 @@
 
 向量 + BM25 两路；单路超时自动降级为纯另一路。证据：语雀-原文件-问题8.md。
 
-⚠️【落地】代码为**双池三路**：全量池向量(rag-full) + 切片池双向量(rag-slice `-c`/`-q`) + 本地 BM25（jieba+Okapi），**四路 RRF**；任一向量路 2s 超时 → 空路降级 + degraded 标记（`RAG_RECALL_TIMEOUT=2.0`）。证据：分析-01/04。
+【落地】代码为**双池三路**：全量池向量(rag-full) + 切片池双向量(rag-slice `-c`/`-q`) + 本地 BM25（jieba+Okapi），**四路 RRF**；任一向量路 2s 超时 → 空路降级 + degraded 标记（`RAG_RECALL_TIMEOUT=2.0`）。证据：分析-01/04。
 
 ### RRF 融合
 
 多路结果按排名倒数融合，最终只展示喂给 LLM 的 Top-K 块（建议 K=3），严禁全量召回列表吐前端。证据：语雀-原文件-问题8.md。注：08-21 曾显式否决重排模型（"小语料不需要重排模型"，D5），08-25 反转采用 RRF。证据：问题8.md 对比表。
 
-⚠️【落地】`RRF_K=60`，`score = RRF × authority × anchor_w`（`query.py:667`）；白盒 `rerank` 事件只回传精排 `RERANK_K=3` 块（assistant.py:31）。证据：分析-04。
+【落地】`RRF_K=60`，`score = RRF × authority × anchor_w`（`query.py:667`）；白盒 `rerank` 事件只回传精排 `RERANK_K=3` 块（assistant.py:31）。证据：分析-04。
 
 ### 打分公式
 
 方案 `score = 相似度 × 问题类型匹配 × 页面锚定加权`；索引层池 top-K=1~3，源文档池 top-K=3~5。证据：design-python-project-intro-rag.md D5。
 
-⚠️【落地演进】**"问题类型匹配"未单独成因子**（类别过滤已废弃，LLM 判类别不准误伤），相似度由 RRF rank 间接表达；权威度（1.0 完善文档/0.8 代码/0.7 语雀）连乘、节锚定命中 ×1.5；top-K 全局 5（生成用），白盒 rerank 回传 3。证据：分析-01/04。
+【落地演进】**"问题类型匹配"未单独成因子**（类别过滤已废弃，LLM 判类别不准误伤），相似度由 RRF rank 间接表达；权威度（1.0 完善文档/0.8 代码/0.7 语雀）连乘、节锚定命中 ×1.5；top-K 全局 5（生成用），白盒 rerank 回传 3。证据：分析-01/04。
 
 ### 白盒 rerank 事件
 
@@ -58,7 +58,7 @@ rerank 事件回传 RRF top-3 精排块：blockId/title/summary/filePath/score�
   - 方案C优劣：语义与关键词互补，一路挂了另一路兜底；代价是多一路的融合处理（RRF）。
 - 最终拍板：多路召回（向量 + BM25）
 - 拍板理由：embedding 挂→纯 BM25 是既有降级矩阵的设计（D10）；多路召回是白盒流水线"召回"阶段的可展示点，代码落地为 retrieve_vector / retrieve_bm25 双路召回（问题8 明确"多路召回 向量+BM25"）。
-- 落地对账：✅ 落地并扩充——代码为**双池三路**：全量池向量(rag-full) + 切片池双向量(rag-slice `-c` 内容路 / `-q` 问题路) + 本地 BM25（jieba+Okapi），四路各贡献 `1/(RRF_K+rank)` 进 RRF（`query.py:518-525, 637-659`）；任一向量路 2s 超时 → 空路降级 + degraded 标记（`assistant.py:71-88`，`RAG_RECALL_TIMEOUT=2.0`）。结论=方案拍板成立，路数超集落地。
+- 落地对账：落地并扩充——代码为**双池三路**：全量池向量(rag-full) + 切片池双向量(rag-slice `-c` 内容路 / `-q` 问题路) + 本地 BM25（jieba+Okapi），四路各贡献 `1/(RRF_K+rank)` 进 RRF（`query.py:518-525, 637-659`）；任一向量路 2s 超时 → 空路降级 + degraded 标记（`assistant.py:71-88`，`RAG_RECALL_TIMEOUT=2.0`）。结论=方案拍板成立，路数超集落地。
 
 ### 选型4：融合与重排选型
 > 检索摘要：08-21 显式否决重排模型（"小语料不需要"），08-25 引入 RRF 融合向量+BM25 多路召回结果，Top-K=3 喂 LLM，排名融合免去跨路分数归一问题；范围门阈值用召回置信度而非 RRF 相对分（2026-08-25 校正）。
@@ -72,7 +72,7 @@ rerank 事件回传 RRF top-3 精排块：blockId/title/summary/filePath/score�
   - 方案C优劣：按倒数排名融合，免分数归一，小语料够用；Top-K=3 只把精选块喂给 LLM，杜绝全量召回列表外泄。
 - 最终拍板：RRF 融合（08-25 引入，Top-K=3）；打分公式沿用相似度×类型×锚定加权
 - 拍板理由：08-21 显式否决重排模型"小语料不需要"；08-25 为多路召回引入 RRF 作为轻量融合，按排名融合对分数尺度不敏感；打分公式多信号加权 + 阈值已足够区分命中与超范围（D5、问题8）。
-- 落地对账：✅ 落地——`RRF_K=60`（`query.py:43`），`score = RRF × authority × anchor_w`（`query.py:667`），权威度(1.0 完善文档/0.8 代码/0.7 语雀)连乘、节锚定命中 ×1.5；白盒 rerank 事件只回传 `RERANK_K=3` 精排块（`assistant.py:31`，严禁吐全量召回列表）；⚠️ 范围门阈值语义 2026-08-25 校正为**召回置信度**（向量=1-平均余弦距离、BM25=`min(1.0,top_score/10)`），非 RRF 相对分（RRF 分 0.01~0.05 量级永远够不到 0.75/0.5，`assistant.py:385-386` 注释）。结论=落地。
+- 落地对账：落地——`RRF_K=60`（`query.py:43`），`score = RRF × authority × anchor_w`（`query.py:667`），权威度(1.0 完善文档/0.8 代码/0.7 语雀)连乘、节锚定命中 ×1.5；白盒 rerank 事件只回传 `RERANK_K=3` 精排块（`assistant.py:31`，严禁吐全量召回列表）；范围门阈值语义 2026-08-25 校正为**召回置信度**（向量=1-平均余弦距离、BM25=`min(1.0,top_score/10)`），非 RRF 相对分（RRF 分 0.01~0.05 量级永远够不到 0.75/0.5，`assistant.py:385-386` 注释）。结论=落地。
 
 > 证据：详见 `1.语雀/语雀-方案选型对比.md`（§选型3/4）｜ 语雀-决策记录.md D9/D10/D5 ｜ 代码分析 分析-01~09
 
@@ -86,7 +86,7 @@ rerank 事件回传 RRF top-3 精排块：blockId/title/summary/filePath/score�
 | 属性 | 内容 |
 |---|---|
 | 背景 | 向量召回落空/置信度低但关键词（如"防作弊""Neo4j"）命中时需兜底 |
-| 演进 | 08-21 方案向量+BM25 双路 → ⚠️【落地】代码双池三路（rag-full + rag-slice 双向量 + 本地 BM25）四路 RRF；任一向量路 2s 超时 → 空路降级 + degraded 标记（RAG_RECALL_TIMEOUT=2.0） |
+| 演进 | 08-21 方案向量+BM25 双路 → 【落地】代码双池三路（rag-full + rag-slice 双向量 + 本地 BM25）四路 RRF；任一向量路 2s 超时 → 空路降级 + degraded 标记（RAG_RECALL_TIMEOUT=2.0） |
 | 拍板理由 | 向量捕捉语义、BM25 捕捉精确关键词，双路互补构成天然降级链——向量路失效时关键词路仍兜底，避免全链路空 |
 | 系统影响 | 单路超时自动降级为纯另一路，链路继续；rerank 事件可带 degraded 标记 |
 | 证据 | 语雀-原文件-问题8；spec-python-project-intro-rag-rag-retrieval；spec-python-rag-project-intro-assistant-pipeline；[总揽§5.2]；分析-01/04 |
@@ -99,7 +99,7 @@ rerank 事件回传 RRF top-3 精排块：blockId/title/summary/filePath/score�
 | 背景 | 08-21 认为小语料不需要重排模型；08-25 白盒助手需要"多路结果如何融合"的确定答案 |
 | 演进 | 08-21 加权求和（weighted-sum）→ 08-25 RRF（Reciprocal Rank Fusion），Top-K 默认 3 可配 |
 | 拍板理由 | RRF 只用排名不用分数，对多路量纲不敏感；只展示喂给 LLM 的 Top-K 块，严禁全量召回列表吐前端 |
-| 系统影响 | ⚠️【落地】RRF_K=60，score = RRF × authority × anchor_w（query.py:667）；白盒 rerank 事件只回传 RERANK_K=3 块（assistant.py:31） |
+| 系统影响 | 【落地】RRF_K=60，score = RRF × authority × anchor_w（query.py:667）；白盒 rerank 事件只回传 RERANK_K=3 块（assistant.py:31） |
 | 证据 | 语雀-原文件-问题8 对比表；design-java D4；spec-java pipeline；[总揽§5.3]；分析-04 |
 
 ### D11 打分公式：相似度×问题类型×锚定加权 → RRF×authority×anchor_w
@@ -108,7 +108,7 @@ rerank 事件回传 RRF top-3 精排块：blockId/title/summary/filePath/score�
 | 属性 | 内容 |
 |---|---|
 | 背景 | 小语料如何区分命中与超范围 |
-| 演进 | 08-21 score = 相似度×问题类型匹配×页面锚定加权（索引层 top-K=1~3、源文档 top-K=3~5）→ ⚠️【落地演进】"问题类型匹配"未单独成因子（类别过滤已废弃，LLM 判类别不准误伤），相似度由 RRF rank 间接表达；权威度（完善文档1.0/代码0.8/语雀0.7）连乘、节锚定命中 ×1.5；top-K 全局 5（生成用），白盒 rerank 回传 3 |
+| 演进 | 08-21 score = 相似度×问题类型匹配×页面锚定加权（索引层 top-K=1~3、源文档 top-K=3~5）→ 【落地演进】"问题类型匹配"未单独成因子（类别过滤已废弃，LLM 判类别不准误伤），相似度由 RRF rank 间接表达；权威度（完善文档1.0/代码0.8/语雀0.7）连乘、节锚定命中 ×1.5；top-K 全局 5（生成用），白盒 rerank 回传 3 |
 | 拍板理由 | 小语料不需要重排模型；多信号加权+阈值足够区分命中与超范围；LLM 类别过滤误伤→弃用 |
 | 系统影响 | 打分公式随 RRF 引入演进；阈值语义改为用召回置信度（见 D16）非 RRF 相对分 |
 | 证据 | design-python-project-intro-rag D5；[总揽§5.4]；分析-01/04 |

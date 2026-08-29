@@ -3,7 +3,7 @@
 > summary: 评测集 gitignore 复盘
 > 来源: 切片 ｜ 锚点: 坑点复盘与口述
 > 节: 坑档案 K5 评测集 jsonl 被 gitignore 挡
-> COS路径: rag-slices/interview/rag-system/坑档案/坑档案-K5-评测集gitignore-复盘.md
+> COS路径: rag-slices/rag-system/坑档案/坑档案-K5-评测集gitignore-复盘.md
 > 类别：开发难点（9 视角闭集）
 > target: 面试项目问答
 

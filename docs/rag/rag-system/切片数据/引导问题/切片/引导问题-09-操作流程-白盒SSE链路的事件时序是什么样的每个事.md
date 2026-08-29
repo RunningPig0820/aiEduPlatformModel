@@ -25,6 +25,6 @@
   - `boundary`：范围门低置信拒答固定话术，reason="low_confidence"（依据：分析-08）。
   - `done`：最终答案 + quotedKeys + tokensUsage + traceId + suggestions（依据：分析-08）。
 - **分支纪律**：clarify/switch/boundary 分支不发 rewrite/recall/generate、0 token 短路；done 到达即停所有转圈并定稿（依据：完善文档 02 / 分析-09）。
-- **⚠️ 落地细节**：permission 由 Java 网关前置产，Python 生产端点从 intent 开始；done.answer 是全量答案，token 是增量（前端以 done 为准）（依据：分析-08）。
+- **落地细节**：permission 由 Java 网关前置产，Python 生产端点从 intent 开始；done.answer 是全量答案，token 是增量（前端以 done 为准）（依据：分析-08）。
 
 > 证据：详见 `7. 引导问题/问题列表.md`（第 9 问）｜ `4.完善文档/02-核心功能.md` ｜ `3.代码/分析-04-检索编排.md`、`分析-08-Java后端网关与SSE中继.md`、`分析-09-前端白盒UI与交互.md`

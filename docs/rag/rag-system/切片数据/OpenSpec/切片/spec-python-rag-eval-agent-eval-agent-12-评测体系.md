@@ -7,7 +7,7 @@
 
 ---
 
-> ⚠️ 代码演进提示：本文为 08-21 设计阶段素材（k=3 / LLM 判分），真实实现已演进为 HIT_K=5 / 判分改硬算，落地以 0.8 canonical 真相源与代码为准。
+> 代码演进提示：本文为 08-21 设计阶段素材（k=3 / LLM 判分），真实实现已演进为 HIT_K=5 / 判分改硬算，落地以 0.8 canonical 真相源与代码为准。
 
 ### 评测集
 > 检索摘要：评测集要求每模块至少5条 Q&A，每条含 module/question/question_type（概览/为什么/数据流/难点/指标）、expected_references 与 expected_points，加载时校验完整性。

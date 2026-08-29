@@ -205,14 +205,14 @@ flowchart TD
 
 | 对账分类 | 项 | 语雀/完善文档口径 | 代码现状 | 结论 |
 |---|---|---|---|---|
-| 方案vs实现 | 范围门 0.75/0.5 | 完善文档 09 称「范围门(后置)：检索置信度阈值——索引层 0.75 / 源文档池 0.5」 | 仅白盒链路 A9 生效（assistant.py:388-408 + pipeline_events:616-625）+ 评测边界类型（eval_agent.py:307-347）；1.6C /query 端点无此门，只有 `if not hits` 空命中拒答 | ⚠️ 部分落地（白盒有、1.6C 端点无） |
-| 注释vs行为 | 1.6C「置信度过低→拒答」 | api/rag.py:13 模块 docstring 自称降级语义 3 | 代码只判 `not hits`（api/rag.py:120-126），不读置信度 | ⚠️ 翻转（docstring 高于实际） |
-| 方案vs实现 | token usage 真算 | 语雀-问题4「现有代码在丢 usage」，建议加 `stream_options.include_usage` + 抓结尾 usage chunk | 流式白盒已修（ark_stream.py:128-129 + assistant.py:448, 476-477, 486-502, 651）；1.6C /query 仍丢（api/rag.py:130 不带 return_usage，RAGQueryResponse 无 usage 字段）；embedding 侧仍丢（vector_store.py:87-103 未抓 resp.usage） | ⚠️ 半落地（流式修、1.6C 与 embedding 未修） |
-| 方案vs实现 | 降级标记透传 | assistant.py:26-28 注释声明 `DEGRADED_VECTOR/DEGRADED_BM25`「供 done/boundary 事件透传 degraded 语义」 | `recall` 返回 `degraded` 列表但 `pipeline_events` 未把它放进 rerank/done 事件（613, 650-652） | ⚠️ 方案有/代码无（标记未透传） |
-| 方案vs实现 | 降级矩阵 | 完善文档 06「多路召回本身就是降级备份（向量挂→纯 BM25）；生成失败 → 预写答案兜底；全挂 → 边界话术」 | 向量挂→纯 BM25（api/rag.py:97-106）、生成挂→召回清单（129-135）、全挂→拒答话术（120-126）均落地 | ✅ 落地 |
-| 方案vs实现 | 边界原则三则 | 完善文档 09「语料没覆盖→拒答不编造 / 生成失败→references 当答案不空答 / 全挂→边界话术兜底」 | 1.6C 三则全落地；白盒链路用 BOUNDARY_MSG + GEN_*_MSG 各自落地 | ✅ 落地 |
-| 方案vs实现 | 两道门 | 语雀-问题4「权限门(前置)+范围门(后置)」 | 权限门=`verify_internal_token`（chat.py:27-35，Java 网关产 permission，Python 从 intent 开始）；范围门=白盒 A9（0.75/0.5） | ✅ 权限门落地/范围门仅白盒（见上） |
-| 方案vs实现 | 评测边界拒答 0 token | eval_agent.py:33-34 注释「断言=触发固定话术+0 token」 | `_boundary_trace` 0 token、不进 generate、score 5/0 | ✅ 落地 |
+| 方案vs实现 | 范围门 0.75/0.5 | 完善文档 09 称「范围门(后置)：检索置信度阈值——索引层 0.75 / 源文档池 0.5」 | 仅白盒链路 A9 生效（assistant.py:388-408 + pipeline_events:616-625）+ 评测边界类型（eval_agent.py:307-347）；1.6C /query 端点无此门，只有 `if not hits` 空命中拒答 | 部分落地（白盒有、1.6C 端点无） |
+| 注释vs行为 | 1.6C「置信度过低→拒答」 | api/rag.py:13 模块 docstring 自称降级语义 3 | 代码只判 `not hits`（api/rag.py:120-126），不读置信度 | 翻转（docstring 高于实际） |
+| 方案vs实现 | token usage 真算 | 语雀-问题4「现有代码在丢 usage」，建议加 `stream_options.include_usage` + 抓结尾 usage chunk | 流式白盒已修（ark_stream.py:128-129 + assistant.py:448, 476-477, 486-502, 651）；1.6C /query 仍丢（api/rag.py:130 不带 return_usage，RAGQueryResponse 无 usage 字段）；embedding 侧仍丢（vector_store.py:87-103 未抓 resp.usage） | 半落地（流式修、1.6C 与 embedding 未修） |
+| 方案vs实现 | 降级标记透传 | assistant.py:26-28 注释声明 `DEGRADED_VECTOR/DEGRADED_BM25`「供 done/boundary 事件透传 degraded 语义」 | `recall` 返回 `degraded` 列表但 `pipeline_events` 未把它放进 rerank/done 事件（613, 650-652） | 方案有/代码无（标记未透传） |
+| 方案vs实现 | 降级矩阵 | 完善文档 06「多路召回本身就是降级备份（向量挂→纯 BM25）；生成失败 → 预写答案兜底；全挂 → 边界话术」 | 向量挂→纯 BM25（api/rag.py:97-106）、生成挂→召回清单（129-135）、全挂→拒答话术（120-126）均落地 | 落地 |
+| 方案vs实现 | 边界原则三则 | 完善文档 09「语料没覆盖→拒答不编造 / 生成失败→references 当答案不空答 / 全挂→边界话术兜底」 | 1.6C 三则全落地；白盒链路用 BOUNDARY_MSG + GEN_*_MSG 各自落地 | 落地 |
+| 方案vs实现 | 两道门 | 语雀-问题4「权限门(前置)+范围门(后置)」 | 权限门=`verify_internal_token`（chat.py:27-35，Java 网关产 permission，Python 从 intent 开始）；范围门=白盒 A9（0.75/0.5） | 权限门落地/范围门仅白盒（见上） |
+| 方案vs实现 | 评测边界拒答 0 token | eval_agent.py:33-34 注释「断言=触发固定话术+0 token」 | `_boundary_trace` 0 token、不进 generate、score 5/0 | 落地 |
 
 ## 已读代码清单
 

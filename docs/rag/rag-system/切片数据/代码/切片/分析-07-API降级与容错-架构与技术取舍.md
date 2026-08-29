@@ -3,7 +3,7 @@
 > summary: API降级与容错架构设计与技术取舍架构与技术取舍
 > 来源: 切片 ｜ 锚点: 架构与技术取舍
 > 节: 分析-07-API降级与容错
-> COS路径: rag-slices/interview/rag-system/分析-07-API降级与容错-架构与技术取舍.md
+> COS路径: rag-slices/rag-system/代码/分析-07-API降级与容错-架构与技术取舍.md
 > 类别：架构设计
 > target: 面试项目问答
 

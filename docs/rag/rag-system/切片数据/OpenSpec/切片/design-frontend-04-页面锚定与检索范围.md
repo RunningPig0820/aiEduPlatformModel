@@ -16,7 +16,7 @@
 
 | 模块 id | 业务模块 | 语料 |
 |---|---|---|
-| ai-tutoring | AI答疑 | 已有 234 块 ✅ |
+| ai-tutoring | AI答疑 | 已有 234 块 |
 | knowledge-graph | 知识图谱 | 未切片 |
 | question-analysis | 题型分析 | 未切片 |
 | rag-system | RAG 项目 | 未切片（9 节待跑） |
