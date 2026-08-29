@@ -113,6 +113,7 @@ def parse_slice(path: str) -> dict | None:
             "file_path": meta.get("cos_path", ""),
             "anchor": meta.get("anchor") or title,
             "pool": "slice",
+            "embed_mode": "full",   # 切片池全部全文向量化(块 ≤5000 已校验)
         },
     }
     return block

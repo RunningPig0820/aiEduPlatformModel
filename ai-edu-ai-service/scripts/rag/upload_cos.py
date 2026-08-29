@@ -57,6 +57,9 @@ def parse_cos_key(md_text: str) -> Optional[str]:
     return None
 
 
+EXCLUDE_DIR_PARTS = ("/处理方案/", "/原来的文件/", "/原来的文件")  # 提示词/原始素材不上传普通桶
+
+
 def collect_files(root: str) -> Tuple[List[Tuple[str, str]], dict]:
     """遍历 root, 返回 (待传 [(本地路径, COS key)], 校验告警 dict)。"""
     items, warns = [], {}
@@ -65,6 +68,8 @@ def collect_files(root: str) -> Tuple[List[Tuple[str, str]], dict]:
             if not fn.endswith(".md"):
                 continue
             path = os.path.join(dirpath, fn)
+            if any(x in path for x in EXCLUDE_DIR_PARTS):
+                continue   # 处理方案(提示词)/原来的文件(原始素材)不上传普通桶
             try:
                 text = open(path, encoding="utf-8").read()
             except OSError as e:

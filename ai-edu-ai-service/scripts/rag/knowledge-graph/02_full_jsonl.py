@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 CORPUS = "/Users/minzhang/Documents/work/ai/aiEduPlatformModel/docs/rag/knowledge-graph"
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "rag_slices_full-knowledge-graph.jsonl")
 MODULE = "knowledge-graph"
+FULL_EMBED_MAX_CHARS = 5000  # 全量池条件式阈值(与 build_index.py 一致): summary+全文 ≤5000 embed 全文, 超限只 embed summary
 
 # 源目录 → (source, 默认 authority, 形态)
 #   whole = 整篇一条;  code = 整篇一条但过滤 CLI 入口;  split = 按 ## 段拆块
@@ -117,6 +118,8 @@ def _split_sections(body: list) -> list[tuple[str, str]]:
 
 def _make_block(text: str, summary: str, source: str, authority, category: str,
                 section: str, name: str, anchor: str, cos_path: str) -> dict:
+    # embed_mode: 全量池条件式——summary+全文 ≤5000 embed 全文(full), 超限只 embed summary
+    embed_mode = "full" if len(summary) + len(text) <= FULL_EMBED_MAX_CHARS else "summary"
     return {
         "text": text,
         "summary": summary,
@@ -130,6 +133,7 @@ def _make_block(text: str, summary: str, source: str, authority, category: str,
             "file_path": cos_path,
             "anchor": anchor,
             "pool": "full",
+            "embed_mode": embed_mode,
         },
     }
 

@@ -93,3 +93,35 @@ COS `query_vectors`（ReturnMetaData=True + ReturnDistance=True）返回每条�
 | `module` | build_index.py metadata | ✅ 已加（doc_type 改为取 tags.module，与 jsonl 对齐） |
 
 > **下一步**：重建索引 `python scripts/rag/build_index.py --clear` 后，rag-index 每条 metadata 才含 `category` + `module`。多路召回按类别筛选（tasks.md 1.11 T3/T4）依赖该字段。
+
+---
+
+## 7. 大文档摘要召回机制（2026-08-29 定稿，sop 留档）
+
+> 背景：全量池 rag-full 的整篇文档（语雀 canonical 9 / 代码分析 11 / 完善文档拆段 36），部分正文超 embedding 输入上限。机制：**条件式 embed + 摘要粗召回 + 切片池全文兜底**。
+
+### 7.1 条件式 embed（build_index.py FULL_EMBED_MAX_CHARS=5000）
+
+- `summary + text ≤ 5000 字符` → `embed(summary+全文)`：全文向量化（完善文档 36 段全部、小语雀/代码）
+- `summary + text > 5000 字符` → 只 `embed(summary)`：大文档（语雀 9 整篇 5580~15893 / 代码 11 整篇 5589~13087）防 dashscope 8192 token 静默截断
+- 阈值依据：中文约 1 token/字符，5000 字符≈5000 token 留安全余量；embedding 输入超 8192 token 会被静默截断，不可用
+- **jsonl 阶段不截断**：jsonl 每块存**完整 text + summary**（反查全文/BM25 用）；阈值判断只在向量化（build_index）时做
+
+### 7.2 大文档检索 = 三路召回（内容不丢）
+
+| 召回路 | 用什么 | 定位 |
+|---|---|---|
+| 全量池向量 | summary（大文档只 embed summary） | 文档级粗召回（"这篇讲了啥"） |
+| 切片池向量 | text 全文（切片全 ≤5000，297 块 embed 全文） | 细节精确召回（具体机制/数字/权衡） |
+| BM25 | 本地 jsonl 全文分词 | 关键词精确命中（断电/断网仍可用） |
+
+### 7.3 生成阶段
+
+- 命中任意块 → 按 key 从本地 jsonl **反查全文**（`text_by_key`，metadata 不含 text 因 COS filterable metadata ≤2048B）
+- 生成时单块 text 截断 `MAX_GEN_TEXT=1200` 字符喂 LLM（query.py:770，控制上下文长度）
+
+### 7.4 双池分工（为什么大文档用摘要不是缺陷）
+
+- 大文档（语雀/代码整篇）只 embed summary 是**有意的粗召回**：细节答案由切片池全文承担（语雀 56 块/代码 71 块/OpenSpec 81 块等）
+- 若大文档也拆块全文向量化 → 与切片池大量重复（同批内容两处），浪费 embedding 成本
+- 判断标准：**切片池负责"能精确回答"，全量池负责"文档级兜底 + 权威 1.0 正文"（完善文档）**

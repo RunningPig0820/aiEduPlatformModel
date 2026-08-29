@@ -181,7 +181,11 @@ def main():
             #   >  FULL_EMBED_MAX_CHARS → embed(summary): 大语雀(10~12K 字符)超 8192 token 防静默截断, 摘要作文档级粗召回
             # text 仍留 jsonl 供 BM25/反查/查看原文, 不进向量。
             full_text = b["summary"] + "\n" + b["text"]
-            data = embed(full_text) if len(full_text) <= FULL_EMBED_MAX_CHARS else embed(b["summary"])
+            # embed_mode 优先取 jsonl tags 标记(02_full_jsonl 产出), 缺失兼容旧 jsonl 按 5000 判断
+            mode = t.get("embed_mode")
+            if mode is None:
+                mode = "full" if len(full_text) <= FULL_EMBED_MAX_CHARS else "summary"
+            data = embed(full_text) if mode == "full" else embed(b["summary"])
             payloads.append({"key": key, "data": {"float32": data}, "metadata": metadata})
 
     for i in range(0, len(payloads), BATCH_PUT):
