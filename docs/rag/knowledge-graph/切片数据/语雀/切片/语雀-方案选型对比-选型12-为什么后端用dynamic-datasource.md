@@ -7,9 +7,9 @@
 
 | 方案 | 优点 | 缺点 | 结论 |
 |---|---|---|---|
-| dynamic-datasource + @DS("kg") | 注解简洁/Mapper 隔离/GitHub 10k+ stars | 三方依赖 | ✅ 采用 |
-| AbstractRoutingDataSource | 无三方 | 手动路由复杂 | ❌ 否决 |
-| 多套 MyBatis Config | 隔离彻底 | 配置量大 | ❌ 否决 |
+| dynamic-datasource + @DS("kg") | 注解简洁/Mapper 隔离/GitHub 10k+ stars | 三方依赖 | 采用 |
+| AbstractRoutingDataSource | 无三方 | 手动路由复杂 | 否决 |
+| 多套 MyBatis Config | 隔离彻底 | 配置量大 | 否决 |
 | 证据 | 证据：语雀-页面化-datasource-design.md / design-backend-datasource Decision 1 |  |  |
 
 > 证据：详见 `1.语雀/语雀-方案选型对比.md`（选型12）

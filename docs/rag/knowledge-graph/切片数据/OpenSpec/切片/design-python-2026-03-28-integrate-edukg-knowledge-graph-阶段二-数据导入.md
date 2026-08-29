@@ -7,7 +7,7 @@
 
 > 检索摘要：数据导入阶段下载 EDUKG TTL 文件、实现 TTL→Neo4j 导入脚本并验证数据完整性。
 
-1. ✅ 下载 EDUKG TTL 文件
+1. 下载 EDUKG TTL 文件
 2. 实现 TTL → Neo4j 导入脚本
 3. 验证数据完整性
 

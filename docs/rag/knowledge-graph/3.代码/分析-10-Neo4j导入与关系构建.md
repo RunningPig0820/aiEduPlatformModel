@@ -1,6 +1,6 @@
 # 分析-10 Neo4j导入与关系构建（代码真相）
 
-> summary: 解答「图谱数据怎么安全进 Neo4j」——11 个 import 脚本按依赖顺序（Class→Concept→Statement→关系→教材→章节→小节→知识点→归属→匹配）执行，全部 MERGE 幂等可重跑，--dry-run 预演/--clear 清旧库/--stats 查数，关系用 OPTIONAL MATCH 跳过缺失目标，clear_neo4j 一键清库、reimport_kg 整库重建，verify_import 查重复 URI 与 v0.2 小学节点。
+> summary: 解答「图谱数据怎么安全进 Neo4j」——eduKG 清洗/推断/匹配好的 JSON 落库 Neo4j 供答疑/学习路径/页面消费，7 类节点（Class/Concept/Statement/Textbook/Chapter/Section/TextbookKP）与 8 类关系（SUB_CLASS_OF/HAS_TYPE/RELATED_TO/PART_OF/BELONGS_TO/CONTAINS/IN_UNIT/MATCHES_KG）由 import/ 下 11 个脚本（EduKG 基础图谱 5 + 人教版教材 6）按两段依赖顺序导入，统一位于 edukg/scripts/kg_data/：第一段 import_math_classes→concepts→statements→relations→partof_belongsto（PART_OF/BELONGS_TO 由 import_partof_belongsto.py:76-123 正则解析 math_instance.ttl）；第二段 import_textbooks 23 册→chapters→sections→textbook_kps→in_unit_relations→matches_kg，import_matches_kg.py:96-106 仅导 matched 且 kg_uri 非空、SET confidence/method（:121-131）、308 条未匹配跳过进人工审核。全链路 MERGE 幂等可重跑（import_textbooks.py:149-160），节点已存在只更新属性、关系已存在跳过，uri/id 唯一约束先建兜底（import_math_classes.py:84-108）；关系缺目标 OPTIONAL MATCH+WHERE IS NOT NULL 静默跳过（import_math_classes.py:199-209），import_in_unit_relations.py:103-116 用 FOREACH+CASE 先落 Section 无则落 Chapter；RELATED_TO 不带 label 跨类型（import_math_relations.py:118-123）。CLI 统一参数：--dry-run 预演、--clear 清本类再导、--clear-only 仅清、--stats 查数、--file 指定数据、--batch-size。校验/运维：verify_import.py 查 Concept 总数/v0.2 小学节点/重复 URI/无类型/版本分布，analyze_textbook_matching.py 精确匹配产出 kp_matching_result.json；clear_neo4j.py:26-31 先删关系再删节点整库清空（无确认不可恢复）；reimport_kg.py:504-518 按 classes→entities→statements→relations 重建、--skip-* 跳步（数据源 math_statements_uri.json+math_statement.json，与分步导入口径不同）。边界/坑：--dry-run 表现不一致（classes 打印真 Cypher :132-142，concepts/relations 只打日志）；--clear 仅清本类且顺序敏感（清 TextbookKP 连带删 IN_UNIT/MATCHES_KG/PREREQUISITE）；README 概览计数与默认数据路径过期（实际数据 Class 38/Concept 1,275/Textbook 23/Chapter 153/Section 657/TextbookKP 1,905/matched 1,847，默认读 textbooks.json 根目录非 output/）；连接失败 sys.exit(1)、文件缺失 FileNotFoundError。设计要点：方案 C 计算与存储分离、MERGE 幂等安全网、OPTIONAL MATCH 容错、约束先建、顺序即契约。
 > 权威度: 0.8
 > 模块: knowledge-graph
 > COS路径: rag-source/knowledge-graph/代码/分析-10-Neo4j导入与关系构建.md
@@ -107,12 +107,12 @@
 ## 对账要点
 | 对账分类 | 项 | 语雀/design 口径 | 代码现状 | 结论 |
 |---|---|---|---|---|
-| 方案vs实现 | 导入方式 | D2：方案C CSV/JSON→MERGE 幂等批量导入 | 11 脚本全 MERGE + 约束 + OPTIONAL MATCH | ✅ 落地 |
-| 方案vs实现 | 匹配未导 | 未匹配记录跳过、人工审核 | import_matches_kg 过滤 matched && kg_uri | ✅ 落地 |
-| 接口契约 | --dry-run 行为 | 各脚本统一"仅打印 Cypher" | classes 打印真 Cypher，concepts/relations 只打日志 | ⚠️不一致 |
-| 注释vs运行行为 | README 默认数据路径 | README 写 output/ 或 math_statement.json | 代码默认路径不同（textbooks.json 根目录、primary_math_statements.json） | ⚠️翻转 |
-| 注释vs运行行为 | 导入结果计数 | README 概览（Textbook 21/MATCHES_KG 1042 等） | 实际数据文件 Textbook 23 / matched 1847 等 | ⚠️文档过期 |
-| 方案vs实现 | 整库重建 | reimport_kg 一键重建 | KGImporter 顺序 classes→entities→statements→relations，--skip-* | ✅ 落地 |
+| 方案vs实现 | 导入方式 | D2：方案C CSV/JSON→MERGE 幂等批量导入 | 11 脚本全 MERGE + 约束 + OPTIONAL MATCH | 落地 |
+| 方案vs实现 | 匹配未导 | 未匹配记录跳过、人工审核 | import_matches_kg 过滤 matched && kg_uri | 落地 |
+| 接口契约 | --dry-run 行为 | 各脚本统一"仅打印 Cypher" | classes 打印真 Cypher，concepts/relations 只打日志 | 不一致 |
+| 注释vs运行行为 | README 默认数据路径 | README 写 output/ 或 math_statement.json | 代码默认路径不同（textbooks.json 根目录、primary_math_statements.json） | 翻转 |
+| 注释vs运行行为 | 导入结果计数 | README 概览（Textbook 21/MATCHES_KG 1042 等） | 实际数据文件 Textbook 23 / matched 1847 等 | 文档过期 |
+| 方案vs实现 | 整库重建 | reimport_kg 一键重建 | KGImporter 顺序 classes→entities→statements→relations，--skip-* | 落地 |
 
 ## 已读代码清单
 - **Python 管道（edukg）**：

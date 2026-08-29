@@ -21,22 +21,22 @@
 
 ## 对账要点（方案 vs 代码现状复盘）
 
-**✅落地：导入方式——方案C CSV/JSON→MERGE 幂等批量导入**
+**落地：导入方式——方案C CSV/JSON→MERGE 幂等批量导入**
 原始方案 D2 定为方案C：CSV/JSON→MERGE 幂等批量导入；代码现状 11 个脚本全 MERGE + 约束 + OPTIONAL MATCH，与方案一致。业务影响：全链路可重跑不产生重复节点/关系。
 
-**✅落地：匹配未导——未匹配记录跳过、人工审核**
+**落地：匹配未导——未匹配记录跳过、人工审核**
 原始方案未匹配记录跳过、进人工审核；代码现状 import_matches_kg 过滤 matched && kg_uri 才导。业务影响：308+ 条未匹配记录不落图、只进人工审核流程。
 
-**⚠️不一致：--dry-run 行为——各脚本应统一"仅打印 Cypher"**
+**不一致：--dry-run 行为——各脚本应统一"仅打印 Cypher"**
 原始设计各脚本统一"仅打印 Cypher"；实际 import_math_classes 打印真 Cypher，concepts/relations 只打一行日志。业务影响：预演参考价值参差，不同脚本 dry-run 结果不可比。
 
-**⚠️翻转：README 默认数据路径**
+**翻转：README 默认数据路径**
 README 写 output/ 或 math_statement.json；代码默认路径不同（textbooks.json 根目录、primary_math_statements.json）。业务影响：按 README 跑会找不到文件，需指定 --file 或按代码默认路径放文件。
 
-**⚠️文档过期：导入结果计数**
+**文档过期：导入结果计数**
 README 概览写 Textbook 21/MATCHES_KG 1,042 等；实际数据文件 Textbook 23 / matched 1,847 等。业务影响：README 只是文档，以实际 JSON 为准。
 
-**✅落地：整库重建——reimport_kg 一键重建**
+**落地：整库重建——reimport_kg 一键重建**
 原始方案 reimport_kg 一键重建；代码现状 KGImporter 按 classes→entities→statements→relations 顺序重建，--skip-* 可跳步。业务影响：图谱乱了可一键整库重来。
 
 > 证据：详见 `3.代码/分析-10-Neo4j导入与关系构建.md`（§隐性坑与注意事项 / §对账要点）

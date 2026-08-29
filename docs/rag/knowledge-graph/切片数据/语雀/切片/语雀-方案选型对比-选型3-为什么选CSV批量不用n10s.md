@@ -7,8 +7,8 @@
 
 | 方案 | 优点 | 缺点 | 结论 |
 |---|---|---|---|
-| CSV 批量（LOAD CSV/UNWIND/MERGE） | 快 10x+、MERGE 幂等、断点可控 | 需先生成 CSV | ✅ 采用 |
-| n10s rdf.import（TTL 直导） | 原生 RDF | 性能差、难控制 | ❌ 早期试后放弃 |
+| CSV 批量（LOAD CSV/UNWIND/MERGE） | 快 10x+、MERGE 幂等、断点可控 | 需先生成 CSV | 采用 |
+| n10s rdf.import（TTL 直导） | 原生 RDF | 性能差、难控制 | 早期试后放弃 |
 | 证据 | 证据：语雀-知识图谱数据清洗方案.md / design-integrate-edukg D2 |  |  |
 
 > 证据：详见 `1.语雀/语雀-方案选型对比.md`（选型3）

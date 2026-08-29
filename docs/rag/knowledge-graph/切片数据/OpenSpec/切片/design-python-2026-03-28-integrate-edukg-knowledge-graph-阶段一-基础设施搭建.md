@@ -7,7 +7,7 @@
 
 > 检索摘要：基础设施阶段配置 Neo4j 连接（已有独立服务器）、创建 core/kg 模块、实现 neo4j_client 连接管理与 entity_linker 实体链接。
 
-1. ✅ 配置 Neo4j 连接（已有独立服务器）
+1. 配置 Neo4j 连接（已有独立服务器）
 2. 创建 `core/kg/` 模块结构
 3. 实现 `neo4j_client.py` 连接管理
 4. 实现 `entity_linker.py` 内存词典实体链接

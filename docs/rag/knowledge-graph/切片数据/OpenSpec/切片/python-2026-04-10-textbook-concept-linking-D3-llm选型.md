@@ -16,7 +16,7 @@
 - 通过 LangChain 集成
 
 **替代方案**:
-- ❌ DeepSeek：需要付费
-- ❌ 百炼 qwen：需要付费
+- DeepSeek：需要付费
+- 百炼 qwen：需要付费
 
 > 证据：详见 `2.OpenSpec design 决策/design-python-2026-04-10-textbook-concept-linking.md`（§D3 LLM 选型）

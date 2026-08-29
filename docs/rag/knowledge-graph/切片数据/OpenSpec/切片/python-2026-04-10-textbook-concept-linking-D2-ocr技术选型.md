@@ -21,7 +21,7 @@
 - 可使用免费额度或购买套餐
 
 **替代方案**:
-- ❌ PaddleOCR：需要本地部署 GPU，维护成本高
-- ❌ PyMuPDF：仅提取已有文字，无法识别扫描版
+- PaddleOCR：需要本地部署 GPU，维护成本高
+- PyMuPDF：仅提取已有文字，无法识别扫描版
 
 > 证据：详见 `2.OpenSpec design 决策/design-python-2026-04-10-textbook-concept-linking.md`（§D2 OCR 技术选型）

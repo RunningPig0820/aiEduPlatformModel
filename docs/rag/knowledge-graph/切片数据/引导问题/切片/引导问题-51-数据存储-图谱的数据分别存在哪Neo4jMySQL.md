@@ -12,7 +12,7 @@
 - **Neo4j**：7 类节点（Textbook 23/Chapter 148/Section 580/TextbookKP 1740/Concept 1295/Statement 2932/Class 39）+ 8 类关系（CONTAINS/IN_UNIT/MATCHES_KG/HAS_TYPE/RELATED_TO/BELONGS_TO/PART_OF/SUB_CLASS_OF），URI 主键；MATCHES_KG 置信度≥0.5 才连、RELATED_TO 方向固定 Statement→Concept；Python `import/` 脚本写，`api/kg.py` + `api/neo4j.py` 读（依据：完善文档 02 存储拓扑）
 - **MySQL（页面化）**：8 张表——t_kg_textbook/chapter/section/knowledge_point 4 主表（URI 主键 + status + merged_to_uri）+ 3 张层级关联表 + 1 张同步记录表（edition/subject/stage/grade 维度 + reconciliation_status）；前端 SPA 读 MySQL，Java 同步（Neo4j→MySQL 手动按需 UPSERT + 状态机，**方案口径，本仓无 Java 代码真值**）（依据：完善文档 02 存储拓扑）
 - **COS 向量索引**：服务侧 dashscope 768 维写 COS 桶（`COS_VECTORS_INDEXES` 路由：topic→topic-index / rag-full→rag-full / rag-slice→rag-slice），put 后约 10s 异步生效，**索引维度固定不可改**；匹配侧另用本地 bge 512 文件（kg_vectors.npy），两套维度互相不通用（依据：完善文档 02 存储拓扑 / 分析-09）
-- **在线查询坑（⚠️）**：在线 service.py 统一 `MATCH (e:Entity {...})`，离线导入用 Textbook/Concept 等具体标签，联调前直接调 `/entities`、`/tree` 可能查不到离线数据（依据：完善文档 02 隐性坑①）
+- **在线查询坑（）**：在线 service.py 统一 `MATCH (e:Entity {...})`，离线导入用 Textbook/Concept 等具体标签，联调前直接调 `/entities`、`/tree` 可能查不到离线数据（依据：完善文档 02 隐性坑①）
 
 ## 追问防御
 - **可能追问：谁写谁读？** → Python import 脚本写 Neo4j；Java 同步写 MySQL；vector_store 写 COS；前端只读；图谱关系直查 Neo4j + Redis TTL 300s 缓存降级（依据：引导问题.md 数据存储 / 完善文档 02 存储拓扑）

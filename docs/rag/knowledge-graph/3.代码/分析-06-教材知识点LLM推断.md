@@ -1,6 +1,6 @@
 # 分析-06 教材知识点LLM推断（代码真相）
 
-> summary: 解答「小学/高中教材缺知识点列表怎么补全」——infer_textbook_kp 分析缺失章节(小学1-6+高中, 初中不推断)→ TextbookKPInferer 双模型投票推断(glm-4-flash 主+deepseek-chat 副)→ llmTaskLock 断点续传(TaskState 检查点+SHA256 缓存+portalocker 进程锁)→ merge_inferred_kps 合并入库, 433 节推断 1616 个知识点平均置信 0.934。
+> summary: 解答「小学/高中教材缺知识点列表怎么补全、长任务中断怎么续跑、重复推断怎么省LLM钱」——本文档是知识图谱「教材知识点LLM推断」管道的代码真相分析。业务: 人教版小学1-6年级与高中必修教材原始JSON无知识点列表(初中7-9已带约252个), 由大模型照章节名推断核心知识点补全教材侧缺口, 是图谱节点重要来源。职责: 缺失章节分析→LLM双模型投票推断→断点续传/缓存→输出textbook_kps_inferred.json, 由merge_inferred_kps.py合并进textbook_kps.json(source=llm_inferred); 不做初中推断/属性推断/图谱匹配/直写Neo4j。调用链: CLI入口infer_textbook_kp.py(默认全部/--stage学段/--dry-run/--stats/--no-resume, 283-294) → analyze_missing_kps筛选(小学grade∈[一~六年级]且len(existing_kps)==0才推断、高中同、初中明确不推断, 159-164) → 缺失433节 → TextbookKPInferer.infer_batch → TaskState断点续传检查 → ProcessLock进程锁 → format_textbook_kg_prompt → llm_cache缓存命中? 命中直接返回(from_cache=True), 未命中DualModelVoter.vote双模型并行(主glm-4-flash免费+副deepseek-chat, config.py:9,11) → 两模型都输出非空knowledge_points即采纳主模型GLM结果、置信度取两模型confidence平均(dual_model_voter.py:288-316, 不比对内容); 任一无输出→consensus=False, 解析失败→5级fallback(直接json→正则{...}→```json```→ast.literal_eval, 125-170)并保留已有知识点confidence=0.0(225-244)。断点续传: TaskState("infer_kp")存检查点section_{section_id}, 恢复捞completed过滤pending_sections, 每checkpoint_interval=10节保存一次(260-356); CachedLLM缓存键=SHA256(prompt)[:16]存output/llm_cache/(llm_cache.py:30); ProcessLock timeout=3600秒防并发(process_lock.py:42)。实际数据: 433节(小学361+高中72)推断1616个知识点、平均置信度0.934、3条带error, 合并后textbook_kps.json共1905条(llm_inferred 1616+original 254+rule_extract_empty_chapter 35)。对账要点: D11断点续传三件套全落地; 语雀D12称MySQL但TaskState实为JSON文件存output/progress/无MySQL(翻转); D7阈值0.5/0.6/0.8不作用于推断路径(0.8/0.6仅vote_prerequisite方法内、当前未调用, 翻转); 缓存命中from_cache=0与语雀"命中高"不符(数据观察)。隐性坑: 推断只要求两模型都有输出、不校验内容一致性; 置信度来自模型自报非外部验证; --resume默认开启, 全量重跑须--no-resume; 缓存键是Prompt的SHA256, 改提示词模板=旧缓存全失效; 进程锁依赖portalocker未装即ImportError(process_lock.py:49-53); infer只输出json、须强制merge_inferred_kps.py才生效(infer_textbook_kp.py:313)。设计要点: 免费GLM当主模型、DeepSeek只在匹配/前置任务拿否决权(见分析-07); llmTaskLock三件套解耦复用给推断/匹配/标准化; state_manager原子写JSON落output/progress/、状态机pending/in_progress/completed/failed完备、resume()取pending+failed(state_manager.py:250-260)。
 > 权威度: 0.8
 > 模块: knowledge-graph
 > COS路径: rag-source/knowledge-graph/代码/分析-06-教材知识点LLM推断.md
@@ -112,11 +112,11 @@ flowchart TD
 ## 对账要点
 | 对账分类 | 项 | 语雀/design 口径 | 代码现状 | 结论 |
 |---|---|---|---|---|
-| 方案vs实现 | D11 断点续传三件套 | TaskState+CachedLLM+ProcessLock | `llmTaskLock/` 三模块全落地，推断/匹配复用 | ✅ 落地 |
-| 方案vs实现 | D11 状态存储 | 语雀 D12 称"MySQL 替代早期 SQLite" | `TaskState` 用 JSON 文件存 `output/progress/`，无 MySQL | ⚠️翻转（Python 管道实为 JSON 文件） |
-| 方案vs实现 | 前置依赖权重 0.85 | 语雀 D9"定义依赖 0.85" | `prerequisite_inferer.py fuse_results` 定义依赖升级 PREREQUISITE 用 `confidence=0.9`（:302），LLM 升级 +0.1 封顶 1.0（:320） | ⚠️翻转（0.85→0.9，D9 已自注） |
-| 方案vs实现 | 推断阈值 | 语雀 D7 提"阈值 0.5/0.6/0.8" | 推断任务（knowledge_points 分支）**无硬阈值**，只要求两模型都有输出；0.8/0.6 阈值仅在 `vote_prerequisite` 方法内（当前管线未调用） | ⚠️翻转（阈值不作用于推断路径） |
-| 注释vs运行行为 | 缓存命中统计 | 语雀称推断缓存命中高 | 实际 `textbook_kps_inferred.json` 中 from_cache=0（该批次缓存未命中） | ✅ 数据观察 |
+| 方案vs实现 | D11 断点续传三件套 | TaskState+CachedLLM+ProcessLock | `llmTaskLock/` 三模块全落地，推断/匹配复用 | 落地 |
+| 方案vs实现 | D11 状态存储 | 语雀 D12 称"MySQL 替代早期 SQLite" | `TaskState` 用 JSON 文件存 `output/progress/`，无 MySQL | 翻转（Python 管道实为 JSON 文件） |
+| 方案vs实现 | 前置依赖权重 0.85 | 语雀 D9"定义依赖 0.85" | `prerequisite_inferer.py fuse_results` 定义依赖升级 PREREQUISITE 用 `confidence=0.9`（:302），LLM 升级 +0.1 封顶 1.0（:320） | 翻转（0.85→0.9，D9 已自注） |
+| 方案vs实现 | 推断阈值 | 语雀 D7 提"阈值 0.5/0.6/0.8" | 推断任务（knowledge_points 分支）**无硬阈值**，只要求两模型都有输出；0.8/0.6 阈值仅在 `vote_prerequisite` 方法内（当前管线未调用） | 翻转（阈值不作用于推断路径） |
+| 注释vs运行行为 | 缓存命中统计 | 语雀称推断缓存命中高 | 实际 `textbook_kps_inferred.json` 中 from_cache=0（该批次缓存未命中） | 数据观察 |
 
 ## 已读代码清单
 - **Python 管道（edukg）**：`scripts/kg_data/textbook/infer_textbook_kp.py`（TextbookKPInferRunner/analyze_missing_kps/run_infer）、`scripts/kg_data/textbook/merge_inferred_kps.py`（merge_kps/生成 URI）、`core/llm_inference/textbook_kp_inferer.py`（TextbookKPInferer/infer_section/infer_batch/_parse_json_response）、`core/llm_inference/dual_model_voter.py`（DualModelVoter.vote/_check_consensus/vote_with_retry）、`core/llm_inference/config.py`（模型/阈值/重试）、`core/llm_inference/prompt_templates.py`（format_textbook_kg_prompt）、`core/llm_inference/prompts/textbook_kg.txt`、`core/llm_inference/__init__.py`

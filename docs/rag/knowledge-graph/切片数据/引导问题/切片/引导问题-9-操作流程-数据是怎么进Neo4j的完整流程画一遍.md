@@ -34,8 +34,8 @@
 （依据：完善文档 02 主流程文字流程图）
 
 - **各阶段谁负责/产出**：拆分 split_main_ttl/split_material_ttl 产 main-math.ttl(14019 triples)/material-math.ttl(6024 triples)；生成 generate_textbook_data 产节点/关系 JSON；清洗 clean_textbook_data（DataCleaner）产 duplicate_detection_report.json；增强 enhance_chapters + enhance_kp_attributes（纯规则）；推断 infer_textbook_kp 双模型产 textbook_kps_inferred.json(433 节→1616 条、平均置信 0.934)；匹配 match_textbook_kp 产 matches_kg_relations.json(1905 条)；导入 import/ 11 脚本 MERGE 幂等；校验 verify_import/analyze_textbook_matching/validate_dag（依据：完善文档 02 落地真相表）
-- **断点续传（⚠️ 翻转）**：方案 D12 规划 MySQL 承接任务状态，代码落地是 llmTaskLock 的 TaskState 用 JSON 文件落 `output/progress/`（临时文件+rename 原子写+备份）；MySQL 状态表在 Python 管道里不存在；`infer_textbook_kp.py` 无 `--resume` 参数（依据：完善文档 02 落地真相）
-- **匹配率口径（⚠️ 翻转）**：语雀 canonical 为 97.1%（1690/1740），当前数据文件 96.96%（1847/1905），是同链路不同数据快照，对外讲"~97%"准确（依据：完善文档 02 落地真相）
+- **断点续传（翻转）**：方案 D12 规划 MySQL 承接任务状态，代码落地是 llmTaskLock 的 TaskState 用 JSON 文件落 `output/progress/`（临时文件+rename 原子写+备份）；MySQL 状态表在 Python 管道里不存在；`infer_textbook_kp.py` 无 `--resume` 参数（依据：完善文档 02 落地真相）
+- **匹配率口径（翻转）**：语雀 canonical 为 97.1%（1690/1740），当前数据文件 96.96%（1847/1905），是同链路不同数据快照，对外讲"~97%"准确（依据：完善文档 02 落地真相）
 
 ## 追问防御
 - **可能追问：哪一步最容易出问题？** → 属性增强顺序 bug（先增强只覆盖 22%）、匹配率 17% 的语义错位；以及导入脚本默认数据路径与 README 不符（跑脚本用 `--file` 显式指定最稳）（依据：完善文档 02 追问与防御 / 局部翻转）

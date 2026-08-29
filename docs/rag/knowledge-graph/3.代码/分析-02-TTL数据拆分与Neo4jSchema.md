@@ -1,6 +1,6 @@
 # 分析-02 TTL数据拆分与Neo4jSchema（代码真相）
 
-> summary: 解答「EduKG 原始 TTL 大数据怎么按学科拆成单文件、Neo4j 的 schema/唯一约束怎么建怎么验」——split_main_ttl 按 URI 前缀 instance/{subject}# 拆 8 学科+unknown、split_material_ttl 按教材名称关键词+RDF类型C3+BFS关系传播拆 10 文件、create_neo4j_schema 只建 3 个唯一约束(性能索引延迟到导入后)、validate_schema 验 6 标签+3 约束(退出码 0/1)。
+> summary: 解答「EduKG 全学科 TTL 大数据怎么按学科拆成单文件、Neo4j 的 schema 唯一约束怎么建怎么验」——本文档是图谱入库第一道工序的代码真相:先把 EduKG 全学科 TTL 按学科拆成独立单文件,再在 Neo4j 初始化唯一性约束防重复,最后验证 schema 是否就绪;仅 Python edukg 管道 4 个脚本(edukg/scripts/kg_split/)+底层 Neo4j 客户端参与,Java/前端不参与,不做数据清洗/匹配、不建性能索引、不导入实际数据。数据背景:main.ttl 约 16MB 知识点、material.ttl 约 3.5MB 教材,整包导入慢且难按学科维护。①split_main_ttl.py 按 URI 学科前缀拆分:SUBJECT_URI_PATTERN=instance/([^/#]+)[#/](split_main_ttl.py:43)同时匹配 # 与 /(instance/math#516 与 instance/math/xxx 都归 math),未匹配归 unknown;DEFAULT_SUBJECTS 8 学科(:40),--auto-discover 遍历图自动发现学科;extract_ttl_headers 保留 @prefix/@base/PREFIX/BASE 头部行(:87-112);输出 main-{subject}.ttl+main-unknown.ttl 共 9 文件;完整性校验 Original=Written 三元组数相等打 ✓ 否则 ✗(:255-261,✗不中断照常返回 stats);产物如 main-math 14,019 triples、main-biology 20,611(kg_split/README.md:32-43)。②split_material_ttl.py 按名称关键词+关系传播拆分:material 实体 URI 不体现学科,故用 RDF 类型 C3(Textbook)识别教材实体(TEXTBOOK_CLASS_URI :62)、名称属性 P4(:65)、图片路径 P7(:68);SUBJECT_KEYWORDS 10 词→9 学科(:44-56),子串匹配按 dict 顺序先命中(生物在生物学前);PARENT_CHILD_RELATIONS 仅 P13 hasLesson/P2 hasUnit/P3 hasSection 三条真实包含关系,P5 hasImage 已移除(:70-79,注释"不是包含关系",但 README:142-144 仍写 P5 属文档与代码不一致,按代码为准);BFS propagate_subject 沿教材→章→节递归传播学科(:237-243);无归属归 unknown,--skip-unknown 丢弃;产物 10 文件(9 学科+unknown),如 material-math 6,024 triples、material-physics 8,511(README:58-70)。③create_neo4j_schema.py 只建唯一约束不含性能索引:NODE_LABELS 6 标签 Subject/Stage/Grade/Textbook/Chapter/KnowledgePoint(:45-52);UNIQUE_CONSTRAINTS 3——kp_uri_unique(KnowledgePoint.uri)/subject_code_unique(Subject.code)/textbook_isbn_unique(Textbook.isbn)(:56-61),Cypher 用 CREATE CONSTRAINT IF NOT EXISTS...IS UNIQUE(:117-120);性能索引设计上延迟到数据导入后建,避免批量导入 10x 变慢与索引碎片化(:9,180;README:129-137);RELATIONSHIP_TYPES 10 个(如 HAS_CHAPTER/PREREQUISITE 等)仅作文档参考,Neo4j 关系类型使用时自动创建无需预定义(:64-81);--dry-run 只打印 Cypher(:175-181),单条约束失败 continue 不中断(:129-131)。④validate_schema.py 用 CALL db.labels() 取标签、SHOW CONSTRAINTS 取约束(:78-88),比对 EXPECTED_LABELS 6 与 EXPECTED_CONSTRAINTS 3(:90-139);全过退出码 0 可开始导入,缺任一/连接异常退出码 1 并提示先跑 create_neo4j_schema(:190-201);明确不验证性能索引(:9)。隐性坑与对账:--skip-validation 是死参数(:293-297 定义 argparse 但 main 未传、函数无此签名,改它没用);唯一约束基于"预期标签",若实际导入用 Concept/Statement/Class 标签(见分析-01)则标签体系不一致,需先统一口径;验证只数三元组数量不校验内容;create 用 sys.path hack 加载 edukg/config/settings(:23-33),运行环境需能 import edukg 否则 ModuleNotFoundError;输入文件不存在 sys.exit(1)(:302-304;:436-438);rdflib 未安装提示并退出(:28-32)。对账:main 按 URI 前缀/material 按名称关键词两套机制差异化落地、索引延迟 D4、3 约束与 design D5 一致、README P5 旧口径与死参数翻转(代码为准)、material 输出 10 文件。已读代码:kg_split/ 下 split_main_ttl/split_material_ttl/create_neo4j_schema/validate_schema 4 脚本+README.md、edukg/config/settings.py(NEO4J_URI/USER/PASSWORD/DATABASE :31-36)、edukg/core/neo4j/client.py(Neo4jClient 单例/execute_read)。
 > 权威度: 0.8
 > 模块: knowledge-graph
 > COS路径: rag-source/knowledge-graph/代码/分析-02-TTL数据拆分与Neo4jSchema.md
@@ -134,12 +134,12 @@ flowchart TD
 
 | 对账分类 | 项 | 语雀/design 口径 | 代码现状 | 结论 |
 |---|---|---|---|---|
-| 方案vs实现 | 拆分方式 | 方案称按学科拆分 | main 按 URI 前缀、material 按名称关键词+BFS 传播，两套机制不同 | ✅ 落地（分脚本差异化实现） |
-| 方案vs实现 | 索引延迟 | design.md D4 性能索引延迟到导入后 | 代码注释+README 明确，create 只建约束 | ✅ 落地 |
-| 方案vs实现 | 唯一约束 | design.md D5 3 个约束 | kp_uri/subject_code/textbook_isbn 三约束一致 | ✅ 落地 |
-| 文档vs代码 | material 传播边 | kg_split/README.md:142-144 称"通过 P13/P2/P3/P5 关系连接""通过 P5 关系连接" | 代码 PARENT_CHILD_RELATIONS 已移除 P5（注释"P5 是 hasImage，不是包含关系"） | ⚠️ 翻转（README 旧口径，代码为准） |
-| 注释vs运行行为 | split_main 的 --skip-validation | 参数注释"跳过三元组数量验证" | 参数定义了但 main 未传、函数无此签名，不生效 | ⚠️ 翻转（死参数） |
-| 方案vs实现 | material 输出文件数 | README 列 10 个 | 9 学科+unknown=10 个 | ✅ 落地 |
+| 方案vs实现 | 拆分方式 | 方案称按学科拆分 | main 按 URI 前缀、material 按名称关键词+BFS 传播，两套机制不同 | 落地（分脚本差异化实现） |
+| 方案vs实现 | 索引延迟 | design.md D4 性能索引延迟到导入后 | 代码注释+README 明确，create 只建约束 | 落地 |
+| 方案vs实现 | 唯一约束 | design.md D5 3 个约束 | kp_uri/subject_code/textbook_isbn 三约束一致 | 落地 |
+| 文档vs代码 | material 传播边 | kg_split/README.md:142-144 称"通过 P13/P2/P3/P5 关系连接""通过 P5 关系连接" | 代码 PARENT_CHILD_RELATIONS 已移除 P5（注释"P5 是 hasImage，不是包含关系"） | 翻转（README 旧口径，代码为准） |
+| 注释vs运行行为 | split_main 的 --skip-validation | 参数注释"跳过三元组数量验证" | 参数定义了但 main 未传、函数无此签名，不生效 | 翻转（死参数） |
+| 方案vs实现 | material 输出文件数 | README 列 10 个 | 9 学科+unknown=10 个 | 落地 |
 
 ## 已读代码清单
 

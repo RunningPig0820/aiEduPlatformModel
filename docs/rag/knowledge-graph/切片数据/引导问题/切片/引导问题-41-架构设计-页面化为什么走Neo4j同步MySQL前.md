@@ -13,7 +13,7 @@
 - **否决原因**：Java 没有 Neo4j 集成、前端是独立 SPA、Neo4j 实时查询重——消费侧多元但单点扛不住，前端直查图库不成立。（依据：完善文档 03）
 - **方案 B 设计**：8 张表（4 节点主表 URI 主键 + 3 层级关联含 order_index + 1 同步记录）、@DS("kg") 双数据源（业务 Mapper 默认 user 库、图谱 Mapper 路由 ai_edu_kg）、状态机 active/deleted/merged、单大事务 UPSERT + 对账校验；图谱关系（MATCHES_KG/PART_OF/RELATED_TO）**不同步**、直查 Neo4j + Redis TTL 300s + `neo4jAvailable:false` 降级。（依据：完善文档 03 / 分析-11）
 - **避免污染权威图**：MySQL 只存节点属性 + 层级关系，图谱关系直查 Neo4j 而非同步——避免无限业务事实污染权威图谱，配合决策 D17 权威图谱零写入。（依据：分析-11）
-- **⚠️ 落地边界**：方案 B 已拍板、design 三份一致，但 Java/前端代码不在本仓（aiEduPlatform/aiEduPlatformFront 不存在），分析-11 基于 design 标注"非代码真值"；graph 接口未实现、API 前缀前后端不一致（/api/kg/** vs /api/auth/kg/**）是 design 内自相矛盾。（依据：完善文档 03 / 分析-11）
+- **落地边界**：方案 B 已拍板、design 三份一致，但 Java/前端代码不在本仓（aiEduPlatform/aiEduPlatformFront 不存在），分析-11 基于 design 标注"非代码真值"；graph 接口未实现、API 前缀前后端不一致（/api/kg/** vs /api/auth/kg/**）是 design 内自相矛盾。（依据：完善文档 03 / 分析-11）
 
 ## 追问防御
 - **可能追问：同步怎么保证两边数据一致？** → 手动按需（非 CDC）按 URI UPSERT 幂等可重跑 + 状态机 active/deleted/merged 软删可回溯 + 单大事务内重建关联表 + 同步后 MySQL vs Neo4j 计数对账。（依据：完善文档 03 / 分析-11）

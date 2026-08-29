@@ -3,7 +3,7 @@
 > 来源：`2.OpenSpec design 决策/design-*.md`（历史设计素材层，doc_type=design_spec，权威 **0.7**）
 > 切片方式：**提示词 + 大模型按 ### 切**（脚本导出方案已废弃，2026-08-27 与 代码/坑档案/引导问题/语雀 对齐）。
 
-## 一、源头（语料就绪，2026-08-27 ✅ 已全部成文）
+## 一、源头（语料就绪，2026-08-27 已全部成文）
 
 - 源文档：`2.OpenSpec design 决策/design-*.md`（**12 份 RAG 结构化重构版已完成**，由 `spec文件整理.md` 产出）
 - 生成提示词：`2.OpenSpec design 决策/处理方案/提示词/spec文件整理.md`（每份 design 各自成文，权威 0.7 素材溯源库，100% 保留 Migration/Risks/OpenQuestions）

@@ -22,12 +22,12 @@
 
 对账结论逐条复盘（原始方案 → 实际落地 → 结论），**本主题 Java/前端代码不在本仓，所有对账均为 design 文档层面核对，非代码真值**：
 
-- **Java/前端代码是否落地**：语雀 D13/D14 描述页面化落地，实际代码不在本仓（`aiEduPlatform/`/`aiEduPlatformFront` 不存在），仅有 design 文档。⚠️无法核实（非代码真值）——不能把设计当已实现。
-- **图谱 graph 接口契约**：design-backend-ui 列出 `knowledge-points/{uri}/graph`，实际 design-frontend 标注该接口后端未实现。⚠️契约断裂（design 内自相矛盾）。
-- **API 前缀口径**：后端 design 写 `/api/kg/**`，前端 design 用 `/api/auth/kg/**`。⚠️口径不一致——联调易 404。
-- **8 张表**：语雀 D13 口径为 4 节点主表+3 层级关联+1 同步记录，实际 design-backend-ui D1 表结构与状态机一致。✅落地——文档层面一致。
-- **双数据源**：语雀 D14 `@DS("kg")` ai_edu_kg，实际 design-backend-datasource 全链路设计一致。✅落地——文档层面一致。
-- **前端三栏/懒加载/React Flow**：语雀 design-frontend 目标，实际 design 一致。✅落地——文档层面一致。
-- **Flyway**：注释/设计为双库分组管理，实际运行行为是当前全禁用、表手动创建。⚠️翻转——设计降级（表从 Flyway 迁移改为手动创建）。
+- **Java/前端代码是否落地**：语雀 D13/D14 描述页面化落地，实际代码不在本仓（`aiEduPlatform/`/`aiEduPlatformFront` 不存在），仅有 design 文档。无法核实（非代码真值）——不能把设计当已实现。
+- **图谱 graph 接口契约**：design-backend-ui 列出 `knowledge-points/{uri}/graph`，实际 design-frontend 标注该接口后端未实现。契约断裂（design 内自相矛盾）。
+- **API 前缀口径**：后端 design 写 `/api/kg/**`，前端 design 用 `/api/auth/kg/**`。口径不一致——联调易 404。
+- **8 张表**：语雀 D13 口径为 4 节点主表+3 层级关联+1 同步记录，实际 design-backend-ui D1 表结构与状态机一致。落地——文档层面一致。
+- **双数据源**：语雀 D14 `@DS("kg")` ai_edu_kg，实际 design-backend-datasource 全链路设计一致。落地——文档层面一致。
+- **前端三栏/懒加载/React Flow**：语雀 design-frontend 目标，实际 design 一致。落地——文档层面一致。
+- **Flyway**：注释/设计为双库分组管理，实际运行行为是当前全禁用、表手动创建。翻转——设计降级（表从 Flyway 迁移改为手动创建）。
 
 > 证据：详见 `3.代码/分析-11-Java同步与前端页面.md`（§隐性坑与注意事项 / §对账要点）

@@ -1,7 +1,7 @@
 # 分析-11 Java同步与前端页面（代码真相）
 
 > 证据说明: 本文档基于 OpenSpec design 文档撰写,Java/前端代码不在本仓,非代码真值
-> summary: 解答「图谱怎么页面化给学生/教研看」——Java 后端把 Neo4j 教材知识点按 URI 主键同步到 MySQL ai_edu_kg（8 张表、@DS("kg") 双数据源、状态机 active/deleted/merged、大事务+对账），前端 React SPA 三栏布局（树+图谱+详情）逐级懒加载、React Flow 展示关联、同步管理与统计面板；图谱关系直查 Neo4j 配 Redis TTL 300s 降级。
+> summary: 解答「图谱怎么页面化给学生/教研看」——本文档基于 OpenSpec design 文档（design-backend-2026-06-03-knowledge-graph-{datasource,ui}.md、design-frontend-2026-06-09-knowledge-graph-ui-front.md）撰写，Java/前端代码不在本仓（aiEduPlatform/、aiEduPlatformFront/ 不存在），非代码真值（权威度 0.8）。核心方案 B：Neo4j→MySQL 手动按需同步（非 CDC）、前端只读 MySQL，不做图谱编辑/搜索/导出。同步流：管理员点「同步」→ POST /api/kg/sync/full → 同步锁（MySQL 行锁/Redis 锁）→ 查 Neo4j 教材节点+层级（CONTAINS/IN_UNIT 含 order_index）→ URI 校验（非空、前缀 http://edukg.org/knowledge/、不重复，D6）→ 单大事务 UPSERT 节点主表 + 关联表先清空再 INSERT → MySQL 有而 Neo4j 无则 status='deleted'（知识点另设 merged_to_uri）→ 对账写 t_kg_sync_record.reconciliation_status → 失败回滚可重跑（幂等）。数据模型 8 张表（design-backend-ui D1）：4 节点主表 t_kg_textbook/chapter/section/knowledge_point 均以 uri VARCHAR(255) 主键（跨库唯一锚点）+ 3 层级关联表（联合主键含 order_index）+ 1 同步记录表。双数据源 @DS("kg") 路由 ai_edu_kg（persistence.edukg.mapper.*），primary:user、strict:true、@Transactional("kg")，Flyway 全禁用表手动创建（design-backend-datasource 96-114）。状态机 active/deleted/merged：导航/知识体系过滤 WHERE status='active'，deleted=Neo4j 已删（进度查询例外），merged 经 merged_to_uri 迁移（D2）；枚举 KgSubjectEnum 六科/KgPhaseEnum primary/middle/high（D10）。前端 React SPA 三栏（左教材树+中 React Flow 关系图+右详情），逐级懒加载自定义递归树，6757 节点不一次性渲染；6 级导航 GET /api/kg/subjects→{subject}/grades→{grade}/textbooks→textbooks/{uri}/chapters→sections/{uri}/points→knowledge-points/{uri}；知识点详情含 2 层父级（小节+章节，D9）；图谱关系直查 Neo4j（concepts/{uri}/relations、batch-relations 防 N+1），Redis kg:neo4j:{uri}:{query_type} TTL 300s 降级，Neo4j 不可用返回空关联+neo4jAvailable:false 隐藏图谱模块；同步管理弹窗（status/records）+统计面板（system/stats/{grade}、neo4j/health）；React Flow useNodesState/useEdgesState，节点>50 简化视图仅 Top 10。设计要点：方案 B 避免业务事实污染权威图谱（D17 权威图谱零写入）、URI 永不修改改动走合并、软删除可回溯、降级优先、手动按需同步而非 CDC。已知坑：knowledge-points/{uri}/graph 后端未实现（design 自相矛盾）；前后端前缀不一致（/api/kg/** vs /api/auth/kg/** 易 404）；年级下拉须先全量同步才有数据；关联表 DELETE+INSERT 依赖单事务防「空目录」；deleted 清理需确认无下游引用；<1 万节点 URI 主键可行。对账：8 表/双数据源/前端三栏文档层面一致，graph 契约断裂、前缀不一致、Flyway 设计降级均。
 > 权威度: 0.8
 > 模块: knowledge-graph
 > COS路径: rag-source/knowledge-graph/代码/分析-11-Java同步与前端页面.md
@@ -129,13 +129,13 @@ React SPA 三栏（左树 / 中 React Flow 关系图 / 右详情 2 层父级）+
 ## 对账要点
 | 对账分类 | 项 | 语雀/design 口径 | 现状 | 结论 |
 |---|---|---|---|---|
-| 方案vs实现 | Java/前端代码 | 语雀 D13/D14 描述页面化落地 | **代码不在本仓**（aiEduPlatform/aiEduPlatformFront 不存在），仅有 design 文档 | ⚠️无法核实（非代码真值） |
-| 接口契约 | 图谱 graph 接口 | design-backend-ui 列出 `knowledge-points/{uri}/graph` | design-frontend 标注该接口后端未实现 | ⚠️契约断裂（design 内自相矛盾） |
-| 接口契约 | API 前缀 | 后端 `/api/kg/**` | 前端 `/api/auth/kg/**` | ⚠️口径不一致 |
-| 方案vs实现 | 8 张表 | D13 4 节点主表+3 层级关联+1 同步记录 | design-backend-ui D1 表结构与状态机一致 | ✅ 文档层面一致 |
-| 方案vs实现 | 双数据源 | D14 @DS("kg") ai_edu_kg | design-backend-datasource 全链路设计 | ✅ 文档层面一致 |
-| 方案vs实现 | 前端三栏/懒加载/React Flow | design-frontend 目标 | design 一致 | ✅ 文档层面一致 |
-| 注释vs运行行为 | Flyway | 双库分组管理 | 当前全禁用，表手动创建 | ⚠️设计降级 |
+| 方案vs实现 | Java/前端代码 | 语雀 D13/D14 描述页面化落地 | **代码不在本仓**（aiEduPlatform/aiEduPlatformFront 不存在），仅有 design 文档 | 无法核实（非代码真值） |
+| 接口契约 | 图谱 graph 接口 | design-backend-ui 列出 `knowledge-points/{uri}/graph` | design-frontend 标注该接口后端未实现 | 契约断裂（design 内自相矛盾） |
+| 接口契约 | API 前缀 | 后端 `/api/kg/**` | 前端 `/api/auth/kg/**` | 口径不一致 |
+| 方案vs实现 | 8 张表 | D13 4 节点主表+3 层级关联+1 同步记录 | design-backend-ui D1 表结构与状态机一致 | 文档层面一致 |
+| 方案vs实现 | 双数据源 | D14 @DS("kg") ai_edu_kg | design-backend-datasource 全链路设计 | 文档层面一致 |
+| 方案vs实现 | 前端三栏/懒加载/React Flow | design-frontend 目标 | design 一致 | 文档层面一致 |
+| 注释vs运行行为 | Flyway | 双库分组管理 | 当前全禁用，表手动创建 | 设计降级 |
 
 ## 已读代码清单
 - **Python 管道（edukg）**：无（本主题不涉 Python 管道）。

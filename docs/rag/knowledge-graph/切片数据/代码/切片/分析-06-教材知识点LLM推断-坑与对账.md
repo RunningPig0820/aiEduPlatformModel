@@ -22,13 +22,13 @@
 
 ### 方案 vs 实现
 
-- **断点续传三件套（D11）**：语雀/design 口径为 TaskState + CachedLLM + ProcessLock → 实际 `llmTaskLock/` 三模块全落地，推断/匹配复用。**✅落地：断点续传三件套与方案一致，全落地并复用。**
-- **状态存储（D11/D12）**：语雀 D12 称"MySQL 替代早期 SQLite" → 实际 `TaskState` 用 JSON 文件存 `output/progress/`，无 MySQL。**⚠️翻转：Python 管道状态存储实为 JSON 文件，非 MySQL。**
-- **前置依赖权重（D9）**：语雀 D9"定义依赖 0.85" → 实际 `prerequisite_inferer.py fuse_results` 定义依赖升级 PREREQUISITE 用 `confidence=0.9`（:302），LLM 升级 +0.1 封顶 1.0（:320）。**⚠️翻转：前置依赖权重从 0.85 → 0.9（D9 已自注）。**
-- **推断阈值（D7）**：语雀 D7 提"阈值 0.5/0.6/0.8" → 实际推断任务（knowledge_points 分支）**无硬阈值**，只要求两模型都有输出；0.8/0.6 阈值仅在 `vote_prerequisite` 方法内（当前管线未调用）。**⚠️翻转：阈值不作用于推断路径。**
+- **断点续传三件套（D11）**：语雀/design 口径为 TaskState + CachedLLM + ProcessLock → 实际 `llmTaskLock/` 三模块全落地，推断/匹配复用。**落地：断点续传三件套与方案一致，全落地并复用。**
+- **状态存储（D11/D12）**：语雀 D12 称"MySQL 替代早期 SQLite" → 实际 `TaskState` 用 JSON 文件存 `output/progress/`，无 MySQL。**翻转：Python 管道状态存储实为 JSON 文件，非 MySQL。**
+- **前置依赖权重（D9）**：语雀 D9"定义依赖 0.85" → 实际 `prerequisite_inferer.py fuse_results` 定义依赖升级 PREREQUISITE 用 `confidence=0.9`（:302），LLM 升级 +0.1 封顶 1.0（:320）。**翻转：前置依赖权重从 0.85 → 0.9（D9 已自注）。**
+- **推断阈值（D7）**：语雀 D7 提"阈值 0.5/0.6/0.8" → 实际推断任务（knowledge_points 分支）**无硬阈值**，只要求两模型都有输出；0.8/0.6 阈值仅在 `vote_prerequisite` 方法内（当前管线未调用）。**翻转：阈值不作用于推断路径。**
 
 ### 注释 vs 运行行为
 
-- **缓存命中统计**：语雀称推断缓存命中高 → 实际 `textbook_kps_inferred.json` 中 from_cache=0（该批次缓存未命中）。**✅数据观察：该批次推断缓存未命中（from_cache=0），与"命中高"描述不符。**
+- **缓存命中统计**：语雀称推断缓存命中高 → 实际 `textbook_kps_inferred.json` 中 from_cache=0（该批次缓存未命中）。**数据观察：该批次推断缓存未命中（from_cache=0），与"命中高"描述不符。**
 
 > 证据：详见 `3.代码/分析-06-教材知识点LLM推断.md`（§隐性坑与注意事项 / §对账要点）

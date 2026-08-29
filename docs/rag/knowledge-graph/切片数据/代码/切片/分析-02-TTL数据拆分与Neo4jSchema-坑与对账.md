@@ -21,16 +21,16 @@
 
 ## 对账复盘（原始方案 → 实际落地 → 业务影响）
 
-**拆分方式 ✅落地（分脚本差异化实现）**：语雀/design 口径称"按学科拆分"；实际落地 main 按 URI 前缀、material 按名称关键词+BFS 传播，两套机制不同。影响：两个数据源 URI 结构差异大（main 含学科前缀、material 不含），分脚本差异化实现才能各自正确按学科拆出单文件。
+**拆分方式 落地（分脚本差异化实现）**：语雀/design 口径称"按学科拆分"；实际落地 main 按 URI 前缀、material 按名称关键词+BFS 传播，两套机制不同。影响：两个数据源 URI 结构差异大（main 含学科前缀、material 不含），分脚本差异化实现才能各自正确按学科拆出单文件。
 
-**索引延迟 ✅落地**：design.md D4 要求性能索引延迟到导入后；代码注释+README 明确，create_neo4j_schema 只建唯一约束不建性能索引。影响：避免批量导入 10x 变慢与索引碎片化。
+**索引延迟 落地**：design.md D4 要求性能索引延迟到导入后；代码注释+README 明确，create_neo4j_schema 只建唯一约束不建性能索引。影响：避免批量导入 10x 变慢与索引碎片化。
 
-**唯一约束 ✅落地**：design.md D5 要求 3 个约束；实际落地 `kp_uri_unique`/`subject_code_unique`/`textbook_isbn_unique` 三约束与方案一致。影响：三个核心实体（知识点/学科/教材）各自唯一，防重复数据。
+**唯一约束 落地**：design.md D5 要求 3 个约束；实际落地 `kp_uri_unique`/`subject_code_unique`/`textbook_isbn_unique` 三约束与方案一致。影响：三个核心实体（知识点/学科/教材）各自唯一，防重复数据。
 
-**material 传播边 ⚠️翻转（README 旧口径，代码为准）**：kg_split/README.md:142-144 称"章节实体通过 P13/P2/P3/P5 关系连接""子章节通过 P5 关系连接"；实际代码 `PARENT_CHILD_RELATIONS` 已移除 P5（注释明确"P5 是 hasImage，不是包含关系"）。影响：若按 README 用 P5 传播会错误地把图片关系当层级包含，导致子节点漏传播落到 unknown——排查 unknown 归属时以代码为准。
+**material 传播边 翻转（README 旧口径，代码为准）**：kg_split/README.md:142-144 称"章节实体通过 P13/P2/P3/P5 关系连接""子章节通过 P5 关系连接"；实际代码 `PARENT_CHILD_RELATIONS` 已移除 P5（注释明确"P5 是 hasImage，不是包含关系"）。影响：若按 README 用 P5 传播会错误地把图片关系当层级包含，导致子节点漏传播落到 unknown——排查 unknown 归属时以代码为准。
 
-**split_main 的 `--skip-validation` ⚠️翻转（死参数）**：参数注释称"跳过三元组数量验证"；实际参数在 argparse 定义了但 main 未传、函数签名无此参数，传了不生效。影响：传这个 flag 验证仍会执行，想跳过校验不可行，改它没用。
+**split_main 的 `--skip-validation` 翻转（死参数）**：参数注释称"跳过三元组数量验证"；实际参数在 argparse 定义了但 main 未传、函数签名无此参数，传了不生效。影响：传这个 flag 验证仍会执行，想跳过校验不可行，改它没用。
 
-**material 输出文件数 ✅落地**：README 列 10 个；实际落地 9 学科+unknown=10 个文件，一致。
+**material 输出文件数 落地**：README 列 10 个；实际落地 9 学科+unknown=10 个文件，一致。
 
 > 证据：详见 `3.代码/分析-02-TTL数据拆分与Neo4jSchema.md`（§隐性坑与注意事项 / §对账要点）

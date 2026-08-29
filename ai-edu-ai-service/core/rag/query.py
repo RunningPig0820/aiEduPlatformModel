@@ -37,6 +37,7 @@ DATA_FULL = os.path.join(DATA_DIR, "rag_slices_full.jsonl")  # ai-tutoring 全�
 MODULE_DATA = {
     "ai-tutoring": ("rag_slices.jsonl", "rag_slices_full.jsonl"),
     "question-analysis": ("rag_slices-question-analysis.jsonl", "rag_slices_full-question-analysis.jsonl"),
+    "knowledge-graph": ("rag_slices-knowledge-graph.jsonl", "rag_slices_full-knowledge-graph.jsonl"),
 }
 
 # 检索参数

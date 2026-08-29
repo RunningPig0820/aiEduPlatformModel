@@ -48,6 +48,8 @@ MODULE_DATA = {
     "ai-tutoring": {"full": "rag_slices_full.jsonl", "slice": "rag_slices.jsonl"},
     "question-analysis": {"full": "rag_slices_full-question-analysis.jsonl",
                           "slice": "rag_slices-question-analysis.jsonl"},
+    "knowledge-graph": {"full": "rag_slices_full-knowledge-graph.jsonl",
+                        "slice": "rag_slices-knowledge-graph.jsonl"},
 }
 BATCH_PUT = 20        # put_vectors 单批条数(服务端上限约束)
 BATCH_DELETE = 100    # delete_vectors 单批条数

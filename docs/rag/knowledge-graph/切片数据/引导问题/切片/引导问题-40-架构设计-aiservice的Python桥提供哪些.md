@@ -12,7 +12,7 @@
 - **api/kg.py 业务查询**（prefix /api/kg）：实为 10 个路由——`/entities`（按 label 搜索实体）、`/entity/{uri}`（详情）、`/link`（文本实体识别）、`/subject/{subject}/tree`（知识树）、`/classes`（学科分类）、`/student/{id}/progress` GET/POST、`/statistics`（进度统计）、`/recommend`（知识点推荐）、`/learning-path`（学习路径）。方案总揽称"八端点"少算（实 10 路由含 progress 两态）。（依据：分析-01 / 完善文档 03）
 - **api/neo4j.py 通用 CRUD**（prefix /api/neo4j）：12 个路由全部走 `x-internal-token` 鉴权（verify_internal_token 比对 settings.INTERNAL_TOKEN，不符 401）——`/health`、`/stats`、`/nodes/{label}` 建/查/改/删/批量/搜索/计数、`/relationships` 建/查、`/query` 裸 Cypher（read_only 默认 true 但调用方可关）。Java 经此桥调 Neo4j。（依据：分析-01 / 完善文档 03）
 - **分工原则**：业务查询（api/kg.py）面向前端/答疑，通用 CRUD（api/neo4j.py）面向 Java 做任意操作；通用层用 token 保护并暴露裸查询，方便 Java 侧扩展但风险自担。（依据：分析-01 / 完善文档 03）
-- **⚠️ 简化桩**：`get_knowledge_tree`/`get_learning_path`/`get_recommendations` 是简化实现——知识树取该学科前 100 实体平铺两层、学习路径只返回目标实体自身、推荐只看一跳邻居；页面化真层级走 Java 同步 MySQL 侧，别从 Python 桥期待完整图谱能力。（依据：分析-01 / 完善文档 03）
+- **简化桩**：`get_knowledge_tree`/`get_learning_path`/`get_recommendations` 是简化实现——知识树取该学科前 100 实体平铺两层、学习路径只返回目标实体自身、推荐只看一跳邻居；页面化真层级走 Java 同步 MySQL 侧，别从 Python 桥期待完整图谱能力。（依据：分析-01 / 完善文档 03）
 - **接口坑**：`/api/neo4j` 默认 `id_property="id"`，但 edukg 节点主键是 `uri`，Java 调用需显式传 `id_property=uri` 否则查不到。（依据：分析-01）
 
 ## 追问防御
