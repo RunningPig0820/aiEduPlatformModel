@@ -8,10 +8,10 @@
 
 ## 文档说明
 > 本文件为原始spec文档的RAG结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### Context：项目背景
-> 状态：✅
+> 状态：
 > 检索摘要：数学学科核心数据已导入Neo4j：EduKG数据、教材数据、关系（RELATED_TO等）均完成初始化，知识图谱数据处理项目进入知识点补全阶段。
 
 知识图谱数据处理项目已完成数学学科的核心数据导入：
@@ -21,7 +21,7 @@
 - 教材数据生成（Textbook 21, Chapter 138, Section 549, TextbookKP 299）
 
 ### Context：当前问题
-> 状态：✅
+> 状态：
 > 检索摘要：小学3-6年级与高中必修知识点数据全空，且教材知识点与EduKG知识图谱割裂，名称精确匹配率仅6%（24/346）。
 
 **1. 教学知识点数据不完整**：
@@ -51,7 +51,7 @@
 - 精确匹配率仅 6% (24/346)
 
 ### Context：设计约束
-> 状态：⚠️
+> 状态：
 > 检索摘要：本阶段不直接导入Neo4j，输出JSON由人工验证后手动导入；核心代码进edukg/core，复用双模型推理并全链路支持llmTaskLock断点续传。
 
 1. **输出 JSON 文件**：不直接导入 Neo4j，由人工验证后手动导入
@@ -60,7 +60,7 @@
 4. **所有 LLM 任务支持断点续传**：使用 llmTaskLock 模块
 
 ### Goals / Non-Goals
-> 状态：⚠️
+> 状态：
 > 检索摘要：目标：解析教材JSON、LLM推断补全缺失知识点、双模型匹配到EduKG Concept并输出关系；非目标：不直接导入Neo4j、不处理其他学科、不实现前置关系推断。
 
 **Goals:**
@@ -80,7 +80,7 @@
 6. 不实现多版本教材对比（未来迭代）
 
 ### D1：目录结构设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：目录结构设计：核心代码放edukg/core/textbook与edukg/core/llm_inference，scripts仅做命令行入口，LLM推断复用dual_model_voter与textbook_kp_inferer。
 
 **核心代码放入 `edukg/core/textbook/`**：
@@ -118,7 +118,7 @@ edukg/scripts/kg_data/
 ```
 
 ### D2：两阶段流程设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：两阶段流程：第一阶段无LLM的数据生成标准化JSON，第二阶段LLM增强推断知识点并匹配关系，支持断点续传。
 
 **第一阶段：数据生成（无 LLM）**
@@ -132,7 +132,7 @@ edukg/scripts/kg_data/
 - 支持断点续传
 
 ### D3：教学知识点推断设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：小学3-6年级与高中知识点全空，用TextbookKPInferer推断补全，输出knowledge_points、confidence与notes，提供textbook_kg.txt提示词。
 
 **问题**: 小学3-6年级、高中数据源 `knowledge_points` 为空
@@ -177,7 +177,7 @@ result = await inferer.infer_section(
 ```
 
 ### D4.1：知识图谱匹配流程 (MATCHES_KG)
-> 状态：⚠️
+> 状态：
 > 检索摘要：将TextbookKP匹配到EduKG Concept创建MATCHES_KG关系，用DualModelVoter投票，阈值≥0.9匹配、0.7-0.9候选。
 
 **目标**: 将 TextbookKP 匹配到 EduKG Concept
@@ -209,7 +209,7 @@ if result['consensus'] and result['result']['is_match']:
 - < 0.7：不匹配
 
 ### D4.2：粗筛机制设计（采纳 DeepSeek 建议）
-> 状态：⚠️
+> 状态：
 > 检索摘要：原方案遍历5000+图谱知识点致LLM调用量爆炸，改为两阶段：教材知识点先粗筛top-20候选再LLM投票，对比difflib与向量检索方案。
 
 **问题**: 原方案遍历所有图谱知识点（5000+），LLM调用量爆炸
@@ -228,7 +228,7 @@ if result['consensus'] and result['result']['is_match']:
 | **向量检索** (新方案) | Embedding语义匹配 | 自动理解同义词、语义强 | 需安装依赖 |
 
 ### D4.3：向量检索方案（推荐采用）
-> 状态：⚠️
+> 状态：
 > 检索摘要：推荐用BAAI/bge-small-zh-v1.5做Embedding语义检索，numpy暴力搜索top-20候选，内存约3.5GB，预计匹配准确率提升10-20%。
 
 **核心思想**: 将知识点转换为语义向量，通过余弦相似度找到语义最接近的候选
@@ -278,7 +278,7 @@ class LocalVectorRetriever:
 | 总体匹配准确率 | 基准 | **预计提升 10-20%** |
 
 ### D4.4：精确匹配增强
-> 状态：⚠️
+> 状态：
 > 检索摘要：精确匹配增强：名称标准化处理（去空格统一括号）加同义词映射SYNONYM_MAP，完整词匹配防止过度匹配。
 
 **标准化处理**:
@@ -301,14 +301,14 @@ SYNONYM_MAP = {
 ```
 
 ### D4.5：异常处理和输出完整性
-> 状态：⚠️
+> 状态：
 > 检索摘要：异常处理：LLM调用失败时continue不中断整个知识点，输出所有教材知识点（含未匹配）并增加matched字段。
 
 - LLM 调用失败时 `continue`，不中断整个知识点
 - 输出所有教材知识点（含未匹配），增加 `matched` 字段
 
 ### D5：断点续传设计（集成 llmTaskLock）
-> 状态：⚠️
+> 状态：
 > 检索摘要：所有LLM任务支持断点续传，集成llmTaskLock的TaskState/CachedLLM/ProcessLock，匹配与推断分别用进度文件和锁文件，数据生成与精确匹配不需要。
 
 **决策**: 所有 LLM 任务必须支持断点续传
@@ -373,7 +373,7 @@ class KPMatcher:
 ```
 
 ### D6：输出文件结构
-> 状态：⚠️
+> 状态：
 > 检索摘要：输出文件结构：edukg/data/edukg/math/5_教材目录/output/下输出节点、关系、进度文件等JSON，供人工验证后导入。
 
 ```
@@ -393,7 +393,7 @@ edukg/data/edukg/math/5_教材目录/output/
 ```
 
 ### D7：数据模型设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：数据模型：Textbook/Chapter/Section/TextbookKP节点与CONTAINS、IN_UNIT、MATCHES_KG关系，URI与id设唯一约束。
 
 **节点设计**：
@@ -414,7 +414,7 @@ edukg/data/edukg/math/5_教材目录/output/
 | **MATCHES_KG** | TextbookKP → Concept | 匹配图谱 | LLM 推断 |
 
 ### D8：URI 命名规范 (v3.1)
-> 状态：⚠️
+> 状态：
 > 检索摘要：URI命名规范v3.1：http://edukg.org/knowledge/3.1/{type}/math#{id}，Textbook/Chapter/Section/TextbookKP按层级编码。
 
 ```
@@ -429,7 +429,7 @@ http://edukg.org/knowledge/3.1/{type}/math#{id}
 | TextbookKP | `textbook-{stage}-{seq:05d}` | `textbook-primary-00001` |
 
 ### D9：知识点过滤规则
-> 状态：⚠️
+> 状态：
 > 检索摘要：知识点过滤规则：用非知识点标记、前缀与正则过滤"数学活动""例1"等，防止把非知识点当知识点导入。
 
 ```python
@@ -454,7 +454,7 @@ NON_KNOWLEDGE_POINT_PATTERNS = [
 ```
 
 ### D10：数据清洗设计（清理冗余标签）
-> 状态：⚠️
+> 状态：
 > 检索摘要：数据清洗：DataCleaner清理"（通用）"冗余标签与Section序号前缀、末尾冒号，先检测候选重复数据再人工确认。
 
 **问题**: 部分章节带有"（通用）"字样，部分 Section 带有序号前缀和不规范标点
@@ -498,7 +498,7 @@ class DataCleaner:
 ```
 
 ### D11：知识点属性扩展设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：知识点属性扩展：规则匹配推断difficulty、importance、cognitive_level、topic四属性，优先规则减少LLM调用成本，含人工审核点。
 
 **目标**: 为 TextbookKP 增加教学属性，支持精准教学应用
@@ -606,7 +606,7 @@ class KPAttributeInferer:
 4. 认知层次映射是否符合教学实际
 
 ### D12：单元/专题层级设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：教材缺少中间"单元"概念，对比新增Unit节点/Chapter加topic/Section加unit_id三方案，建议方案B（Chapter.topic字段）。
 
 **背景**: 教材的"章"过大、"节"过细，缺少中间的"单元"概念
@@ -651,7 +651,7 @@ class ChapterEnhancer:
 ```
 
 ### D13：多版本教材支持设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：多版本教材支持：URI从隐含版本扩展为{edition}-{grade}{semester}支持北师大/苏教版，数据模型加version_code，当前阶段不实现。
 
 **未来扩展**: 支持北师大版、苏教版等多版本教材
@@ -677,57 +677,57 @@ class ChapterEnhancer:
 **当前阶段**: 不实现，记录在 Non-Goals
 
 ### R1：知识点匹配率低
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：LLM匹配可能不准确导致知识点匹配率低，缓解用双模型投票+置信度阈值+候选关系保留。
 
 **风险**: LLM 匹配可能不准确
 **缓解**: 双模型投票 + 置信度阈值 + 候选关系保留
 
 ### R2：教学知识点推断质量
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：LLM推断的教学知识点可能不准确，缓解用教研员角色提示词+保留置信度+人工验证。
 
 **风险**: LLM 推断的知识点可能不准确
 **缓解**: 使用教研员角色提示词 + 保留置信度 + 人工验证
 
 ### R3：手动导入验证成本
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：人工验证JSON数据需要时间，缓解输出详细统计摘要+提供Cypher模板+分批验证导入。
 
 **风险**: 人工验证 JSON 数据需要时间
 **缓解**: 输出详细统计摘要 + 提供 Cypher 模板 + 分批验证导入
 
 ### R4：推理依赖
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：依赖kg-math-prerequisite-inference的推理机制，缓解该模块需要先完成。
 
 **风险**: 依赖 kg-math-prerequisite-inference 的推理机制
 **缓解**: kg-math-prerequisite-inference 需要先完成
 
 ### R5："通用"标签处理复杂度
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：清理"通用"标签可能误删有效数据，缓解先检测列出候选重复数据人工确认后再处理。
 
 **风险**: 清理"通用"标签可能误删有效数据
 **缓解**: 先检测并列出候选重复数据，人工确认后再处理
 
 ### R6：知识点属性推断一致性
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：不同章节推断的difficulty/importance可能不一致，缓解使用统一标准+建立属性校验规则。
 
 **风险**: 不同章节推断的 difficulty/importance 可能不一致
 **缓解**: 使用统一标准 + 建立属性校验规则
 
 ### Migration Plan 迁移计划
-> 状态：⚠️
+> 状态：
 > 检索摘要：迁移计划：数据生成已完成，知识点推断/图谱匹配/数据清洗/属性扩展/人工导入待执行，各阶段用--resume续传。
 
 **执行步骤**：
 
 1. **数据生成（已完成）**：
-   - ✅ 运行 `generate_textbook_data.py`
-   - ✅ 输出 textbooks.json, chapters.json, sections.json, textbook_kps.json
-   - ✅ 输出 contains_relations.json, in_unit_relations.json
+   - 运行 `generate_textbook_data.py`
+   - 输出 textbooks.json, chapters.json, sections.json, textbook_kps.json
+   - 输出 contains_relations.json, in_unit_relations.json
 
 2. **教学知识点推断（待执行）**：
    - 运行 `infer_textbook_kp.py --resume`
@@ -754,7 +754,7 @@ class ChapterEnhancer:
    - 验证导入结果
 
 ### Open Questions 开放问题
-> 状态：❓
+> 状态：
 > 检索摘要：仍有推断准确率评估、未匹配TextbookKP处理、"通用"标签去留、单元层级方案选择等开放问题待拍板决策。
 
 1. **Q1**: 教学知识点推断的准确率如何评估？

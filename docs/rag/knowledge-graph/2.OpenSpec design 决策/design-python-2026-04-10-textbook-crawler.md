@@ -8,10 +8,10 @@
 
 ## 文档说明
 > 本文件为原始spec文档的RAG结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### Context：小学初中教材标注缺失与数据来源
-> 状态：✅
+> 状态：
 > 检索摘要：EDUKG 知识图谱 main.ttl 仅有高中教材标注 28,438 条，小学初中缺失，教师之家网站提供人教版数学教材完整目录，入口为 renjiaoshe.com/renjiaoshuxue/。
 
 EDUKG 知识图谱的 main.ttl 只包含高中教材标注数据（28,438条），小学初中教材标注缺失。教师之家网站提供了完整的人教版教材目录，包含：
@@ -24,7 +24,7 @@ EDUKG 知识图谱的 main.ttl 只包含高中教材标注数据（28,438条）�
 **入口页面**: `https://www.renjiaoshe.com/renjiaoshuxue/` 包含小学、初中、高中三个学段的教材目录链接。
 
 ### Goals / Non-Goals
-> 状态：⚠️
+> 状态：
 > 检索摘要：目标是爬取教师之家人教版数学教材目录，解析章节与知识点并生成兼容 main.ttl 的 TTL 及 JSON；不爬课件教案、不建前置关系。
 
 **Goals:**
@@ -40,7 +40,7 @@ EDUKG 知识图谱的 main.ttl 只包含高中教材标注数据（28,438条）�
 - 不建立知识点前置关系（仅目录结构）
 
 ### 1. 爬虫文件位置
-> 状态：⚠️
+> 状态：
 > 检索摘要：爬虫脚本放 edukg/scripts/textbook_data/ 目录，renjiaoshe_math_crawler.py 明确标明人教版数学，与项目结构保持一致。
 
 **决定**: 爬虫脚本放在 `edukg/scripts/textbook_data/` 目录下，明确标明是人教版数学
@@ -62,7 +62,7 @@ edukg/
 - 文件名 `renjiaoshe_math_crawler.py` 明确标明是人教版数学
 
 ### 2. 数据保存位置
-> 状态：⚠️
+> 状态：
 > 检索摘要：教材数据存 edukg/data/textbook/，按 学科-教材-学段-年级 四级目录组织，便于精确查询与扩展其他版本。
 
 **决定**: 数据保存在 `edukg/data/textbook/` 目录下，按照 **学科-教材-学段-年级** 层级结构组织
@@ -118,7 +118,7 @@ edukg/data/
 - 与现有 `edukg/data/edukg/` 目录风格一致
 
 ### 3. 数据格式
-> 状态：⚠️
+> 状态：
 > 检索摘要：同时输出 JSON（人工验证）与 TTL（与 main.ttl 兼容、可用 n10s 导入 Neo4j）两种格式。
 
 **决定**: 同时输出 JSON 和 TTL 两种格式
@@ -172,7 +172,7 @@ edukg/data/
 - 可直接使用 n10s 导入 Neo4j
 
 ### 4. 爬虫技术选型
-> 状态：⚠️
+> 状态：
 > 检索摘要：爬虫技术选 Python + requests + BeautifulSoup4，教师之家是静态页面无需 JS 渲染，与现有技术栈一致。
 
 **决定**: 使用 Python + requests + BeautifulSoup4
@@ -183,7 +183,7 @@ edukg/data/
 - 与现有项目技术栈一致
 
 ### 5. URL 发现策略
-> 状态：⚠️
+> 状态：
 > 检索摘要：从入口页面解析教材目录链接分层爬取：学段区块 → 教材链接 → 章节目录 → 知识点，动态适应网站结构。
 
 **决定**: 从入口页面解析教材目录链接，分层爬取
@@ -209,7 +209,7 @@ https://www.renjiaoshe.com/renjiaoshuxue/
 - 可同时支持小学、初中、高中三个学段
 
 ### 6. 数据模型
-> 状态：⚠️
+> 状态：
 > 检索摘要：数据模型沿用 build_textbook_data.py 定义结构，含 subject/stage/grade/chapters/sections/knowledge_points 字段。
 
 **决定**: 沿用 build_textbook_data.py 定义的数据结构
@@ -240,7 +240,7 @@ https://www.renjiaoshe.com/renjiaoshuxue/
 ```
 
 ### Risks / Trade-offs
-> 状态：⚠️
+> 状态：
 > 检索摘要：爬虫风险涵盖网站结构变化、爬取频率过高被封、知识点命名不一致、页面解析失败，各有容错与断点续爬缓解。
 
 | 风险 | 缓解措施 |

@@ -1,39 +1,41 @@
 # 切片数据 / OpenSpec
 
 > 来源：`2.OpenSpec design 决策/design-*.md`（历史设计素材层，doc_type=design_spec，权威 **0.7**）
-> 切片方式：**提示词 + 大模型按 ### 切**（脚本导出方案已废弃，2026-08-27 与 代码/坑档案/引导问题/语雀 对齐）。
+> 切片方式：**提示词 + 大模型按业务主题合并**（`业务主题清单.md` 17 主题，一块 = 一个业务问题的完整答案；2026-08-29 用户口径：按业务匹配、非按文档结构 ### 硬切）。
 
 ## 一、源头（语料就绪，2026-08-27 已全部成文）
 
 - 源文档：`2.OpenSpec design 决策/design-*.md`（**12 份 RAG 结构化重构版已完成**，由 `spec文件整理.md` 产出）
 - 生成提示词：`2.OpenSpec design 决策/处理方案/提示词/spec文件整理.md`（每份 design 各自成文，权威 0.7 素材溯源库，100% 保留 Migration/Risks/OpenQuestions）
-- 前提：design-*.md 已按 ### 小节结构化（每个决策/背景/目标/风险/迁移/开放各一小节，**每块已带 状态+检索摘要**）
+- 前提：design-*.md 已按 ### 小节结构化（每个决策/背景/目标/风险/迁移/开放各一小节），重切按业务主题归并（D#/### 作正文保留，不作文件名）
 - 原始稿归档：`原来的文件/design-*.md`（证据源，不进池）；13 份低价值 proposal + review-system design 已删除（2026-08-27）
 
-## 二、切片（提示词 + 大模型按 ### 切）
+## 二、切片（提示词 + 大模型按业务主题合并）
 
-- 粒度：一个决策/背景/目标/风险/迁移/开放问题各一小节一块；决策编号**归一化** `Decision #/决策 # → D{#}`
-- 保真：决策正文/属性表/表格/流程图文本/代码块原样保留，**特别完整保留 风险与权衡/迁移计划/开放问题**；只删 文档说明
-- **不写状态，检索摘要必须有**：每块正文必须带 `> 检索摘要：`（源小节检索摘要原样完整；缺失补写 1-2 句富含核心实体与动作）——素材层未落地/待决语义由 `authority=0.7 + source=OpenSpec` 层规则兜底
-- 头部精简 5 行（summary/权威度 0.7/模块/COS路径/类别），机器元信息（entry_id/source_doc）摄入时推导
+- 粒度：**按业务主题**（`切片数据/业务主题清单.md` 17 主题大纲，按文档实际内容可偏移/新增 18+）；一份源文档只产它覆盖的主题块（不产空块），同主题跨文档不合并（靠源文档前缀区分）
+- 块 = 该主题在文档内所有相关决策/背景/风险/迁移内容合并，**去结构编号头**（D# 作正文保留）
+- **大小约束（2026-08-29）**：每块正文 ≤ 5000 字符（**全文向量化入桶**，embed 输入上限），超长按子块拆 -2/-3，每子块自包含
+- **检索摘要必须有**：每块正文带 `> 检索摘要：`（业务向提问式）——素材层未落地/待决语义由 `authority=0.7 + source=OpenSpec` 层规则兜底
+- 头部精简 5 行（summary 短标题式 `{主题短名}` / 权威度 0.7 / 模块 / COS路径 / 类别），机器元信息（entry_id/source_doc）摄入时推导
+- **禁止 emoji 符号**（✅/⚠️/❓/❌）：状态一律用文字表达（已完成/待决/风险/警告），避免污染向量
 
-## 三、本模块 design 切片清单（12 份,共 242 块,2026-08-28 已全部产出）
+## 三、本模块 design 切片清单（12 份,共 91 块,2026-08-29 按主题重切完成）
 
-| design 文件 | ### 块数 | 备注 |
+| design 文件 | 主题块数 | 覆盖主题 |
 |---|---|---|
-| `design-python-2026-04-10-knowledge-graph-data-research.md` | 54 | 90KB 拆 #### 子块（上半 §一~九 23 + 下半 §9.5~17 31） |
-| `design-python-2026-04-15-kg-math-complete-graph.md` | 29 | 匹配阈值/URI v3.1 |
-| `design-backend-kp-matching-lightup.md` | 28 | D1~D22 每决策一块 |
-| `design-python-2026-03-28-integrate-edukg-knowledge-graph.md` | 22 | D1~D5 |
-| `design-backend-2026-06-03-knowledge-graph-ui.md` | 20 | 页面化方案 B（D12 拆 12.1~12.5） |
-| `design-python-2026-04-10-textbook-concept-linking.md` | 16 | 教材↔概念匹配 |
-| `design-python-kg-math-prerequisite-inference.md` | 15 | 前置依赖/双模型投票 |
-| `design-frontend-kp-matching-lightup-frontend.md` | 14 | 掌握度主体纠正 |
-| `design-python-2026-04-08-kg-infrastructure-init.md` | 13 | D1~D5 llmTaskLock |
-| `design-frontend-2026-06-09-knowledge-graph-ui-front.md` | 13 | React Flow |
-| `design-backend-2026-06-03-knowledge-graph-datasource.md` | 9 | 双数据源 @DS |
-| `design-python-2026-04-10-textbook-crawler.md` | 9 | 爬虫 |
-| **合计** | **242** | 全落 `切片/`（参考值 278，data-research 以实际解析为准 54 块） |
+| `design-python-2026-04-10-knowledge-graph-data-research.md` | 15 | 01/02/03/04(×2)/07(×4)/12(×2)/13/16/18/19 |
+| `design-python-2026-04-15-kg-math-complete-graph.md` | 11 | 01/02/03/04/05/06/08/12/13/15/16 |
+| `design-backend-kp-matching-lightup.md` | 11 | 01/03/06/10/11/13/18/19/20/21/22 |
+| `design-python-2026-03-28-integrate-edukg-knowledge-graph.md` | 9 | 01/02/03/04/11/15/16/18/19 |
+| `design-backend-2026-06-03-knowledge-graph-ui.md` | 8 | 10(×4)/11/13/15/16 |
+| `design-frontend-kp-matching-lightup-frontend.md` | 7 | 10(×4)/13/15/16 |
+| `design-python-2026-04-08-kg-infrastructure-init.md` | 7 | 09/12(×3)/13/15/16 |
+| `design-frontend-2026-06-09-knowledge-graph-ui-front.md` | 4 | 10/11/15/16 |
+| `design-python-kg-math-prerequisite-inference.md` | 4 | 07/05/12/16 |
+| `design-python-2026-04-10-textbook-crawler.md` | 3 | 02/04/13 |
+| `design-python-2026-04-10-textbook-concept-linking.md` | 10 | 01/02/03/04/05/06/09/13/15/16 |
+| `design-backend-2026-06-03-knowledge-graph-datasource.md` | 2 | 10/16 |
+| **合计** | **91** | 全落 `切片/`（新主题 18~22：实体链接/学生进度/技术栈/成本/掌握度翻转/信任模型/维护闭环/迁移/待决） |
 
 ## 四、检索规则（入桶/查询时生效）
 

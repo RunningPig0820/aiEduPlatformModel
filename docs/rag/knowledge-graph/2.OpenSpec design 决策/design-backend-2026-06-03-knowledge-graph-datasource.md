@@ -8,16 +8,16 @@
 
 ## 文档说明
 > 本文件为原始spec文档的RAG结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### Context：单数据源现状与独立库诉求
-> 状态：✅
+> 状态：
 > 检索摘要：Spring Boot 3.2.5 + MyBatis-Plus 3.5.5 当前单数据源 ai_edu_user，知识图谱 EduKG 需独立库 ai_edu_kg 物理隔离，无 JPA 无自定义 DataSource。
 
 当前项目使用 Spring Boot 单数据源配置，所有 MyBatis-Plus Mapper 都连接到一个 MySQL 数据库 `ai_edu_user`。知识图谱（EduKG）需要独立数据库 `ai_edu_kg` 存储，实现物理隔离和独立扩展。项目使用 MyBatis-Plus 3.5.5 + Spring Boot 3.2.5，无 JPA/Hibernate，无自定义 DataSource 配置。
 
 ### Goals / Non-Goals
-> 状态：⚠️
+> 状态：
 > 检索摘要：目标是实现 ai_edu_user 与 ai_edu_kg 双数据源、知识图谱 Mapper 自动路由且业务零侵入；不做跨库 JOIN 与分布式事务。
 
 **Goals:**
@@ -32,7 +32,7 @@
 - 不做动态数据源切换（Mapper 级别固定路由，不需要运行时动态切换）
 
 ### 1. 双数据源方案：dynamic-datasource-spring-boot3-starter
-> 状态：⚠️
+> 状态：
 > 检索摘要：双数据源选用 Baomidou dynamic-datasource-spring-boot3-starter 的 @DS("kg") 注解路由，与 MyBatis-Plus 官方推荐方案一致。
 
 **决策**: 引入 Baomidou 的 `dynamic-datasource-spring-boot3-starter`（4.x 版本），通过 `@DS("kg")` 注解实现数据源路由。
@@ -51,7 +51,7 @@
 - 配置简单，`application.yml` 声明多个数据源即可
 
 ### 2. 数据源路由策略：Mapper 包路径隔离
-> 状态：⚠️
+> 状态：
 > 检索摘要：数据源路由按 Mapper 包路径隔离：persistence.mapper 默认 user 库，edukg.mapper 加 @DS("kg") 注解。
 
 **决策**: 通过包路径区分数据源：
@@ -72,7 +72,7 @@ public interface KgTextbookMapper extends BaseMapper<KgTextbook> { ... }
 ```
 
 ### 3. 事务管理：按数据源隔离
-> 状态：⚠️
+> 状态：
 > 检索摘要：事务按数据源隔离：@Transactional 默认绑定 user 库，知识图谱 Service 用 @Transactional("kg") 显式指定。
 
 **决策**: `@Transactional` 默认绑定到 `user` 数据源。知识图谱的 Service 方法使用 `@Transactional("kg")` 指定数据源。跨库操作不使用分布式事务，通过应用层保证一致性。
@@ -89,7 +89,7 @@ public class KgSyncAppService {
 ```
 
 ### 4. application.yml 配置结构
-> 状态：⚠️
+> 状态：
 > 检索摘要：application.yml 用 dynamic 多数据源配置声明 user 与 kg 两个数据源，primary=user 且 strict 严格模式开启。
 
 ```yaml
@@ -115,7 +115,7 @@ spring:
 ```
 
 ### 5. Mapper 扫描路径拆分
-> 状态：⚠️
+> 状态：
 > 检索摘要：@MapperScan 拆分为两个 basePackages，edukg.mapper 路径指定 annotationClass 为 DS 注解。
 
 **决策**: `@MapperScan` 拆分为两个：
@@ -127,7 +127,7 @@ public class AiEduPlatformApplication { ... }
 ```
 
 ### 6. Flyway 迁移脚本按库分组
-> 状态：⚠️
+> 状态：
 > 检索摘要：Flyway 迁移脚本按库分组 db/migration/user 与 kg，知识图谱用自定义 Bean 创建第二个 Flyway 实例。
 
 **决策**: 迁移脚本目录结构：
@@ -156,7 +156,7 @@ spring:
 由于 Spring Boot 仅支持一个原生 Flyway Bean，知识图谱的 Flyway 通过自定义配置类创建第二个 Bean。
 
 ### Risks / Trade-offs
-> 状态：⚠️
+> 状态：
 > 检索摘要：双数据源风险涵盖第三方库稳定性、跨库一致性、Mapper 注解遗漏、连接池翻倍、事务漏绑数据源，各有缓解措施。
 
 | 风险 | 缓解措施 |

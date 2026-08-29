@@ -8,10 +8,10 @@
 
 ## 文档说明
 > 本文件为原始spec文档的RAG结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### Context：数据现状与决策方向
-> 状态：⚠️
+> 状态：
 > 检索摘要：知识图谱数据存远程Neo4j，Java后端无集成、前端无SPA；决策采用方案B：Neo4j知识点同步到MySQL，前端SPA读MySQL，先做数学学科人教版。
 
 知识图谱数据已存储在远程 Neo4j，包含人教版 K-12 数学教材的完整结构。当前 Java 后端无 Neo4j 集成代码。前端为独立部署（尚无 SPA 项目）。
@@ -23,7 +23,7 @@
 **前端职责**：后端负责 API 设计和接口实现，前端页面由前端同学根据 API 文档开发。
 
 ### Goals / Non-Goals
-> 状态：⚠️
+> 状态：
 > 检索摘要：目标：一键同步Neo4j教材节点到MySQL、6级知识点导航、年级知识体系API、详情返回2层父级、下拉选择器；非目标：不做前端页面、不做Neo4j实时查询。
 
 **Goals:**
@@ -44,7 +44,7 @@
 - 当前不实现权限控制（后续组织结构/权限模块补充）
 
 ### D1：数据方案：Neo4j → MySQL 同步 + Neo4j 关系查询
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：MySQL存核心节点属性与层级关系，图谱关系（MATCHES_KG/PART_OF等）不同步、后续直接查Neo4j；给出t_kg_textbook等主表与层级关系表SQL设计。
 
 **决策**: MySQL 存储核心节点属性和层级关系（用于导航和进度统计），图谱关系（MATCHES_KG/PART_OF/RELATED_TO 等）不同步到 MySQL，后续通过 Neo4j 直接查询。
@@ -159,7 +159,7 @@ CREATE TABLE t_kg_sync_record (
 ```
 
 ### D2：同步策略：按需触发 + UPSERT + 状态机
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：手动按需触发同步（非CDC），按URI UPSERT，整个同步在单事务内保证原子性；状态机active/deleted/merged，查询过滤deleted但进度查询例外。
 
 **决策**: 同步为**手动按需触发**（非实时监听/CDC），同步粒度为教材-学科-年级维度。采用 UPSERT 策略（按 URI 判断），同步节点属性和层级关系。图谱关系（MATCHES_KG/PART_OF/RELATED_TO 等）**不同步到 MySQL**，后续通过 Neo4j 直接查询。
@@ -209,13 +209,13 @@ CREATE TABLE t_kg_sync_record (
 **查询过滤**: 所有导航/知识体系查询自动加 `WHERE status = 'active'`。**进度查询例外**：学习进度查询需要包含已删除知识点的历史记录，通过 `isDeprecated` 字段标识，前端展示为"已归档"。
 
 ### D3：并发控制：MySQL 同步锁
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：同步接口用MySQL应用层行锁SELECT FOR UPDATE或Redis分布式锁，确保同一时间只有一个同步任务执行。
 
 **决策**: 同步接口使用 MySQL 应用层行锁（`SELECT ... FOR UPDATE` on a sync lock row）或 Redis 分布式锁，确保同一时间只有一个同步任务执行。
 
 ### D4：数据库索引设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：除主键外对grade/subject/phase/topic/status等常用查询字段加索引，层级关联表加排序索引。
 
 **决策**: 除主键外，对常用查询字段添加索引。
@@ -245,7 +245,7 @@ CREATE INDEX idx_kg_sync_status ON t_kg_sync_record(status, started_at);
 ```
 
 ### D5：Neo4j 查询降级与缓存
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：图谱关系查询加Redis缓存TTL 5分钟，Neo4j不可用时返回空关联降级，提供batch-relations与health接口。
 
 **决策**: 图谱关系查询（直接查 Neo4j）在应用层加短期缓存（Redis，TTL 5 分钟），并提供降级机制。
@@ -256,7 +256,7 @@ CREATE INDEX idx_kg_sync_status ON t_kg_sync_record(status, started_at);
 - **健康检查**: `/api/kg/neo4j/health` 接口定期检查 Neo4j 连接状态
 
 ### D6：知识点唯一标识：URI
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：MySQL主表以uri为主键而非自增ID，URI是Neo4j天然唯一标识，同步按URI UPSERT，URI校验格式且永不修改。
 
 **决策**: MySQL 所有主表以 `uri` 作为主键（而非自增 ID）。URI 是 Neo4j 中的天然唯一标识（如 `http://edukg.org/knowledge/3.1/textbook/一年级上册`），同步时直接按 URI UPSERT，下游引用也使用 URI 而非 MySQL 自增 ID。
@@ -267,7 +267,7 @@ CREATE INDEX idx_kg_sync_status ON t_kg_sync_record(status, started_at);
 - URI 生成后永不修改（若需修改走合并流程）
 
 ### D7：Domain 层建模：URI 主键 Entity + 关联表
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：Domain层用JPA Entity，主键为URI（String），Repository用Spring Data JPA+MyBatis-Plus混合，含关联表Entity。
 
 **决策**: 同步后，知识点数据存储在 MySQL 中，Domain 层使用标准的 JPA Entity，主键为 URI（String 类型），Repository 使用 Spring Data JPA + MyBatis-Plus 混合。
@@ -299,7 +299,7 @@ domain/edukg/repository/
 ```
 
 ### D8：分层架构对齐现有模式
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：分层架构对齐现有模式：Domain/Infrastructure/Application/Interface四层，同步与导航分别由KgSyncAppService/KgNavigationAppService负责。
 
 与现有代码保持一致：
@@ -309,7 +309,7 @@ domain/edukg/repository/
 - **Interface**: `KnowledgeGraphController`（`/api/kg/**`）
 
 ### D9：前端对接：API 接口定义 + DTO 结构
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：后端负责API设计与DTO定义，前端同学按API文档开发；知识点详情DTO含2层父级（小节+章节）不过度展示。
 
 **决策**: 后端负责 API 设计和 DTO 定义，前端同学根据 API 文档开发页面。
@@ -332,7 +332,7 @@ public class KgKnowledgePointDetailDTO {
 ```
 
 ### D10：同步下拉选项数据源（枚举 + MySQL 混合）
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：同步对话框下拉用枚举+MySQL混合：学科/学段/教材来自Java枚举，年级从t_kg_textbook DISTINCT grade查询，首次需先全量同步。
 
 **决策**: 同步对话框中的下拉选项数据源采用**枚举 + MySQL 混合**方式：
@@ -394,7 +394,7 @@ public enum KgTextbookEnum {
 - `GET /api/kg/dimensions/textbooks` → 从 `KgTextbookEnum` 枚举读取，按 orderIndex 排序
 
 ### D11：导航树扩展为 6 级
-> 状态：⚠️
+> 状态：
 > 检索摘要：决策：导航树从4级扩为6级（学科→年级→教材→章节→小节→知识点），新增subjects/grades/textbooks接口，数据均来自t_kg_textbook聚合查询。
 
 **决策**: 导航树从原有的 4 级（教材→章节→小节→知识点）扩展为 6 级（学科→年级→教材→章节→小节→知识点）。
@@ -418,7 +418,7 @@ public enum KgTextbookEnum {
 ```
 
 ### D12.1：API 设计 - 同步相关
-> 状态：⚠️
+> 状态：
 > 检索摘要：同步API：POST /api/kg/sync/full触发全量同步（可带subject/phase/grade/textbookUri参数），查询同步状态与历史记录，当前不实现权限控制。
 
 ```
@@ -428,7 +428,7 @@ GET  /api/kg/sync/records           - 同步历史记录
 ```
 
 ### D12.2：API 设计 - 维度配置
-> 状态：⚠️
+> 状态：
 > 检索摘要：维度下拉API：/api/kg/dimensions/subjects|grades|phases|textbooks从枚举与MySQL读取，供前端下拉选择器使用，无需登录。
 
 ```
@@ -439,7 +439,7 @@ GET  /api/kg/dimensions/textbooks   - 获取教材列表（前端下拉用，枚
 ```
 
 ### D12.3：API 设计 - 导航相关
-> 状态：⚠️
+> 状态：
 > 检索摘要：导航API扩展6级：学科/年级/教材列表、教材章节树、小节知识点、知识点详情及图谱关系，支持逐级浏览。
 
 ```
@@ -455,7 +455,7 @@ GET  /api/kg/knowledge-points/{uri}/graph - 获取知识点图谱关系
 ```
 
 ### D12.4：API 设计 - 知识体系
-> 状态：⚠️
+> 状态：
 > 检索摘要：知识体系API：GET /api/kg/system/grade/{grade}获取某年级完整知识体系，stats接口获取年级知识点统计，无需登录。
 
 ```
@@ -464,7 +464,7 @@ GET  /api/kg/system/stats/{grade}    - 获取年级知识点统计
 ```
 
 ### D12.5：API 设计 - 图谱关系查询
-> 状态：⚠️
+> 状态：
 > 检索摘要：图谱关系API直接查Neo4j：概念关联图、批量关联、知识点到概念完整路径与Neo4j健康检查，含Redis缓存。
 
 ```
@@ -475,7 +475,7 @@ GET  /api/kg/neo4j/health            - Neo4j 健康检查
 ```
 
 ### Risks / Trade-offs 风险与权衡
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险与权衡涵盖同步耗时、并发冲突、事务原子性、URI脏数据、Neo4j不可用降级等，均给出缓解措施。
 
 | 风险 | 缓解措施 |
@@ -494,7 +494,7 @@ GET  /api/kg/neo4j/health            - Neo4j 健康检查
 | 首次使用下拉选项为空 | 提示用户先执行全量同步，t_kg_textbook 有数据后下拉选项自动可用 |
 
 ### Open Questions 开放问题
-> 状态：✅
+> 状态：
 > 检索摘要：本文档开放问题已全部确认，无遗留待决策项。
 
 已确认，无遗留问题。

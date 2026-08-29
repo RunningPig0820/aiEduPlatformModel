@@ -8,10 +8,10 @@
 
 ## 文档说明
 > 本文件为原始spec文档的RAG结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### Context
-> 状态：✅
+> 状态：
 > 检索摘要：AI 答疑 decide 已输出自由文本知识点标签但 TutoringKpResolverImpl 精确/LIKE 落不到图谱，权威图谱 Neo4j+kg-sync 镜像只读，掌握度链路断裂。
 
 - **现状**：AI 答疑的 decide 已能输出自由文本知识点标签（`question_kps` / `mastery_signals`），但 `TutoringKpResolverImpl` 只做「精确 → LIKE → 未命中丢弃」，真实题型（鸡兔同笼）大量落不到图谱，掌握度链路断裂。
@@ -20,7 +20,7 @@
 - **关键约束**：权威图谱（Neo4j + kg-sync 镜像）**零写入**。题型空间无限、图谱节点有限，无限业务数据必须与有限权威结构分存。
 
 ### Goals / Non-Goals
-> 状态：⚠️
+> 状态：
 > 检索摘要：目标让 AI 题型可靠解析到教材知识点 URI、沉淀知识点题型库、掌握度主体翻转并派生层全自动维护闭环；不做 embedding 语义聚类与掌握度自动迁移。
 
 **Goals:**
@@ -37,7 +37,7 @@
 - 本期不删除/迁移旧 KP 掌握度表 `t_student_kp_mastery`（并行过渡，见 Decisions §20）。
 
 ### 模块归属（DDD 域定位）
-> 状态：⚠️
+> 状态：
 > 检索摘要：方案业务落在 learning 域，派生 3 表+掌握度落 ai_edu_learning，解析管线在 infrastructure/ai/tutoring 集成层，权威图谱 Neo4j 归 edukg 域只读。
 
 方案核心业务落在 **learning 域**；答疑入口与权威图谱边界如下：
@@ -58,7 +58,7 @@
 > 注：`tutoring` 不是 domain 域，答疑 Java 网关在 `infrastructure/ai/tutoring`，属 AI 集成层而非业务域。
 
 ### D1 派生层只存MySQL，权威图谱只读
-> 状态：⚠️
+> 状态：
 > 检索摘要：题型派生层 3 张表全放 ai_edu_learning，Neo4j 与 kg-sync 镜像只读，以 kp_uri 为钩子借权威结构，拒绝派生节点物化进 Neo4j。
 
 **决策**：题型派生层 3 张表全部放 `ai_edu_learning`，Neo4j 与 kg-sync 镜像只读。
@@ -68,7 +68,7 @@
 **替代方案**：派生节点物化进 Neo4j 扩展命名空间（`ExtAlias` + `ALIAS_OF` 边）。**拒绝**：现阶段无图遍历需求（MySQL 键值够用），且增加权威图耦合；留待阶段 2 需图遍历时再评估。
 
 ### D2 解析管线：年级锚 + 镜像 + 题型库先验 + LLM 消歧 + 挂起
-> 状态：⚠️
+> 状态：
 > 检索摘要：TutoringKpResolverImpl 重写为五步解析管线：镜像精确/LIKE→题型库年级匹配→LLM 消歧→学生澄清→挂起，年级是强先验非硬规则。
 
 **决策**：`TutoringKpResolverImpl` 重写为管线，命中顺序：
@@ -88,7 +88,7 @@
 **候选列表质量**：③ 冷启动消歧的候选生成见 Decision 21（LLM 生成候选名 + 镜像校验）；题型库已有先验时优先走②年级匹配，LLM 只兜底。最终 kp 必经镜像校验（SHALL NOT 凭空生成镜像不存在的 kp）。
 
 ### D3 三张表数据模型
-> 状态：⚠️
+> 状态：
 > 检索摘要：派生层三张表 t_kp_derived_obs（个体观测）/t_kp_question_type（题型库）/t_kp_question_type_kp（题型↔知识点年级分布），obs 按 student+topic+kp 去重计数。
 
 **`t_kp_derived_obs`（个体派生/观测，长期尾·无限）**
@@ -137,7 +137,7 @@
 > 备选：分布存 JSON 列简化表数；**选子表**——便于按 `kp_uri` 查询（消费方/错题/变式题都需要按知识点反向找题型）。
 
 ### D4 聚合阈值（配置化）
-> 状态：⚠️
+> 状态：
 > 检索摘要：题型库聚合阈值进 application.yml：进 CANDIDATE 需去重学生≥3 且总命中≥5，升 STABLE 需审核通过+去重学生≥10 且近 30 天增长。
 
 | 阶段 | 条件 |
@@ -148,7 +148,7 @@
 聚合桶按 `topic_label`（分布子表再按 kp 拆）。阈值进 `application.yml`（`ai-edu.kp.aggregation.*`）。
 
 ### D5 自动维护闭环（保守）
-> 状态：⚠️
+> 状态：
 > 检索摘要：周期任务扫描 CONFLICTED/低置信/分布异常行，用年级锚+题型库先验+LLM 重判，变化回流传先验，仍歧义进 HUMAN_REVIEW 人工队列。
 
 周期任务（`@Scheduled`，如每日）：
@@ -169,7 +169,7 @@
 **保守原则**：只有高置信重判才自动改；LLM 也摇摆、无年级锚的进人工。一次修正回流先验 → 全体学生受益（"共享维护"）。
 
 ### D6 点亮 + 疑似态
-> 状态：⚠️
+> 状态：
 > 检索摘要：掌握度显示=掌握值×置信档位两维，解析低置信/挂起渲染疑似态（虚线+待确认角标），错解析回退打标 MIGRATED 挂人工复核不自动删。
 
 **决策**：掌握度显示 = 掌握值 × 置信档位两维。
@@ -189,7 +189,7 @@
 **掌握度回退（错解析）**：重判把 二元一次方程组→假设法 后，错记在旧 kp 上的掌握度**打标 `MIGRATED` + 挂人工复核**，不自动删（自动删可能丢真实信号）。本期只打标 + 记录迁移日志，自动迁移列为后续。
 
 ### D7 学生端图谱页
-> 状态：⚠️
+> 状态：
 > 检索摘要：复用 KnowledgeGraph.jsx 新增学生端图谱页，mastery.kpKey==node.id 按档位着色，疑似节点从 obs PENDING 列表渲染虚线+角标。
 
 - 复用 `KnowledgeGraph.jsx` 组件，新增学生路由 + 页面（当前学生端无图谱页，仅 admin 有）。
@@ -197,7 +197,7 @@
 - 匹配：`mastery.kpKey == node.id` → 按档位着色。疑似节点从 obs PENDING 列表渲染虚线 + 角标。
 
 ### D8 信任模型：LLM 主裁判 + 学生意图信号 + 人工边界仲裁
-> 状态：⚠️
+> 状态：
 > 检索摘要：派生层最终裁判按各自擅长分工：LLM 规模化主裁判、学生意图信号源、人工仅边界仲裁；LLM 判断须被客观信号校准防自证循环。
 
 **决策**：派生层需要持续维护，但"谁是最终裁判"不能单一押注 LLM / 人工 / 学生任一方。三者各有不可替代的位置，按"各做其最擅长的事"分工：
@@ -217,7 +217,7 @@
 **票权重**（歧义时的优先级）：LLM 高置信（≥阈值）→ 直接 RESOLVED，学生票不覆盖；LLM 低置信/摇摆 → 问学生，学生票优先于 LLM 低置信（问的是主观意图，学生天然权威）；学生票 confidence 中等（默认 60），不视为 100 确定，仍需 ≥3 人去重一致才进候选。
 
 ### D9 冷启动弱化：首条 LLM 消歧不直接点亮
-> 状态：⚠️
+> 状态：
 > 检索摘要：题型库无先验时 LLM 消歧首条标 WEAK 不直接点亮，需第二独立信号（做题结果佐证/他人共现/投票达标）才转 RESOLVED，防高置信幻觉结晶。
 
 **决策**：题型库无先验支撑时（冷启动首条），LLM 消歧结果 SHALL 标记 `status=WEAK`（弱确定），**不直接点亮**、不直接进题型库先验；满足任一"第二独立信号"才转 RESOLVED：
@@ -229,7 +229,7 @@
 **理由**：冷启动种子 100% 依赖 LLM，是最不可靠的一环。让"确定性"来自「重复 + 客观结果」而非 LLM 一句话，防止高置信幻觉直接结晶。
 
 ### D10 客观结果后验 + 多模型交叉
-> 状态：⚠️
+> 状态：
 > 检索摘要：关联对错的最终判据=能否解释学生做题结果，重判纳入做题结果作校准输入；冷启动消歧支持多模型/多温度交叉打断偏见自证。
 
 **决策**：关联"对"的最终客观判据 = 它能否解释学生的做题结果。维护重判 SHALL 纳入该生做题结果（对/错 + 用哪个知识点解）：若 obs 归到假设法、该生却用二元一次方程组解对了同类题 → 关联可疑，触发 CONFLICTED 重判。做题结果是独立于 LLM 的客观信号，作为 LLM 重判的校准输入。
@@ -237,7 +237,7 @@
 **多模型交叉**：冷启动消歧与维护重判 SHALL 支持多模型/多温度交叉（默认主模型 + 1 交叉模型投票），打断"同一偏见自证"；交叉结果不一致 → 置信度下调，走学生澄清或转人工。
 
 ### D11 在线 vs 离线边界：大数据逻辑单独隔离
-> 状态：⚠️
+> 状态：
 > 检索摘要：派生层逻辑按在线（解析管线/掌握度点亮）与离线（obs→题型库聚合/维护重判）拆分，离线逻辑进 batch 包标注大数据归宿，当前 @Scheduled 过渡。
 
 **决策**：派生层逻辑按「实时在线」与「离线批处理」拆分：
@@ -252,7 +252,7 @@
 **理由**：聚合/维护本质是离线批处理（不要求实时、obs 无限长尾），理想归宿是大数据平台；当前项目纯 Java DDD 后端未接大数据，故先以 @Scheduled 过渡。数据表（obs/题型库）为中性结构，大数据可直接读写，未来迁移只需替换 batch 包，在线解析管线②与数据表不变。
 
 ### D12 学生端疑似接口 + obs 接入答疑主流程
-> 状态：⚠️
+> 状态：
 > 检索摘要：新增 GET /api/students/{id}/pending-kps 返回该生 PENDING/WEAK 观测；applyMasteryAndErrors 升级调用 resolve 使 obs 接入答疑主流程、年级锚生效。
 
 **决策**：补两个前端对接暴露的缺口：
@@ -263,7 +263,7 @@
 **理由**：前端对接暴露两个断层——(a) `getMastery` 硬编码 RESOLVED，学生拿不到自己的疑似点（现有 pending 接口是 ADMIN/TEACHER 专属且返回全体）；(b) 灰度遗留：`resolveLabelToUri` 传 null，obs 派生层未接进答疑主流程，题型库聚合/维护闭环无输入数据。
 
 ### D13 知识点学段/章节归属反查（mastery stage 字段）
-> 状态：⚠️
+> 状态：
 > 检索摘要：MasteryItemDTO 增 stage+章节归属，kp_uri 反查 kp→section→chapter→textbook 链取学段，批量 LEFT JOIN 反查避免 N+1，学段比年级更稳。
 
 **决策**：`MasteryItemDTO` 增加 `stage`（primary/middle/high）+ 可选 `chapterLabel`/`sectionLabel`。反查链路沿用现有 `getKnowledgePointDetail` 的 kp→section→chapter 两级，再延伸一跳 chapter→textbook 取 stage：
@@ -277,7 +277,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：学生掌握点天然跨年级（三年级可问初中内容），"按年级框定范围"的前提不成立；学段是更宽更稳的分组粒度。`stage` 已在 `KgTextbook.stage`（与 `KgStageEnum` code 对齐），零 schema 变更，纯反查。
 
 ### D14 全量知识点分页接口（学生端知识点总览）
-> 状态：⚠️
+> 状态：
 > 检索摘要：新增 POST /api/kg/knowledge-points 按学段分页列教材知识点，Mapper 反向 JOIN 从 textbook 过滤到知识点，供学生端全量知识地图底图。
 
 **决策**：新增 `POST /api/kg/knowledge-points`（body `{stage, page, size}`，对齐现有 kg 接口全 POST body 风格），按学段分页列教材知识点，每项带 `kpUri`/`kpLabel`/`stage`/`chapterLabel`/`sectionLabel`。
@@ -289,7 +289,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：知识点总览是"全量知识地图"底图（1000+ 条），按学段分页避免一次拉全量；`chapterLabel`/`sectionLabel` 供前端"学段→章节→知识点"二次分组。
 
 ### D15 题型库分页 + 关联知识点接口（题型分析）
-> 状态：⚠️
+> 状态：
 > 检索摘要：新增题型库分页 GET /api/kp/question-types 与题型关联知识点接口，kpLabel 从 kg 镜像反查不冗余存 name。
 
 **决策**：新增两个接口：
@@ -299,7 +299,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：题型分析页需"题型库浏览 + 通过题型看关联知识点"。`QuestionType`/`QuestionTypeKp` 目前只有 `kp_uri` 无 name，`kpLabel` 从 kg 镜像反查（不冗余存 name，权威标签唯一来源 kg 镜像）。
 
 ### D16 掌握度主体翻转：题型直接观测，知识点派生
-> 状态：⚠️
+> 状态：
 > 检索摘要：掌握度信号主键从 kp_key(URI) 翻转为 topic_key，新增 t_student_topic_mastery 承接题型信号，知识点覆盖度运行时派生不冗余落库。
 
 **决策**：学生掌握的是**题型**（"鸡兔同笼"）不是**知识点**（"二元一次方程组"）——学会鸡兔同笼 ≠ 掌握二元一次方程组。因此：
@@ -332,7 +332,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：题型是学生的直接认知对象（这道题会不会做），知识点是题型背后的抽象。直接观测题型 + 派生知识点，既符合认知，也避免"把无限题型硬塞到有限知识点上"导致掌握度粒度错位。知识点覆盖度是"读时计算"，不冗余落库，单一事实源仍是题型掌握度 + 题型→kp 映射。
 
 ### D17 topic_key 归一化（题型标识主键）
-> 状态：⚠️
+> 状态：
 > 检索摘要：题型标识用归一化 topic_key 作主键、topic_label 只展示，NFKC 全角半角/空白折叠/去末尾标点，SHALL NOT 剥离「问题」等题型固有后缀。
 
 **决策**：题型标识用归一化后的题型名 `topic_key` 作主键，`topic_label` 只作展示。归一化函数落 domain（`TopicKeyNormalizer`），规则：Unicode NFKC 全角→半角、trim + 空白折叠、去末尾标点（"鸡 兔 同 笼" / 全角写法 / 带标点 → 同一 key）。**SHALL NOT 剥离「问题/题型」等后缀**——「相遇问题/追及问题/工程问题」里的「问题」是题型名固有部分，剥离会丢语义（同义词聚类留大数据阶段）。
@@ -340,7 +340,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：题型空间无限且命名不规整（LLM 随手输出），自由文本直接作主键会导致同题型裂成多行、掌握度分散。归一化收敛到稳定 key，又与 `t_kp_derived_obs.topic_label` / `t_kp_question_type.topic_label` 对齐（题型库晋升后按 `topic_key` 关联）。冷启动首次遇到题型即可落掌握度，无需等题型库聚合——这是选 `topic_key` 而非 `question_type_id` 外键的核心原因（外键会冷启动断裂）。
 
 ### D18 知识点派生覆盖度计算
-> 状态：⚠️
+> 状态：
 > 检索摘要：coverage(kp)=clamp(Σ topic_mastery×ratio,0,75)，ratio 优先题型库分布否则单观测 ratio=1，返回连续 coverage 与离散 masteryLevel 双视图。
 
 **决策**：`coverage(kp) = clamp(Σ_{topic→kp} (topic_mastery × ratio), 0, 75)`。
@@ -352,7 +352,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：覆盖度是"该知识点被学生已掌握题型覆盖的程度"，连续值供详情展示、离散档供图谱着色。封顶 75 与题型四档顶对齐，避免多个题型叠加同一 kp 时溢出成无意义高分（多题型覆盖同 kp 的叠加语义留待大数据阶段细调，本期 clamp 保守）。
 
 ### D19 掌握度接口改造 + 派生覆盖度接口
-> 状态：⚠️
+> 状态：
 > 检索摘要：拆两个接口：GET /api/students/{id}/mastery 返回题型掌握度明细，GET /api/students/{id}/kp-coverage 返回知识点派生覆盖度，归属属性移入覆盖度接口。
 
 **决策**：拆两个接口，对应前端「掌握度」（题型四类明细）与「知识点总览」（派生覆盖度着色）：
@@ -364,7 +364,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：题型掌握度与知识点覆盖度是两个不同粒度视图（一个按题型、一个按知识点），拆开各自清晰。`stage`/`chapterLabel`/`sectionLabel` 从 mastery 移入覆盖度接口（这些是知识点的归属属性，题型无归属语义）；`kpLabel` 反查沿用 kg 镜像（权威标签唯一来源）。
 
 ### D20 迁移策略：并行保留 + 派生覆盖
-> 状态：⚠️
+> 状态：
 > 检索摘要：旧 t_student_kp_mastery 本期保留不动，新增 t_student_topic_mastery 承接新题型信号，覆盖度查询优先题型派生、无映射回退旧表，旧表后续下线。
 
 **决策**：旧 `t_student_kp_mastery`（student_id + kp_key）**本期保留不动**，错题本/既有掌握度查询不受影响；新增 `t_student_topic_mastery` 承接新题型信号。知识点覆盖度查询顺序：**优先题型派生** → 无题型映射的 kp 回退旧 KP 掌握度（过渡期兜底）→ 随题型库覆盖率提升逐步弱化旧表依赖。旧表归档/删除列为后续（需大数据侧 + 覆盖率达标后），本期不删。
@@ -372,7 +372,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：翻转是主键语义变更，一次性迁移破坏面大（错题本、掌握度追踪、历史数据）。并行两表 + 读时派生，可灰度、可回退、不锁旧链路；题型侧数据自然积累到覆盖旧表后，再择机下线旧表。
 
 ### D21 冷启动 LLM 消歧：LLM 生成候选名 + 镜像校验
-> 状态：⚠️
+> 状态：
 > 检索摘要：冷启动候选生成改为 LLM 自由生成 N 个候选知识点名再回镜像 exact/LIKE 校验，题型名与知识点名两套词汇靠 LLM 跨词汇语义桥接。
 
 **决策**：现 `KpLlmDisambiguator` 候选只来自 `findByLabelLikeList(label)`（镜像知识点名 LIKE），题型名（"鸡兔同笼"）在知识点名里 LIKE 不到 → 候选空 → LLM 不被调用 → 冷启动断、题型库长不出来。改为**两段式**：
@@ -391,7 +391,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **冷启动弱化沿 Decision 9**：首条 LLM 消歧标 `WEAK`，第二独立信号（第二名同学共现 / 学生投票达标 / 做题结果佐证）才转 RESOLVED。
 
 ### D22 离线聚合升级：LLM 自动关联题型↔知识点
-> 状态：⚠️
+> 状态：
 > 检索摘要：题型库聚合从纯计数升级为计数+LLM 自动关联题型→kp 分布，LLM 只做提名、第二独立信号才升 STABLE，题型库自我生长。
 
 **决策**：现 `KpQuestionTypeAggregationService` 是纯计数聚合（同名题型命中≥N 建 CANDIDATE），冷启动慢、也无法纠错 LLM 误关联。升级为**计数 + LLM 自动关联**：
@@ -407,7 +407,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 **理由**：题型库要「自我生长」而非初始化灌数据——在线阶段学生/LLM 把题目和知识点关联成 obs，离线阶段 LLM 从 obs 共现里归纳出可靠的题型→知识点映射，题型库逐步补充。这样第 0 天无题型库也能跑，靠 LLM 消歧冷启动 + 离线聚合慢慢长满。
 
 ### Risks / Trade-offs
-> 状态：⚠️
+> 状态：
 > 检索摘要：冷启动依赖 LLM 种子、候选名幻觉、LLM 自证循环、开发者打标脱离解题等风险，分别以镜像校验/WEAK 弱化/客观信号校准/人工边界仲裁缓解。
 
 - [冷启动种子依赖 LLM] → 题型库空时第一次关联只能靠 LLM。缓解：学生澄清意图（可选）+ 单学科（数学）+ label 接地（复用 mastery_snapshot 已知 label）降噪。
@@ -423,7 +423,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 - [维护任务误改] → 保守原则：高置信才自动改，否则 HUMAN_REVIEW。
 
 ### Migration Plan
-> 状态：⚠️
+> 状态：
 > 检索摘要：Flyway 新增 ai_edu_learning 4 表，掌握度翻转/解析管线/学生图谱页/维护闭环灰度上线，维护任务最后上线，停任务+关路由即回滚。
 
 1. Flyway 迁移新增 4 表（`ai_edu_learning`）：`t_kp_derived_obs`、`t_kp_question_type`、`t_kp_question_type_kp`、`t_student_topic_mastery`。
@@ -433,7 +433,7 @@ kp_uri → t_kg_section_kp → t_kg_chapter_section → t_kg_textbook_chapter �
 5. 维护闭环最后上线（依赖 obs/题型库稳定）。回滚：停维护任务 + 关闭学生图谱路由即回退。
 
 ### Open Questions
-> 状态：❓
+> 状态：
 > 检索摘要：Python mastery_signals 是否改名 topic_label、student_grade 来源、LLM 消歧调用方式、聚合阈值、掌握度自动迁移、topic_key 归一化力度等 8 项待决策。
 
 0. **【高优先级·跨仓库协调】Python `mastery_signals` 信号源粒度**：现状 `kp_label` 是自由文本（题型/知识点混合，见 Context），要翻题型粒度需 Python 稳定输出**题型 label**。字段名 `kp_label` 是否重命名为 `topic_label`？（默认：建议重命名 `topic_label` 语义清晰，Java `MasterySignalItem` 对应改 `@JsonProperty`；Python 未就绪前 Java 侧兼容旧字段名 `kp_label` 作为过渡）。

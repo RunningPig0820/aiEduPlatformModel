@@ -8,10 +8,10 @@
 
 ## 文档说明
 > 本文件为原始 spec/design 文档的 RAG 结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### 一、目标
-> 状态：✅
+> 状态：
 > 检索摘要：知识图谱按学科年级组织知识点并建立前置/后置依赖，支撑 AI 作业答疑的学习路径推荐与知识缺陷诊断。
 
 将现有数据整理成支持 AI 作业答疑业务的知识图谱：
@@ -20,11 +20,11 @@
 ● 支持学习路径推荐和知识缺陷诊断
 
 ### 二、数据模型设计（知识点层级结构）
-> 状态：✅
+> 状态：
 > 检索摘要：图谱数据模型按 学科→学段→年级→教材→章节→知识点 六级层级组织知识点，是 Neo4j 建模基础。
 
 #### 2.1 知识点层级结构
-> 状态：✅
+> 状态：
 > 检索摘要：知识点按 学科→学段→年级→教材→章节→知识点 六级层级组织，是图谱建模骨架。
 
 学科 (Subject)
@@ -35,7 +35,7 @@
 └── 知识点 (KnowledgePoint)
 
 ### 2.2 Neo4j 节点模型
-> 状态：✅
+> 状态：
 > 检索摘要：Neo4j 节点模型定义 Subject/Stage/Grade/Textbook/Chapter/KnowledgePoint 六类节点及属性，含教材版本、知识点难度与跨源映射ID。
 
 // 学科节点
@@ -82,7 +82,7 @@ source: "edukg"         // 数据来源
 })
 
 ### 2.2.1 跨源映射表（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：跨源映射表解决未来引入好未来等外部数据时 URI 变化导致关系失效问题，以 SQLite 表保存标准URI与外部ID映射。
 
 建议来源：后续可能引入外部数据（如好未来数据），需建立跨源映射避免 URI 变化导致关系失效。
@@ -97,7 +97,7 @@ UNIQUE(canonical_uri, external_id, source_name)
 );
 
 ### 2.3 关系模型（区分教学顺序与学习依赖）
-> 状态：✅
+> 状态：
 > 检索摘要：关系模型区分教学顺序与学习依赖：TEACHES_BEFORE 教学顺序、PREREQUISITE 核心前置、PREREQUISITE_CANDIDATE 低置信候选，RELATED_TO/GRADED/THEME 关联。
 
 // ========== 层级关系 ==========
@@ -168,22 +168,22 @@ source: "llm"
 ● PREREQUISITE_ON：EduKG 标准关系，方便未来互操作。
 
 ### 三、数据来源与整合策略（数据源分析）
-> 状态：✅
+> 状态：
 > 检索摘要：图谱数据源整合：ttl 知识点实例与 relations 关系为主数据源，main.ttl 提供教材/年级信息，好未来数据作层级参考。
 
 #### 3.1 数据源分析
-> 状态：✅
-> 检索摘要：数据源五类：ttl 知识点实例/relations 关系为✅主源，main.ttl 提供教材年级，entities 实体链接，好未来数据作层级参考。
+> 状态：
+> 检索摘要：数据源五类：ttl 知识点实例/relations 关系为主源，main.ttl 提供教材年级，entities 实体链接，好未来数据作层级参考。
 
 数据源	版本	内容	用途
-ttl/*.ttl	v0.1	知识点实例	✅ 主要数据源
-relations/*.ttl	v0.1	知识点关系	✅ 关联/分类关系
-main.ttl	v3.0	教材出处	⚠️ 年级/教材信息（已拆分为 split/main-{subject}.ttl）
-entities/*.json	v0.1	实体列表	✅ 实体链接
+ttl/*.ttl	v0.1	知识点实例	主要数据源
+relations/*.ttl	v0.1	知识点关系	关联/分类关系
+main.ttl	v3.0	教材出处	年级/教材信息（已拆分为 split/main-{subject}.ttl）
+entities/*.json	v0.1	实体列表	实体链接
 好未来数据	-	小学数学	📖 层级参考
 
 ### 3.2 整合策略
-> 状态：✅
+> 状态：
 > 检索摘要：整合流程五步：ttl主数据源→标签匹配 main 教材→推断年级→导入 relations 关联→构建 PREREQUISITE。
 
 Step 1: 以 ttl/*.ttl 为主数据源
@@ -197,11 +197,11 @@ Step 4: 导入 relations/*.ttl 的关联关系
 Step 5: 构建 PREREQUISITE 关系
 
 ### 四、年级推断规则（教材→年级映射）
-> 状态：✅
+> 状态：
 > 检索摘要：年级推断核心是教材→年级映射表 TEXTBOOK_TO_GRADE（必修/选择性必修/七八九年级），学段反向推断作 fallback。
 
 #### 4.1 教材 → 年级映射
-> 状态：✅
+> 状态：
 > 检索摘要：教材→年级映射表 TEXTBOOK_TO_GRADE：必修/选择性必修对应高一高二高三，七八九年级分册，学段反向推断 fallback。
 
 TEXTBOOK_TO_GRADE = {
@@ -232,7 +232,7 @@ STAGE_FALLBACK = {
 }
 
 ### 4.2 章节 → 学期推断
-> 状态：⚠️
+> 状态：
 > 检索摘要：章节→学期推断基于 main.ttl 的 mark 字段（如 6.2.1 第6章第2节第1小节），通常上学期1-4章下学期5-8章，缺失时按教材序号。
 
 # 从 main.ttl 的 mark 字段推断
@@ -240,7 +240,7 @@ STAGE_FALLBACK = {
 # 通常上学期学1-4章，下学期学5-8章
 
 ### 4.2.1 mark 字段解析兼容（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：mark 字段格式不统一（6.2.1/6-2-1/第六章第二节/Chapter 6.2.1），parse_mark_field 兼容解析返回(章节,小节,序号)，无法解析 fallback。
 
 问题：mark 字段格式可能不统一（如 "6.2.1"、"6-2-1"、"第六章第二节"）。
@@ -285,11 +285,11 @@ return (None, None, None)
 Fallback 策略：若章节信息完全缺失，按教材序号作为顺序（第1章、第2章）。
 
 ### 五、前置依赖关系构建方案（多证据融合）
-> 状态：✅
+> 状态：
 > 检索摘要：前置依赖构建核心原则：教学顺序≠学习依赖，教材顺序存 TEACHES_BEFORE，真正学习依赖存 PREREQUISITE。
 
 #### 5.1 核心原则
-> 状态：✅
+> 状态：
 > 检索摘要：核心原则：教学顺序≠学习依赖，教材顺序存 TEACHES_BEFORE，真正学习依赖存 PREREQUISITE。
 
 教学顺序 ≠ 学习依赖
@@ -298,7 +298,7 @@ Fallback 策略：若章节信息完全缺失，按教材序号作为顺序（�
 ● 因此：教材顺序存为 TEACHES_BEFORE，真正的学习依赖存为 PREREQUISITE
 
 ### 5.2 证据来源分类
-> 状态：⚠️
+> 状态：
 > 检索摘要：前置依赖证据来源四类：教材章节顺序(0.7)、定义/定理依赖(0.85)、LLM多模型投票(0.8)、教师标注(1.0)，Demo 阶段按证据权重分流。
 
 证据类型	说明	基础权重	Demo 阶段策略
@@ -308,7 +308,7 @@ LLM 多模型投票	GLM + DeepSeek 两模型一致	0.8	→ PREREQUISITE/CANDIDAT
 教师标注	人工审核	1.0	Demo 阶段不做
 
 ### 5.3 教材章节顺序（仅生成 TEACHES_BEFORE）
-> 状态：✅
+> 状态：
 > 检索摘要：教材章节顺序仅生成同章节内 TEACHES_BEFORE 关系（教学顺序），不直接转化为 PREREQUISITE。
 
 仅生成同章节内的 TEACHES_BEFORE 关系，不直接转化为 PREREQUISITE。
@@ -334,14 +334,14 @@ teaches_before.append({
 return teaches_before
 
 ### 5.4 定义依赖抽取（强证据）- 改进版
-> 状态：⚠️
+> 状态：
 > 检索摘要：定义依赖抽取改进：原简单字符串匹配易误报（"指数"匹配"指数函数"），改进为词边界匹配+停用词+同义词+概念层级。
 
 从知识点的定义文本中提取关键词，匹配其他知识点名称。
 智谱建议改进：原方案使用简单字符串匹配（if other_kp.name in kp.definition），容易产生误报（如"指数"匹配"指数函数"、"合"匹配"集合"）。
 
 #### 5.4.1 词边界匹配 + 停用词表
-> 状态：⚠️
+> 状态：
 > 检索摘要：定义依赖用词边界匹配+停用词表（过滤方法/概念等泛化词）+定义文本预处理，降低子串误报，保证完整词匹配。
 
 import re
@@ -399,7 +399,7 @@ clean = re.sub(r'\s+', ' ', clean)
 return clean.strip()
 
 #### 5.4.2 知识点类型标准化
-> 状态：⚠️
+> 状态：
 > 检索摘要：知识点类型标准化映射：公理/定律/原理统一为定理，方程/表达式归公式，术语归定义，特征/属性归性质。
 
 问题：不同数据源对类型划分标准不一致（如"公理"、"定律"应统一为"定理"）。
@@ -433,7 +433,7 @@ def standardize_type(raw_type: str) -> str:
 return TYPE_MAPPING.get(raw_type, raw_type)  # 未映射的保留原值
 
 #### 5.4.3 同义词映射（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：定义中用同义词而非精确知识点名（方程vs等式），按学科建同义词映射表扩展匹配模式，提高定义依赖召回。
 
 问题：定义中可能使用同义词而非精确知识点名，如"方程"与"等式"。
@@ -486,7 +486,7 @@ break  # 只记录一次
 return matched
 
 #### 5.4.4 概念层级依赖（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：概念层级依赖：整式方程是方程子类，定义出现整式方程则间接依赖方程，沿 CONCEPT_HIERARCHY 向上追溯父类。
 
 问题：如"整式方程"是"方程"的子类，若定义中出现"整式方程"，则间接依赖"方程"。
@@ -529,7 +529,7 @@ dependencies = set(matched_kps)
 ● → 层级依赖推断："整式方程" → 依赖"方程"
 
 ### 5.5 LLM 多模型投票 - 改进版
-> 状态：⚠️
+> 状态：
 > 检索摘要：LLM 前置推断用 GLM-4-flash + DeepSeek 两模型投票，temperature 0.3、批大小10、滑动窗口携带前序章节知识点上下文。
 
 配置：GLM-4-flash + DeepSeek 两模型投票
@@ -548,7 +548,7 @@ LLM_CONFIG = {
 }
 
 #### 5.5.1 Few-Shot Prompting（智谱建议）
-> 状态：⚠️
+> 状态：
 > 检索摘要：Few-Shot 提示词引导 LLM 区分核心前置(概念依赖)与教学顺序(时间依赖)，含正确示例与反例警示防误判。
 
 在 Prompt 中增加高质量标注示例，引导模型更精准输出：
@@ -590,11 +590,11 @@ LLM_CONFIG = {
     - confidence: 0.8
 
 **示例 3：反例警示（新增）**
-❌ **错误示例**：因为"勾股定理"和"圆"出现在同一章，就认为"勾股定理"是"圆"的前置。
-✅ **正确分析**：教学顺序 ≠ 学习依赖。需要判断"不学A是否真的无法理解B"。
+**错误示例**：因为"勾股定理"和"圆"出现在同一章，就认为"勾股定理"是"圆"的前置。
+**正确分析**：教学顺序 ≠ 学习依赖。需要判断"不学A是否真的无法理解B"。
 
-❌ **错误示例**：将"方程"作为"二次函数"的前置。
-✅ **正确分析**：二次函数的核心前置是"函数"，"方程"虽有辅助作用但不绝对必须。
+**错误示例**：将"方程"作为"二次函数"的前置。
+**正确分析**：二次函数的核心前置是"函数"，"方程"虽有辅助作用但不绝对必须。
 
 ## 当前任务
 
@@ -627,7 +627,7 @@ LLM_CONFIG = {
 ● 严格区分核心前置 vs 教学顺序：参考示例 3 的反例警示。
 
 #### 5.5.2 滑动窗口上下文（智谱建议）
-> 状态：⚠️
+> 状态：
 > 检索摘要：滑动窗口上下文解决跨章节依赖识别：携带最近2个前序章节核心知识点（按定义类/引用频次/重点标注优先级选取）作为批次上下文。
 
 解决跨章节依赖识别问题：携带前序章节核心知识点作为上下文。
@@ -686,7 +686,7 @@ def select_core_knowledge_points(chapter_kps: list, config: dict) -> list:
     return [kp for _, kp in scored_kps[:config['prev_chapter_kps']]]
 
 #### 5.5.3 幻觉检测 + JSON 容错（智谱建议）- 支持 JSON 数组格式
-> 状态：⚠️
+> 状态：
 > 检索摘要：LLM 输出幻觉检测+JSON容错：解析数组/对象双格式、修复JSON尾逗号、过滤不存在知识点与前置，激进修复作兜底。
 
 import json
@@ -795,7 +795,7 @@ def llm_inference_with_voting(kp_batch):
     return final_candidates
 
 ### 5.6 多证据融合
-> 状态：⚠️
+> 状态：
 > 检索摘要：多证据融合规则：定义依赖强证据直接生成 PREREQUISITE，LLM 两模型一致且置信度≥0.8 生成 PREREQUISITE，否则降为候选。
 
 def fuse_prerequisites(definition_deps, llm_candidates):
@@ -844,7 +844,7 @@ def fuse_prerequisites(definition_deps, llm_candidates):
 ● 教材顺序：仅作为 TEACHES_BEFORE，不转化为 PREREQUISITE
 
 ### 六、实施步骤
-> 状态：✅
+> 状态：
 > 检索摘要：实施分四阶段：数据清洗整合→导入Neo4j→构建前置依赖(含LLM跨章节补充+人工审核接口)→验证优化，按学科逐个处理。
 
 阶段一：数据清洗与整合 (按学科逐个处理)
@@ -875,11 +875,11 @@ Step 4.2: 验证学习路径的正确性
 Step 4.3: 收集反馈，持续优化
 
 ### 七、预期产出（数据产物）
-> 状态：✅
+> 状态：
 > 检索摘要：数据产物三件：知识点标准数据JSON/CSV(含年级学科类型)、前置依赖CSV三元组、Neo4j图谱库，type列必须导出。
 
 #### 7.1 数据产物
-> 状态：✅
+> 状态：
 > 检索摘要：数据产物三件：知识点标准数据 JSON/CSV、前置依赖 CSV 三元组、Neo4j 图数据库，type 列必须导出。
 
 产物	格式	说明
@@ -899,7 +899,7 @@ http://edukg.org/...,http://edukg.org/...,0.85,textbook_chapter,
 注意: type 列必须导出，便于后续按类型查询和分析
 
 ### 7.2 代码产物
-> 状态：✅
+> 状态：
 > 检索摘要：代码产物四脚本：clean_data 清洗、import_to_neo4j 导入、build_prerequisites 前置构建、llm_inference 推理调用。
 
 代码	说明
@@ -909,11 +909,11 @@ build_prerequisites.py	前置关系构建脚本
 llm_inference.py	LLM 推理调用脚本
 
 ### 八、分学科处理策略（学科类型划分）
-> 状态：✅
+> 状态：
 > 检索摘要：学科分三类：强逻辑链学科(数理化生)建 PREREQUISITE，语言学科(英语)建语法词汇层级，主题关联学科(历史语文地理政治)建主题分类。
 
 #### 8.1 学科类型划分
-> 状态：✅
+> 状态：
 > 检索摘要：学科分三类：强逻辑链(数理化生)建 PREREQUISITE、语言(英语)建语法词汇层级、主题(史地政语)建主题分类，优先级 P1/P2/P3。
 
 学科类型	学科	关系特点	处理策略	优先级
@@ -922,7 +922,7 @@ llm_inference.py	LLM 推理调用脚本
 主题关联学科	历史、语文、地理、政治	主题/时间关联，非学习依赖	构建主题分类关系	P3
 
 ### 8.2 处理顺序 (Phase by Phase)
-> 状态：✅
+> 状态：
 > 检索摘要：处理顺序四阶段：Phase1数学(4490知识点/relateTo9870)验证设计，Phase2数理化生构建关系，Phase3英语语法层级，Phase4主题学科。
 
 Phase 1: 数学 (有关系数据，验证设计)
@@ -949,7 +949,7 @@ Phase 4: 历史、语文、地理、政治 (主题关联)
          - 目标: 构建主题分类，不做前置依赖
 
 ### 8.3 前置关系构建方案（已确认：LLM 推理）
-> 状态：✅
+> 状态：
 > 检索摘要：前置关系构建已确认为 LLM 推理：GLM-4-flash 免费主力、批大小50、temperature 0.3、置信度<0.7丢弃，relateTo 保留为 RELATED_TO。
 
 模型选择: GLM-4-flash (免费，主力)
@@ -975,11 +975,11 @@ relateTo 数据处理:
 ● Demo 阶段不做 LLM 验证补充，核心闭环跑通后再优化
 
 ### 8.4 分学科细化策略（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：分学科细化策略：强逻辑链学科定制停用词+物理公式符号前置，英语 GRADED 难度递进，主题学科 THEME 主题聚类。
 
 #### 8.4.1 强逻辑链学科（数理化生）
-> 状态：⚠️
+> 状态：
 > 检索摘要：强逻辑链学科定制学科停用词表（数学/物理/化学/生物），物理公式符号依赖特殊处理提取符号含义前置。
 
 化学/生物定制停用词表：
@@ -1020,7 +1020,7 @@ def extract_physics_formula_dependencies(kp):
     return dependencies
 
 #### 8.4.2 语言学科（英语）
-> 状态：⚠️
+> 状态：
 > 检索摘要：英语 GRADED 关系表示难度递进（词汇→短语→句型）而非学习依赖，按词汇分级与语法层级构建递进关系。
 
 英语 GRADED 关系：表示难度递进，而非学习依赖。
@@ -1056,7 +1056,7 @@ def build_english_graded_relations(knowledge_points: list) -> list:
     return graded_relations
 
 #### 8.4.3 主题关联学科（历史/语文/地理/政治）
-> 状态：⚠️
+> 状态：
 > 检索摘要：THEME 关系用于主题聚类与推荐而非学习依赖，按历史/语文/地理主题表匹配知识点生成主题关联。
 
 THEME 关系：用于主题聚类和推荐，非学习依赖。
@@ -1106,11 +1106,11 @@ def build_theme_relations(knowledge_points: list, subject: str) -> list:
     return relations
 
 ### 九、验证方案（Demo 阶段务实策略）
-> 状态：⚠️
+> 状态：
 > 检索摘要：验证方案务实策略：自动验证(循环依赖/年级倒置惩罚)+抽样测试(≥70%准确率即可)，Demo 不做人工教师审核。
 
 #### 9.1 验证方式
-> 状态：⚠️
+> 状态：
 > 检索摘要：验证方式三种：自动验证(循环/年级倒置)、抽样测试(≥70%准确率)、人工审核(教师，Demo 不做)。
 
 方式	说明	Demo 阶段策略
@@ -1119,7 +1119,7 @@ def build_theme_relations(knowledge_points: list, subject: str) -> list:
 人工审核	教师审核	不做，无相关人员参与
 
 ### 9.2 置信度处理
-> 状态：⚠️
+> 状态：
 > 检索摘要：置信度分流规则：<0.8 的 LLM 候选存 PREREQUISITE_CANDIDATE，定义依赖直接生成 PREREQUISITE，多模型一致且≥0.8 生成，年级倒置按跨度惩罚。
 
 ● 置信度 < 0.8 的 LLM 候选：存入 PREREQUISITE_CANDIDATE
@@ -1128,7 +1128,7 @@ def build_theme_relations(knowledge_points: list, subject: str) -> list:
 ● 新增：年级倒置按跨度惩罚置信度（智谱建议）
 
 ### 9.3 年级倒置的宽松处理（智谱建议）
-> 状态：⚠️
+> 状态：
 > 检索摘要：年级倒置按跨度惩罚置信度：0-2级相邻跨年级×0.95、跨1学段×0.9、跨2学段×0.5、跨度异常×0.3降为候选。
 
 问题：原方案将"高年级指向低年级"直接判定为异常。但在实际教学中，跨学段复习或螺旋式课程设计是合理的（如高二物理用到初三数学知识）。
@@ -1191,11 +1191,11 @@ def apply_grade_penalty(relation, from_kp, to_kp):
 >6（跨度太大）	高三→小学一年级	×0.3	存入 PREREQUISITE_CANDIDATE
 
 ### 9.4 验证增强（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：验证增强四件套：循环依赖检测、孤立知识点检测、分层抽样评估、置信度校准，保障 PREREQUISITE 图质量。
 
 #### 9.4.1 循环依赖检测
-> 状态：⚠️
+> 状态：
 > 检索摘要：循环依赖检测用 DFS 找有向环，resolve_cycles 移除环中置信度最低的边，保证前置关系符合 DAG 要求。
 
 问题：如果 A→B 且 B→A 同时存在，形成有向环，违背 DAG 要求。
@@ -1257,7 +1257,7 @@ def resolve_cycles(prerequisites: list, cycles: list) -> list:
     return [rel for rel in prerequisites if (rel['from'], rel['to']) not in to_remove]
 
 #### 9.4.2 孤立知识点检测
-> 状态：⚠️
+> 状态：
 > 检索摘要：孤立知识点检测按入度/出度区分真正孤立（定义/定理型）与 potential_missing（数据可能缺失型），辅助定位数据问题。
 
 问题：没有任何 PREREQUISITE 关系，也没有被任何知识点依赖的知识点，可能是原子知识点或数据缺失。
@@ -1287,7 +1287,7 @@ def detect_isolated_kps(knowledge_points: list, prerequisites: list) -> dict:
     return result
 
 #### 9.4.3 分层抽样评估（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：分层抽样评估按关系来源分组抽样，评估标准分定义依赖/LLM推理/教材顺序三类的强合理/弱合理/不合理判定。
 
 问题：按来源分层抽样，便于定位问题。
@@ -1318,7 +1318,7 @@ LLM 推理	明确必须掌握	有较强辅助作用	完全无关
 教材顺序	-	仅时间依赖	-
 
 #### 9.4.4 置信度校准（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：置信度校准对比模型置信度与专家打分计算校准因子，识别模型过自信/保守，便于后续阈值调整。
 
 问题：模型输出置信度可能过于乐观或保守。
@@ -1353,7 +1353,7 @@ def calibrate_confidence(prerequisites: list, expert_scores: dict) -> dict:
     }
 
 ### 9.5 图谱查询性能优化（智谱建议）
-> 状态：⚠️
+> 状态：
 > 检索摘要：多跳查询 [:PREREQUISITE*] 在5万+节点可能变慢，加深度限制(*..10)防死循环，可选离线预计算 prerequisite_level 加速。
 
 问题：多跳查询 [:PREREQUISITE*] 在大规模图谱（5万+节点）时可能变慢。
@@ -1388,7 +1388,7 @@ WHERE prereq.prerequisite_level < kp.prerequisite_level
 RETURN prereq ORDER BY prereq.prerequisite_level ASC
 
 ### 9.5 抽样测试量化标准
-> 状态：⚠️
+> 状态：
 > 检索摘要：抽样测试量化：随机抽100-200条 PREREQUISITE 覆盖不同年级类型，准确率目标≥70%，低于阈值调 Prompt/温度/置信度阈值。
 
 抽样方法:
@@ -1406,7 +1406,7 @@ RETURN prereq ORDER BY prereq.prerequisite_level ASC
 3. 提高置信度阈值（如 0.85）
 
 ### 9.6 图谱质量指标
-> 状态：⚠️
+> 状态：
 > 检索摘要：图谱质量指标含前置关系覆盖率≥30%、DAG合规率100%、平均前置链长度2-4跳、年级倒置率≤5%、高置信度占比≥60%。
 
 指标	计算方法	目标值（demo）
@@ -1417,7 +1417,7 @@ DAG 合规率	无环的知识点比例（检测环的数量）	100%
 置信度分布	高置信度（≥0.8）关系的占比	≥ 60%
 
 ### 9.7 Neo4j 部署配置
-> 状态：✅
+> 状态：
 > 检索摘要：Neo4j 部署：社区版 4.4.x 单机、内存4G、存储100G+、CSV 全量备份。
 
 配置项	值
@@ -1428,7 +1428,7 @@ DAG 合规率	无环的知识点比例（检测环的数量）	100%
 备份	CSV 文件全量备份
 
 ### 9.6 典型业务查询模板
-> 状态：✅
+> 状态：
 > 检索摘要：典型业务查询模板：多跳前置依赖、教学前驱、知识缺陷计算(未掌握前置)、拓扑排序学习路径、候选前置查询。
 
 // 1. 获取知识点的所有前置依赖（多跳）
@@ -1457,7 +1457,7 @@ WHERE r.confidence >= 0.6
 RETURN kp, target, r
 
 ### 9.4 业务优先级（围绕 AI 引导式答疑）
-> 状态：✅
+> 状态：
 > 检索摘要：业务优先级：P0前置依赖查询核心基础，P1知识点识别/知识缺陷诊断，P2学习路径推荐/年级学科定位可迭代。
 
 优先级	业务场景	说明
@@ -1466,11 +1466,11 @@ P1	知识点识别、知识缺陷诊断	Demo 必实现，支撑核心功能闭�
 P2	学习路径推荐、年级/学科定位	可选迭代，核心跑通后补充
 
 ### 十、技术栈与开发规范
-> 状态：✅
+> 状态：
 > 检索摘要：技术栈选型：Python 3.10+、rdflib 解析 TTL、neo4j-driver 4.4.x、复用 LLM Gateway，脚本独立依赖不污染主服务。
 
 #### 10.1 技术栈
-> 状态：✅
+> 状态：
 > 检索摘要：技术栈：Python 3.10+、rdflib 解析 TTL、neo4j-driver 4.4.x 与 Neo4j 版本严格匹配、LLM 复用现有 Gateway。
 
 技术项	选择	说明
@@ -1480,7 +1480,7 @@ Neo4j 驱动	neo4j-driver 4.4.x	与 Neo4j 版本严格匹配
 LLM 调用	复用 Gateway	使用现有 core/gateway/factory.py
 
 ### 10.2 脚本目录结构
-> 状态：✅
+> 状态：
 > 检索摘要：脚本目录 edukg/scripts/kg_construction 按流程拆：清洗/教材提取/合并/LLM推理/合并前置/导入/验证，含日志目录。
 
 edukg/scripts/kg_construction/
@@ -1495,7 +1495,7 @@ edukg/scripts/kg_construction/
 └── logs/                      # 错误日志目录
 
 ### 10.3 LLM Gateway 配置
-> 状态：✅
+> 状态：
 > 检索摘要：LLM Gateway 新增 prerequisite_inference scene 映射：zhipu glm-4-flash、temperature 0.3。
 
 在 config/model_config.py 新增 scene 映射：
@@ -1509,7 +1509,7 @@ SCENE_MODEL_MAPPING = {
 }
 
 ### 十一、风险与缓解
-> 状态：✅
+> 状态：
 > 检索摘要：主要风险：v0.1/v3.0数据不匹配、LLM推理不准、年级推断不准、数据量大、relateTo与PREREQUISITE语义混淆，各有缓解措施。
 
 风险	缓解措施
@@ -1520,7 +1520,7 @@ LLM 推理不准确	置信度阈值过滤（<0.7 丢弃），≥70% 准确率满
 relateTo 与 PREREQUISITE 语义混淆	严格区分，relateTo → RELATED_TO，LLM → PREREQUISITE
 
 ### 十二、数据更新机制（Demo 阶段）
-> 状态：⚠️
+> 状态：
 > 检索摘要：Demo 数据更新机制：edukg 基准知识点冻结只读，仅增量补充题目-知识点关联，CSV 按版本命名，长期维护待正式迭代。
 
 方面	策略
@@ -1530,11 +1530,11 @@ relateTo 与 PREREQUISITE 语义混淆	严格区分，relateTo → RELATED_TO，
 长期维护	Demo 阶段不考虑，正式迭代再设计
 
 ### 十三、任务执行与容错设计（工程化补充）
-> 状态：⚠️
+> 状态：
 > 检索摘要：任务执行工程化五原则：幂等性、断点续传、成本控制（付费模型结果持久化）、版本管理快照回滚、并发安全防多进程。
 
 #### 13.1 核心原则
-> 状态：⚠️
+> 状态：
 > 检索摘要：工程化五原则：幂等性、断点续传、成本控制、版本管理快照、并发安全，保障构建可重跑不重复计费。
 
 ● 幂等性：脚本可以重复执行，不会产生重复数据或重复调用 LLM
@@ -1544,7 +1544,7 @@ relateTo 与 PREREQUISITE 语义混淆	严格区分，relateTo → RELATED_TO，
 ● 并发安全：防止误启动多进程，造成重复调用和数据冲突
 
 ### 13.2 状态管理（MySQL）
-> 状态：⚠️
+> 状态：
 > 检索摘要：状态管理用 MySQL 替代 SQLite：已有环境、并发性能好、运维工具丰富、有备份机制，承接处理状态/LLM缓存/成本表。
 
 使用 MySQL 替代 SQLite，原因：
@@ -1554,7 +1554,7 @@ relateTo 与 PREREQUISITE 语义混淆	严格区分，relateTo → RELATED_TO，
 ● 数据更安全（有备份机制）
 
 #### 13.2.0 数据库连接配置
-> 状态：⚠️
+> 状态：
 > 检索摘要：MySQL 连接配置 database.yaml + pymysql 连接池，状态表设计含 processing_state/llm_cache/cost_tracking/两层状态表。
 
 # config/database.yaml
@@ -1749,7 +1749,7 @@ CREATE TABLE IF NOT EXISTS failed_batches (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='失败批次表';
 
 #### 13.2.1 StateDB 类（MySQL 版）
-> 状态：⚠️
+> 状态：
 > 检索摘要：StateDB 类封装章节状态、子批次状态、LLM缓存、进度查询、成本追踪的 MySQL 操作，支撑断点续传。
 
 # scripts/state_db.py
@@ -1940,7 +1940,7 @@ class StateDB:
             conn.commit()
 
 #### 13.2.2 按课程单元划分
-> 状态：⚠️
+> 状态：
 > 检索摘要：重跑最小单位=章节（业务认知），内部按 token 限制拆子批次（技术限制），支持跳过已完成/已跳过章节断点续传。
 
 设计原则：重跑最小单位 = 章节（业务认知），内部可拆分子批次（技术限制）。
@@ -1997,7 +1997,7 @@ def process_by_chapter(subject: str, version: str, state_db):
     return state_db.get_progress(subject, version)
 
 #### 13.2.3 进度可视化
-> 状态：⚠️
+> 状态：
 > 检索摘要：进度可视化按学科/版本展示完成百分比、处理中/失败章节数，并提供命令行入口 show-progress/retry-failed/skip-chapter。
 
 def show_progress(subject: str, version: str, state_db: StateDB):
@@ -2041,7 +2041,7 @@ def main():
         state_db.skip_chapter(args.skip_chapter)
 
 #### 13.2.4 手动跳过章节
-> 状态：⚠️
+> 状态：
 > 检索摘要：手动跳过章节调用 skip_chapter 标记 skipped 状态，后续重跑自动跳过不处理。
 
 def skip_chapter(state_db: StateDB, chapter_id: str, reason: str = ""):
@@ -2052,7 +2052,7 @@ def skip_chapter(state_db: StateDB, chapter_id: str, reason: str = ""):
     logging.info(f"已跳过章节: {chapter_id}")
 
 #### 13.2.5 原子性操作保证
-> 状态：⚠️
+> 状态：
 > 检索摘要：结果文件与状态更新原子性用 MySQL 事务+两阶段提交，先写缓存再处理业务状态避免重复付费。
 
 问题：如果结果文件写入成功，但状态更新失败怎么办？
@@ -2130,13 +2130,13 @@ def safer_process_subbatch(sub_batch, batch_id, state_db, cache_dir):
     return result
 
 ### 13.3 进程锁机制（跨平台支持）
-> 状态：⚠️
+> 状态：
 > 检索摘要：进程锁防止误启动多进程或意外中断后重复启动，支持 portalocker 文件锁与 MySQL 表锁两种跨平台方案。
 
 防止误启动多进程或意外中断后重复启动。
 
 #### 13.3.1 文件锁（portalocker，推荐）
-> 状态：⚠️
+> 状态：
 > 检索摘要：文件锁用 portalocker LOCK_EX|LOCK_NB 非阻塞获取，写入 pid，配合上下文管理器防止多进程重复运行。
 
 # pip install portalocker
@@ -2174,7 +2174,7 @@ class ProcessLock:
         self.release()
 
 #### 13.3.2 MySQL 表锁（替代方案）
-> 状态：⚠️
+> 状态：
 > 检索摘要：MySQL 分布式锁表 process_lock 记录 pid/hostname，获取时清理超时锁，防止多进程冲突并支持锁信息查询。
 
 class MySQLLock:
@@ -2269,7 +2269,7 @@ def run_pipeline_with_lock(subject: str):
         lock.release(lock_name)
 
 ### 13.4 LLM 推理断点续传
-> 状态：⚠️
+> 状态：
 > 检索摘要：LLM 批处理带缓存断点续传：先查状态/缓存，再标记处理中，成功保存缓存与成本，失败按重试次数降级。
 
 步骤级断点：
@@ -2312,7 +2312,7 @@ def process_llm_batches(candidates, state_db, cache_dir):
                 save_failed_batch(batch, str(e))
 
 ### 13.5 成本控制与监控
-> 状态：⚠️
+> 状态：
 > 检索摘要：成本控制：日预算50元/总预算200元/70%告警，调用前检查成本限制，超预算停止调用。
 
 实时成本累积：
@@ -2352,7 +2352,7 @@ def call_llm_with_cost_check(batch, state_db):
     return call_llm(batch)
 
 ### 13.6 缓存策略（SHA256）
-> 状态：⚠️
+> 状态：
 > 检索摘要：缓存键用 SHA256 替代 MD5 避免碰撞，基于 uri 排序+prompt版本+model 生成唯一缓存键。
 
 改进：使用 SHA256 替代 MD5，避免碰撞风险：
@@ -2372,7 +2372,7 @@ def get_cache_key(batch, prompt_version: str, model: str) -> str:
     return hashlib.sha256(key_str.encode()).hexdigest()[:32]
 
 ### 13.7 版本控制与数据快照
-> 状态：⚠️
+> 状态：
 > 检索摘要：版本控制按 v1_日期 目录隔离数据快照，manifest.json 记录源数据版本/统计/成本/LLM配置，缓存跨版本复用。
 
 目录结构：
@@ -2428,7 +2428,7 @@ Manifest 记录：
 }
 
 ### 13.8 Graceful Shutdown
-> 状态：⚠️
+> 状态：
 > 检索摘要：Graceful Shutdown 监听 SIGINT/SIGTERM，中断时保存当前状态，下次可继续处理。
 
 手动中断处理：
@@ -2463,7 +2463,7 @@ def process_with_shutdown(candidates, state_db):
         process_batch(batch, state_db)
 
 ### 13.9 幂等性设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：Neo4j 导入用 MERGE 保证幂等：知识点按 uri 唯一，前置关系按端点和类型唯一，重复执行不产生重复数据。
 
 Neo4j 导入使用 MERGE：
@@ -2483,7 +2483,7 @@ SET r.confidence = $confidence,
     r.evidence_types = $evidence_types
 
 ### 13.10 重试与错误恢复
-> 状态：⚠️
+> 状态：
 > 检索摘要：重试策略分错误类型：LLM超时重试2次指数退避、格式错误1次、网络故障3次、成本超限/解析错误0次；失败批次结构化存储。
 
 错误类型	重试次数	退避策略	处理方式
@@ -2547,7 +2547,7 @@ network_error	网络临时故障	重试
 unknown	其他错误	检查日志，人工介入
 
 #### 13.10.1 动态批大小调整（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：动态批大小用 tiktoken 预估 token 数，按 Prompt 基础token+知识点token 动态分组，避免固定批次 Token 超限。
 
 问题：不同章节知识点数量差异大，固定批大小可能导致 Token 超限。
@@ -2590,7 +2590,7 @@ def build_dynamic_batch(knowledge_points: list, max_tokens: int = 4000) -> list:
     return batches
 
 #### 13.10.2 关系去重与合并（新增）
-> 状态：⚠️
+> 状态：
 > 检索摘要：多来源重复关系合并去重：按(from,to,类型)取最高置信度并合并证据来源，避免图谱冗余。
 
 问题：多个来源可能生成相同关系，需要合并去重。
@@ -2618,7 +2618,7 @@ def merge_duplicate_relations(relations: list) -> list:
     return list(merged.values())
 
 ### 13.11 脚本执行流程
-> 状态：⚠️
+> 状态：
 > 检索摘要：主流程 run_math_pipeline 七步：解析TTL→教材匹配→定义依赖→关系提取→LLM推理→证据融合→Neo4j导入，每步幂等+进程锁。
 
 def run_math_pipeline():
@@ -2674,11 +2674,11 @@ def run_math_pipeline():
         logging.info(f"Pipeline 完成: {version}")
 
 ### 十四、成本估算与优化策略（数学学科成本估算）
-> 状态：⚠️
+> 状态：
 > 检索摘要：数学前置推理成本估算：4490知识点/批50≈90次，两模型投票180次+10%重试≈200次，GLM免费、DeepSeek付费约1-2元。
 
 #### 14.1 数学学科成本估算（智谱修正）
-> 状态：⚠️
+> 状态：
 > 检索摘要：数学成本修正：4490知识点/批50≈90次，两模型投票180次+10%重试≈200次，GLM免费、DeepSeek付费约1-2元。
 
 智谱指出：数学知识点 4490 个，批大小 50，理论上应该是 4490/50 ≈ 90 次调用，而非 1000 次。
@@ -2701,7 +2701,7 @@ LLM 推理（DeepSeek投票）	~90	DeepSeek-V3	~0.01元/批	~0.9 元
 重要：GLM-4-flash 免费，是主力模型。DeepSeek 仅用于投票验证，成本极低。
 
 ### 14.2 成本优化措施
-> 状态：⚠️
+> 状态：
 > 检索摘要：成本优化六招：优先免费模型 GLM-4-flash 主力、付费模型仅投票验证、结果缓存防重复、批量处理、成本监控告警、免费模型多轮验证。
 
 1. 优先免费模型：GLM-4-flash 作为主力，免费
@@ -2712,7 +2712,7 @@ LLM 推理（DeepSeek投票）	~90	DeepSeek-V3	~0.01元/批	~0.9 元
 6. GLM 多轮验证：免费模型可多轮验证，提升准确率而不增加成本
 
 ### 14.3 全学科成本预估（修正）
-> 状态：⚠️
+> 状态：
 > 检索摘要：全学科成本预估：数学/物理/化学/生物+其他5学科共56391知识点约1120批次，GLM约1120次免费、DeepSeek付费约10-20元。
 
 学科	知识点数	批次调用次数	预估成本（DeepSeek）
@@ -2726,7 +2726,7 @@ LLM 推理（DeepSeek投票）	~90	DeepSeek-V3	~0.01元/批	~0.9 元
 注：GLM-4-flash 调用约 1,120 次（免费），DeepSeek 调用约 1,120 次（付费约 10-20 元）。
 
 ### 十五、风险与缓解（更新）
-> 状态：✅
+> 状态：
 > 检索摘要：更新风险清单：断点续传/缓存防重复计费、版本目录+MERGE防误删、SQLite事务、成本监控、进程锁、Graceful Shutdown 等。
 
 风险	缓解措施
@@ -2742,7 +2742,7 @@ LLM 推理（DeepSeek投票）	~90	DeepSeek-V3	~0.01元/批	~0.9 元
 relateTo 语义混淆	严格区分 RELATED_TO vs PREREQUISITE
 
 ### 十六、技术栈更新
-> 状态：⚠️
+> 状态：
 > 检索摘要：技术栈更新：状态存储 MySQL、缓存键 SHA256、进程锁 portalocker/MySQL表锁、YAML配置、错误日志 MySQL 表、控制台告警。
 
 技术项	选择	说明
@@ -2754,7 +2754,7 @@ relateTo 语义混淆	严格区分 RELATED_TO vs PREREQUISITE
 告警方式	控制台日志	个人项目首选
 
 #### 16.1 数据库依赖
-> 状态：⚠️
+> 状态：
 > 检索摘要：脚本新增依赖：pymysql>=1.0.2、pyyaml>=6.0、portalocker>=2.7.0，写入 requirements-scripts.txt 不污染主服务。
 
 # requirements-scripts.txt 新增
@@ -2763,7 +2763,7 @@ pyyaml>=6.0
 portalocker>=2.7.0
 
 ### 十七、脚本目录结构更新
-> 状态：⚠️
+> 状态：
 > 检索摘要：脚本目录新增 config/db_connection/state_db/缓存/成本/进程锁/优雅退出/主流程，按工程化容错补齐文件。
 
 edukg/scripts/kg_construction/

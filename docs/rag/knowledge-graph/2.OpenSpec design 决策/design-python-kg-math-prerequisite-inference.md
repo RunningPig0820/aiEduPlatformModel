@@ -8,10 +8,10 @@
 
 ## 文档说明
 > 本文件为原始spec文档的RAG结构化重构版本。
-> ⚠️重要提示：本文属于**设计阶段素材**，同时包含✅已落地、⚠️构想未实现、❓待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
+> 重要提示：本文属于**设计阶段素材**，同时包含已落地、构想未实现、待决策内容；业务真实实现请以权威度0.8的canonical真相源文档为准。本文件独立完整，内容不拆分到外部canonical文档。
 
 ### Context：前置关系推断背景与约束
-> 状态：⚠️
+> 状态：
 > 检索摘要：前置关系推断是知识图谱项目核心设计成本：需区分教学顺序TEACHES_BEFORE与学习依赖PREREQUISITE，多证据融合生成高质量前置关系，设计约束含多模型投票与断点续传。
 
 前置关系推断是知识图谱项目的**核心设计成本**部分。需要区分教学顺序（TEACHES_BEFORE）和学习依赖（PREREQUISITE），通过多证据融合生成高质量的前置关系数据。
@@ -30,7 +30,7 @@
 - **核心代码放入 `edukg/core/llm_inference/`，scripts 只做命令行入口**
 
 ### Goals / Non-Goals
-> 状态：⚠️
+> 状态：
 > 检索摘要：目标：按教材章节顺序推断TEACHES_BEFORE、LLM多模型投票推断PREREQUISITE、定义依赖抽取、推断教学知识点并融合多证据输出JSON；非目标：不处理其他学科、不做人工审核、不处理高中数据。
 
 **Goals:**
@@ -48,7 +48,7 @@
 - 不处理高中数据（知识点数据源缺失）
 
 ### D1：目录结构设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：目录结构设计：核心代码放edukg/core/llm_inference/，含dual_model_voter、prerequisite_inferer、textbook_kp_inferer与prompts，scripts仅做命令行入口。
 
 **核心代码放入 `edukg/core/llm_inference/`**：
@@ -79,7 +79,7 @@ edukg/scripts/kg_inference/
 ```
 
 ### D2：双模型投票模块 (dual_model_voter.py)
-> 状态：⚠️
+> 状态：
 > 检索摘要：双模型投票模块：主模型glm-4-flash+副模型deepseek-chat，返回consensus/result/confidence；一致且置信度≥0.8为PREREQUISITE，<0.8为CANDIDATE，不一致不采纳。
 
 ```python
@@ -120,7 +120,7 @@ class DualModelVoter:
 | 不一致 | - | 不采纳 |
 
 ### D3：提示词文件化设计
-> 状态：⚠️
+> 状态：
 > 检索摘要：提示词文件化设计：从代码内联改为独立prompts/*.txt文件，PromptLoader支持文件加载与MySQL加载扩展，便于修改维护。
 
 **决策**: 提示词从代码内联改为独立文件，便于修改和后续扩展从 MySQL 加载。
@@ -151,7 +151,7 @@ class PromptLoader:
 ```
 
 ### D4：教学知识点推断模块 (textbook_kp_inferer.py)
-> 状态：⚠️
+> 状态：
 > 检索摘要：教学知识点推断模块：TextbookKPInferer用双模型投票推断小学3-6年级与高中缺失的knowledge_points，支持infer_batch断点续传。
 
 **背景**: 教材数据中小学3-6年级、高中知识点的 `knowledge_points` 字段为空，需要 LLM 推断补全。
@@ -208,7 +208,7 @@ class TextbookKPInferer:
 ```
 
 ### D5：断点续传设计（集成 llmTaskLock）
-> 状态：⚠️
+> 状态：
 > 检索摘要：断点续传设计：所有LLM推断任务集成llmTaskLock（TaskState/CachedLLM/ProcessLock），前置关系推断用infer_prerequisites.py --resume，教材顺序推断与DAG验证无需续传。
 
 **决策**: 所有 LLM 推断任务必须支持断点续传，使用 `llmTaskLock` 模块。
@@ -284,7 +284,7 @@ class PrerequisiteInferer:
 | `ProcessLock` | 进程锁保护（防止多进程冲突） |
 
 ### D6：输出文件结构
-> 状态：⚠️
+> 状态：
 > 检索摘要：输出文件结构：edukg/data/edukg/math/6_推理结果/output/下输出teaches_before、definition_deps、llm_prereq等JSON、validation_report与进度文件。
 
 ```
@@ -302,7 +302,7 @@ edukg/data/edukg/math/6_推理结果/output/
 ```
 
 ### D7：配置 (config.py)
-> 状态：⚠️
+> 状态：
 > 检索摘要：配置config.py：主模型glm-4-flash与副模型deepseek-chat，投票阈值0.8/0.6，批量BATCH_SIZE=10与断点续传保存间隔10。
 
 ```python
@@ -324,35 +324,35 @@ PROGRESS_DIR = "edukg/data/edukg/math/6_推理结果/output/progress/"
 ```
 
 ### Risk 1：LLM 推断准确率不足
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：LLM可能错误推断前置关系或教学知识点，缓解用多模型投票+置信度阈值+候选关系保留+人工验证。
 
 **风险**: LLM 可能错误推断前置关系或教学知识点
 **缓解**: 多模型投票 + 置信度阈值 + 候选关系保留 + 人工验证
 
 ### Risk 2：成本超预期
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：LLM调用次数超预期导致成本超支，缓解以免费模型为主+缓存复用+监控调用次数。
 
 **风险**: 实际调用次数超过预期
 **缓解**: 使用免费模型为主 + 缓存复用 + 监控调用次数
 
 ### Risk 3：DAG 出现环
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：前置关系可能形成循环依赖环，缓解输出后DAG验证+发现环时报警。
 
 **风险**: 前置关系可能形成循环依赖
 **缓解**: 输出后验证 + 发现环时报警
 
 ### Risk 4：断点续传文件损坏
-> 状态：⚠️
+> 状态：
 > 检索摘要：风险：断点续传进度文件可能损坏或丢失，缓解定期备份+JSON格式易恢复。
 
 **风险**: 进度文件可能损坏或丢失
 **缓解**: 定期备份 + JSON 格式易恢复
 
 ### Migration Plan 迁移计划
-> 状态：⚠️
+> 状态：
 > 检索摘要：迁移计划：完善核心模块、更新提示词、开发命令行入口，先运行知识点推断再运行前置推断，最后DAG验证与人工导入。
 
 **执行步骤**:
@@ -378,7 +378,7 @@ PROGRESS_DIR = "edukg/data/edukg/math/6_推理结果/output/progress/"
    - 人工验证后导入 Neo4j
 
 ### Open Questions 开放问题
-> 状态：✅
+> 状态：
 > 检索摘要：开放问题已确定：无遗留待决策项，设计已拍板。
 
 无（设计已确定）

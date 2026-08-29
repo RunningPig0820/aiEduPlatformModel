@@ -651,9 +651,9 @@ class ChapterEnhancer:
 **执行步骤**：
 
 1. **数据生成（已完成）**：
-   - ✅ 运行 `generate_textbook_data.py`
-   - ✅ 输出 textbooks.json, chapters.json, sections.json, textbook_kps.json
-   - ✅ 输出 contains_relations.json, in_unit_relations.json
+   - 运行 `generate_textbook_data.py`
+   - 输出 textbooks.json, chapters.json, sections.json, textbook_kps.json
+   - 输出 contains_relations.json, in_unit_relations.json
 
 2. **教学知识点推断（待执行）**：
    - 运行 `infer_textbook_kp.py --resume`
