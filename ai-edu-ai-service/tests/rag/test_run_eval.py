@@ -76,10 +76,12 @@ class TestReport:
 
     def test_report_saved_with_version(self, tmp_path):
         report_dir = str(tmp_path / "reports")
-        path = run_eval._save_report(_agg(), "2026-08-24-v2", report_dir=report_dir)
+        path = run_eval._save_report(_agg(), "2026-08-24-v2", "ai-tutoring", report_dir=report_dir)
         assert os.path.exists(path)
+        assert "ai-tutoring-2026-08-24-v2.json" == os.path.basename(path)
         data = json.load(open(path, encoding="utf-8"))
         assert data["version"] == "2026-08-24-v2"
+        assert data["module"] == "ai-tutoring"
         assert data["aggregate"]["hit_at_k_avg"] == 0.8
 
     def test_compare_selects_prev_report(self, tmp_path, capsys):
@@ -87,16 +89,16 @@ class TestReport:
         report_dir = str(tmp_path / "reports")
         run_eval._save_report({"hit_at_k_avg": 0.7, "quality_avg": 3.0,
                                "total_cost_yuan": 0.05, "avg_latency_ms": 400},
-                              "2026-08-24-v1", report_dir=report_dir)
+                              "2026-08-24-v1", "ai-tutoring", report_dir=report_dir)
         new_agg = {"hit_at_k_avg": 0.8, "quality_avg": 4.0,
                    "total_cost_yuan": 0.06, "avg_latency_ms": 300}
-        run_eval._compare(new_agg, "2026-08-24-v2", report_dir=report_dir)
+        run_eval._compare(new_agg, "2026-08-24-v2", "ai-tutoring", report_dir=report_dir)
         out = capsys.readouterr().out
         assert "hit@k" in out and "0.8" in out
         assert "质量分" in out and "4.0" in out
 
     def test_compare_no_history_skips(self, tmp_path, capsys):
         report_dir = str(tmp_path / "empty")
-        run_eval._compare(_agg(), "2026-08-24-v1", report_dir=report_dir)
+        run_eval._compare(_agg(), "2026-08-24-v1", "ai-tutoring", report_dir=report_dir)
         out = capsys.readouterr().out
         assert "无历史报告" in out

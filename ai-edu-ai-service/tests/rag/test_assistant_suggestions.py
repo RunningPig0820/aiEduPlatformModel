@@ -81,8 +81,8 @@ class TestPoolSuggestions:
             assert any(q in _rag_set() for q in out)
 
     def test_pool_suggestions_unknown_module(self):
-        """未知模块抽样 → FALLBACK 池, 不崩"""
+        """未知模块抽样 → FALLBACK 池, 不崩(rag-system 已有独立池, 不再是未知模块)"""
         for _ in range(5):
-            out = assistant._pool_suggestions("rag-system")
+            out = assistant._pool_suggestions("unknown-module")
             assert 2 <= len(out) <= 3
             assert all(q in _scope_set() for q in out)
