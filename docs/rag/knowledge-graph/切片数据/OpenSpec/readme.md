@@ -19,23 +19,25 @@
 - 头部精简 5 行（summary 短标题式 `{主题短名}` / 权威度 0.7 / 模块 / COS路径 / 类别），机器元信息（entry_id/source_doc）摄入时推导
 - **禁止 emoji 符号**（✅/⚠️/❓/❌）：状态一律用文字表达（已完成/待决/风险/警告），避免污染向量
 
-## 三、本模块 design 切片清单（12 份,共 91 块,2026-08-29 按主题重切完成）
+## 三、本模块 design 切片清单（12 份,共 81 块,2026-08-29 按主题重切完成）
+
+> 2026-08-29 精简：删 **10 个「主题16 方案选型与决策记录」总览索引块**（低价值/与语雀 16 块重复，见 `低价值与重复切片评估.md`），OpenSpec 91→81。
 
 | design 文件 | 主题块数 | 覆盖主题 |
 |---|---|---|
-| `design-python-2026-04-10-knowledge-graph-data-research.md` | 15 | 01/02/03/04(×2)/07(×4)/12(×2)/13/16/18/19 |
-| `design-python-2026-04-15-kg-math-complete-graph.md` | 11 | 01/02/03/04/05/06/08/12/13/15/16 |
+| `design-python-2026-04-10-knowledge-graph-data-research.md` | 14 | 01/02/03/04(×2)/07(×4)/12(×2)/13/18/19 |
+| `design-python-2026-04-15-kg-math-complete-graph.md` | 10 | 01/02/03/04/05/06/08/12/13/15 |
 | `design-backend-kp-matching-lightup.md` | 11 | 01/03/06/10/11/13/18/19/20/21/22 |
-| `design-python-2026-03-28-integrate-edukg-knowledge-graph.md` | 9 | 01/02/03/04/11/15/16/18/19 |
-| `design-backend-2026-06-03-knowledge-graph-ui.md` | 8 | 10(×4)/11/13/15/16 |
-| `design-frontend-kp-matching-lightup-frontend.md` | 7 | 10(×4)/13/15/16 |
-| `design-python-2026-04-08-kg-infrastructure-init.md` | 7 | 09/12(×3)/13/15/16 |
-| `design-frontend-2026-06-09-knowledge-graph-ui-front.md` | 4 | 10/11/15/16 |
-| `design-python-kg-math-prerequisite-inference.md` | 4 | 07/05/12/16 |
+| `design-python-2026-03-28-integrate-edukg-knowledge-graph.md` | 8 | 01/02/03/04/11/15/18/19 |
+| `design-backend-2026-06-03-knowledge-graph-ui.md` | 7 | 10(×4)/11/13/15 |
+| `design-frontend-kp-matching-lightup-frontend.md` | 6 | 10(×4)/13/15 |
+| `design-python-2026-04-08-kg-infrastructure-init.md` | 6 | 09/12(×3)/13/15 |
+| `design-frontend-2026-06-09-knowledge-graph-ui-front.md` | 3 | 10/11/15 |
+| `design-python-kg-math-prerequisite-inference.md` | 3 | 07/05/12 |
 | `design-python-2026-04-10-textbook-crawler.md` | 3 | 02/04/13 |
-| `design-python-2026-04-10-textbook-concept-linking.md` | 10 | 01/02/03/04/05/06/09/13/15/16 |
-| `design-backend-2026-06-03-knowledge-graph-datasource.md` | 2 | 10/16 |
-| **合计** | **91** | 全落 `切片/`（新主题 18~22：实体链接/学生进度/技术栈/成本/掌握度翻转/信任模型/维护闭环/迁移/待决） |
+| `design-python-2026-04-10-textbook-concept-linking.md` | 9 | 01/02/03/04/05/06/09/13/15 |
+| `design-backend-2026-06-03-knowledge-graph-datasource.md` | 1 | 10 |
+| **合计** | **81** | 全落 `切片/`（新主题 18~22：实体链接/学生进度/技术栈/成本/掌握度翻转/信任模型/维护闭环/迁移/待决） |
 
 ## 四、检索规则（入桶/查询时生效）
 

@@ -3,7 +3,7 @@
 > summary: Neo4j导入与关系构建架构与技术取舍
 > 来源: 切片 ｜ 锚点: 架构与技术取舍
 > 节: 分析-10-Neo4j导入与关系构建
-> COS路径: rag-slices/interview/knowledge-graph/分析-10-Neo4j导入与关系构建-架构与技术取舍.md
+> COS路径: rag-slices/knowledge-graph/代码/分析-10-Neo4j导入与关系构建-架构与技术取舍.md
 > 类别：架构设计
 > target: 面试项目问答
 

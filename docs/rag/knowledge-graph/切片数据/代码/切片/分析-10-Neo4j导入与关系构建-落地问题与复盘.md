@@ -3,7 +3,7 @@
 > summary: Neo4j导入与关系构建落地问题与复盘
 > 来源: 切片 ｜ 锚点: 落地问题与复盘
 > 节: 分析-10-Neo4j导入与关系构建
-> COS路径: rag-slices/interview/knowledge-graph/分析-10-Neo4j导入与关系构建-落地问题与复盘.md
+> COS路径: rag-slices/knowledge-graph/代码/分析-10-Neo4j导入与关系构建-落地问题与复盘.md
 > 类别：开发难点
 > target: 面试项目问答
 

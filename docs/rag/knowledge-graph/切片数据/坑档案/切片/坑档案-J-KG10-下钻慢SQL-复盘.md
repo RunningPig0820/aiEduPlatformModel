@@ -3,7 +3,7 @@
 > summary: 下钻慢SQL复盘
 > 来源: 切片 ｜ 锚点: 坑点复盘与口述
 > 节: 坑档案 J-KG10 下钻慢SQL
-> COS路径: rag-slices/interview/knowledge-graph/坑档案/坑档案-J-KG10-下钻慢SQL-复盘.md
+> COS路径: rag-slices/knowledge-graph/坑档案/坑档案-J-KG10-下钻慢SQL-复盘.md
 > 类别：开发难点
 > target: 面试项目问答
 

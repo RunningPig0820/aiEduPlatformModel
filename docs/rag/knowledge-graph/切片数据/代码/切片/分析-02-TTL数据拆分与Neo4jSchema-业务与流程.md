@@ -2,7 +2,7 @@
 > summary: TTL数据拆分与Neo4jSchema业务与流程
 > 来源: 切片 ｜ 锚点: 业务与流程
 > 节: 分析-02-TTL数据拆分与Neo4jSchema
-> COS路径: rag-slices/interview/knowledge-graph/分析-02-TTL数据拆分与Neo4jSchema-业务与流程.md
+> COS路径: rag-slices/knowledge-graph/代码/分析-02-TTL数据拆分与Neo4jSchema-业务与流程.md
 > 类别：业务流程
 > target: 面试项目问答
 

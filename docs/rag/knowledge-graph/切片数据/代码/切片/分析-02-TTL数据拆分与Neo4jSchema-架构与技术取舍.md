@@ -2,7 +2,7 @@
 > summary: TTL数据拆分与Neo4jSchema架构与技术取舍
 > 来源: 切片 ｜ 锚点: 架构与技术取舍
 > 节: 分析-02-TTL数据拆分与Neo4jSchema
-> COS路径: rag-slices/interview/knowledge-graph/分析-02-TTL数据拆分与Neo4jSchema-架构与技术取舍.md
+> COS路径: rag-slices/knowledge-graph/代码/分析-02-TTL数据拆分与Neo4jSchema-架构与技术取舍.md
 > 类别：架构设计
 > target: 面试项目问答
 
