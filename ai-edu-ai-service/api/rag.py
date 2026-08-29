@@ -116,10 +116,17 @@ async def rag_query(
         intent = RAGIntent(locked_sections=it["locked_sections"], strategy="retrieve",
                            anchor=it["anchor"], categories=it["locked_categories"])
 
-        # --- 降级语义 3: 无命中 → 拒答不编造 ---
-        if not hits:
+        # --- 降级语义 3: 无命中 或 离题 → 拒答不编造 ---
+        # 离题判定(2026-08-30 用户口径): intent category=其他 且 非澄清(ambiguous=false)
+        #   且 无 history(非追问省略) → 问题语义无法归属项目主题, 直接边界拒答, 不勉强生成
+        off_topic = (it.get("category") == "其他" and not it.get("ambiguous")
+                     and not request.history)
+        if not hits or off_topic:
+            answer = "该问题语料未覆盖，建议问项目相关话题"
+            if off_topic and hits:
+                answer = "这个问题和项目主题关系不大，可以聊聊项目介绍、架构、技术实现、评测相关的问题"
             return RAGQueryResponse(
-                answer="该问题语料未覆盖，建议问项目相关话题",
+                answer=answer,
                 references=[],
                 intent=intent,
                 version=rag_core._current_version(blocks),

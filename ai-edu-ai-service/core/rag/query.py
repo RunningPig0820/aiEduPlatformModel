@@ -808,6 +808,20 @@ def rag_query(question: str, top_k: int = TOP_K) -> dict:
                        top_k=top_k, vec2_result=dual["slice"],
                        vec3_result=dual["slice_q"], corpus=corpus)
 
+    # 离题拒答(2026-08-30 用户口径): category=其他 且 非澄清 → 边界拒答不勉强生成
+    # (rag_query 为单问 CLI 场景无 history; API 端点在 api/rag.py 同步)
+    off_topic = it.get("category") == "其他" and not it.get("ambiguous")
+    if not hits or off_topic:
+        answer = "该问题语料未覆盖，建议问项目相关话题"
+        if off_topic and hits:
+            answer = "这个问题和项目主题关系不大，可以聊聊项目介绍、架构、技术实现、评测相关的问题"
+        return {
+            "answer": answer,
+            "references": [],
+            "intent": it,
+            "version": _current_version(blocks),
+        }
+
     references = [
         {k: h[k] for k in ("file", "file_path", "anchor", "authority", "summary")}
         for h in hits
@@ -815,7 +829,7 @@ def rag_query(question: str, top_k: int = TOP_K) -> dict:
     return {
         "answer": generate(hits, question),
         "references": references,
-        "intent": strategy,
+        "intent": it,
         "version": _current_version(blocks),
     }
 
