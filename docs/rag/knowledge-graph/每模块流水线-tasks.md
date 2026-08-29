@@ -5,7 +5,7 @@
 > **流程**：`① 语料下载整理 → ② 文档对齐 → ③ 完善文档 → ④ 切片 → ⑤ 索引 → ⑥ 评测`
 > **当前进度（2026-08-29）**：
 > - ✅ ①~⑤ 全完成：canonical 6/6 + spec 双轨 12 design RAG 版 + 代码深读 11 + 方案-代码对账 24 项 + 坑 J-KG1~12 + 完善文档 9 节 + 切片 296 块（代码 71/坑 24/引导 64/语雀 56 主题重切/OpenSpec 81 主题重切+删16总览块）+ 引导 64 问 + GUIDE_POOL 同步（14 测试过）
-> - 🔄 ⑥ 索引入 COS 执行中：**全量库决策（用户 2026-08-29 定）= 语雀 9 + 完善文档 9 + 代码 11（29 条整篇）**，条件式 embed（summary+全文 ≤5000 字符 embed 全文 / 超限仅 embed summary）；29 份源文档 summary 已补详细版（语雀 800~1500 / 完善 700~1100 / 代码 500~900 字，Word 式 18 达标 + 10 接近 + 1 返工中），均只改 `> summary:` 一行
+> - ✅ ⑥ 索引入 COS 完成（2026-08-29）：全量池 56（语雀 9/代码 11/完善 36 段）+ 切片池 594 双向量（297 块），kg 旧污染版本删除后重入；普通桶 325 文件；元数据审计 0 重复
 > - ⏳ ⑦ 评测
 
 ---
@@ -136,15 +136,15 @@ venv/bin/python -m pytest tests/rag/ -q                                   # 回�
 - [x] `7. 引导问题/问题列表.md`（9 视角 64 问，纯问题，带 `<!--tag:{视角}-->`）+ `引导问题.md`（问答表）
 - [x] 同步 `guide_pool.py` 的 `GUIDE_POOL["knowledge-graph"]`（视角→组映射 intro=项目介绍7/operation=操作流程+业务流程14/data_relation=数据关联+数据存储15/difficulty=开发难点+架构设计+业务视角+未来演进28/rag=GraphRAG+向量+query.py 桥接5；scope 去重 64 问对齐问题列表）→ 引导单测 14 passed
 
-## 6. 索引入 COS（🔄 2026-08-29 执行中）
+## 6. 索引入 COS（✅ 2026-08-29 完成）
 
-- [x] summary 分级：**全量库 = 语雀 9 + 完善 9 + 代码 11（29 条，用户 2026-08-29 定，对齐 ai-tutoring/question-analysis 全量库=源文档整篇口径）**；29 份 summary 补详细版（语雀 800~1500 / 完善 700~1100 / 代码 500~900 字，29 agent 并行，git 确认每份仅改 1 行；Word 式复核 18 达标 + 10 接近 + 1 返工分析-09）
-- [ ] 条件式 embed 已就绪（build_index.py FULL_EMBED_MAX_CHARS=5000：≤5000 embed(summary+全文)，超限只 embed(summary) 防 8192 token 截断）——21/29 份 >5000 只 embed summary，summary 即向量本体
-- [ ] `scripts/rag/knowledge-graph/01_slice_jsonl.py` + `02_full_jsonl.py`
-- [ ] `upload_cos.py --root docs/rag/knowledge-graph` → 内容上传普通桶
-- [ ] `build_index.py --module knowledge-graph --pool full|slice`（**不带 --clear**，共用索引增量并入）
-- [ ] `query.py` MODULE_DATA 确认加 `knowledge-graph` 映射
-- [ ] 元数据审计（module=knowledge-graph / ≤2048B / 键唯一性）+ `向量桶入桶清单.md` 归档
+- [x] summary 分级：全量库=语雀 9+完善 9+代码 11（用户 2026-08-29 定）；语雀/代码 20 份详细版 summary 补充；完善 9 份回滚（改全文拆块向量化，不需要详细 summary）
+- [x] 条件式 embed 已就绪（build_index.py FULL_EMBED_MAX_CHARS=5000；jsonl 加 `embed_mode` 标记，build_index 优先读标记兼容旧 jsonl）
+- [x] `01_slice_jsonl.py`（297 切片）+ `02_full_jsonl.py`（56 全量：完善拆 4 段全文向量化 / 代码滤 CLI 入口 / authority 容错）
+- [x] `upload_cos.py` → 普通桶已传 325 文件（语雀 9/代码 11/完善 9/切片 296；排除 处理方案/原来的文件）
+- [x] `build_index.py --module knowledge-graph --pool full|slice`（不带 --clear 增量并入；kg 旧污染版本删除后重入：全量 56 + 切片 594 双向量）
+- [x] `query.py` MODULE_DATA 加 `knowledge-graph` 映射（build_index.py 同步加）
+- [x] 元数据审计（module=knowledge-graph / 键唯一性 0 重复 / authority·category 闭集 / emoji 0）+ `向量桶入桶清单.md` 归档
 
 ## 7. 评测（⏳）
 

@@ -125,3 +125,10 @@ COS `query_vectors`（ReturnMetaData=True + ReturnDistance=True）返回每条�
 - 大文档（语雀/代码整篇）只 embed summary 是**有意的粗召回**：细节答案由切片池全文承担（语雀 56 块/代码 71 块/OpenSpec 81 块等）
 - 若大文档也拆块全文向量化 → 与切片池大量重复（同批内容两处），浪费 embedding 成本
 - 判断标准：**切片池负责"能精确回答"，全量池负责"文档级兜底 + 权威 1.0 正文"（完善文档）**
+
+### 7.5 metadata.summary 截断（COS filterable 限制，build_index.py）
+
+- COS filterable metadata 单条 **≤2048B**（实测计数含 key 名 + JSON 结构，约 +130B 开销），且单条 metadata 字段 ≤10 个
+- 截断逻辑：`_budget = 2048 - 非 summary 字段字节 - 250（安全量）` → summary 逐字符截到 ≤ budget
+- **截断只影响 metadata 展示，不影响 embedding**：embedding 始终用完整 summary（`b["summary"]`，data 侧），全文/完整摘要经 key 反查 jsonl
+- text 不进 metadata（块最大 ~6000 字超限），留本地 jsonl
