@@ -28,6 +28,8 @@ DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "eval")
 BOUNDARY_TYPE = "边界拒答"
 VALID_TYPES = {"项目介绍", "操作", "数据关联", "难点", "最危险", BOUNDARY_TYPE}
 MIN_PER_MODULE = 5
+# 四模块闭集(2026-08-29 评测扩展到多模块)
+KNOWN_MODULES = {"ai-tutoring", "question-analysis", "knowledge-graph", "rag-system"}
 
 
 def load_dataset(module: str = "ai-tutoring") -> list:
@@ -73,8 +75,8 @@ def _validate(item: dict, path: str, lineno: int) -> None:
         raise err("expected_points 必填非空列表")
     if not all(isinstance(p, str) and p for p in item["expected_points"]):
         raise err("expected_points 元素必须是非空字符串")
-    if item.get("module") != "ai-tutoring":
-        raise err(f"module 应为 ai-tutoring, 实际 {item.get('module')!r}")
+    if item.get("module") not in KNOWN_MODULES:
+        raise err(f"module 应为 {sorted(KNOWN_MODULES)}, 实际 {item.get('module')!r}")
 
 
 def main():

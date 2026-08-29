@@ -35,11 +35,12 @@ def _save_trace(results, eval_dir: str = EVAL_DIR) -> str:
     return path
 
 
-def _save_report(agg: dict, version: str, report_dir: str = REPORT_DIR) -> str:
+def _save_report(agg: dict, version: str, module: str, report_dir: str = REPORT_DIR) -> str:
+    """报告按 模块-版本 命名(2026-08-29): 多模块评测避免同名覆盖。"""
     os.makedirs(report_dir, exist_ok=True)
-    path = os.path.join(report_dir, f"{version}.json")
+    path = os.path.join(report_dir, f"{module}-{version}.json")
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"version": version, "aggregate": agg}, f, ensure_ascii=False, indent=2)
+        json.dump({"version": version, "module": module, "aggregate": agg}, f, ensure_ascii=False, indent=2)
     return path
 
 
@@ -49,9 +50,10 @@ def _list_reports(report_dir: str = REPORT_DIR) -> list:
     return sorted(os.listdir(report_dir))
 
 
-def _compare(agg: dict, version: str, report_dir: str = REPORT_DIR):
-    """5.3 报告版本对比: 与上一份报告对比 hit@k/质量分变化"""
-    reports = [f for f in _list_reports(report_dir) if f.endswith(".json") and f != f"{version}.json"]
+def _compare(agg: dict, version: str, module: str, report_dir: str = REPORT_DIR):
+    """5.3 报告版本对比: 与同模块上一份报告对比 hit@k/质量分变化"""
+    reports = [f for f in _list_reports(report_dir)
+               if f.endswith(".json") and f.startswith(f"{module}-") and f != f"{module}-{version}.json"]
     if not reports:
         print("\n[版本对比] 无历史报告, 跳过(下次运行可对比)")
         return
@@ -67,12 +69,13 @@ def _compare(agg: dict, version: str, report_dir: str = REPORT_DIR):
         print(f"  {label:8s} {prev.get(key, 0):>8} → {agg[key]:>8}  {arrow} {delta:+.3f}")
 
 
-def run_evaluation() -> dict:
+def run_evaluation(module: str = "ai-tutoring") -> dict:
     """执行评测(可复用: CLI/API 共用)。
 
+    module: 评测模块(ai-tutoring/question-analysis/knowledge-graph/rag-system)
     返回 {results, aggregate, version, trace_path, report_path}。
     """
-    items = eval_dataset.load_dataset()
+    items = eval_dataset.load_dataset(module)
     print(f"评测集: {len(items)} 条, 开始评测(真实检索 + doubao 生成/判分)...\n")
 
     results = []
@@ -90,8 +93,8 @@ def run_evaluation() -> dict:
     version = results[0]["version"] if results else ""
     agg = eval_agent.aggregate(results)
     trace_path = _save_trace(results)
-    report_path = _save_report(agg, version)
-    return {"results": results, "aggregate": agg, "version": version,
+    report_path = _save_report(agg, version, module)
+    return {"results": results, "aggregate": agg, "version": version, "module": module,
             "trace_path": trace_path, "report_path": report_path}
 
 
@@ -109,15 +112,17 @@ def _print_report(out: dict, compare: bool = False):
     print(f"\ntrace 已落盘: {out['trace_path']}")
     print(f"报告已落盘: {out['report_path']}")
     if compare:
-        _compare(agg, out["version"])
+        _compare(agg, out["version"], out.get("module", "ai-tutoring"))
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--module", default="ai-tutoring",
+                    help="评测模块(ai-tutoring/question-analysis/knowledge-graph/rag-system)")
     ap.add_argument("--compare", action="store_true", help="与上一份报告对比(5.3)")
     args = ap.parse_args()
 
-    out = run_evaluation()
+    out = run_evaluation(args.module)
     _print_report(out, compare=args.compare)
 
 

@@ -43,6 +43,8 @@ MODULE_DATA = {
 
 # 检索参数
 RRF_K = 60          # RRF 融合常数
+FULL_POOL_WEIGHT = 2.0   # 全量池权威1.0加权(2026-08-29): 只对 authority=1.0 完善文档(主答案)在向量路乘权重,
+                         # 语雀/代码整篇(0.8)不加——完善文档单向量1路 vs 切片池多路易被挤出 top-5, 加权保主答案
 TOP_K = 5           # 生成用块数(双向量方案编排 top-5, 2026-08-26)
 BM25_K = 10         # BM25 召回数
 VEC_K = 12          # 向量召回数
@@ -650,18 +652,20 @@ def orchestrate(question: str, blocks: list, vec_result: dict, bm25_result: dict
 
     scored = []
     for key in set(vec_rank) | set(vec2_rank) | set(vec3_rank) | set(bm_rank):
+        block = keymap.get(key)
+        if block is None:
+            continue
         rrf = 0.0
         if key in vec_rank:
-            rrf += 1.0 / (RRF_K + vec_rank[key])
+            # 精准加权(2026-08-29): 只给 authority=1.0 完善文档(主答案)加权, 语雀/代码整篇(0.8)不加
+            w = FULL_POOL_WEIGHT if block["tags"].get("authority") == 1.0 else 1.0
+            rrf += w / (RRF_K + vec_rank[key])
         if key in vec2_rank:
             rrf += 1.0 / (RRF_K + vec2_rank[key])
         if key in vec3_rank:
             rrf += 1.0 / (RRF_K + vec3_rank[key])
         if key in bm_rank:
             rrf += 1.0 / (RRF_K + bm_rank[key])
-        block = keymap.get(key)
-        if block is None:
-            continue
         t = block["tags"]
         authority = t.get("authority", 0.7)
         anchor_w = ANCHOR_WEIGHT if t.get("section") in locked else 1.0

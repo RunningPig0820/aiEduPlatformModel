@@ -232,9 +232,11 @@ def run_eval_case(case: dict, top_k: int = rag_core.TOP_K) -> dict:
     t0 = time.time()
 
     # 检索(真实原语, 不降级; 1.13 双池: intent 判模块/类别 + 双池三路召回)
+    # 2026-08-29 多模块评测: 以评测集 case["module"] 为准(意图自动路由可能误判模块, 如 kg 问题被路由到 ai-tutoring)
     blocks = rag_core._load_all_blocks()
     it = rag_core.intent(question)
-    corpus = it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None
+    corpus = (case["module"] if case.get("module") in rag_core.MODULE_ANCHORS
+              else (it["anchor"] if it["anchor"] in rag_core.MODULE_ANCHORS else None))
     dual = rag_core.retrieve_dual(question, corpus=corpus,
                                   locked_categories=it["locked_categories"])
     hits = rag_core.orchestrate(question, blocks, dual["full"], dual["bm25"], it,
