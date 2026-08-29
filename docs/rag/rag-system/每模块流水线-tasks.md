@@ -8,7 +8,8 @@
 > - ✅ 语料原料在位：`1.语雀/原来的文件` 11 篇（问题1~9/11/12）+ `2.OpenSpec design 决策` 2 design + `rag-system.md` 主文档
 > - ✅ 代码深读 9 份完成（`3.代码/分析-01~09`，落地真相 + 文件:行号）
 > - ✅ ①~⑤ 全完成：canonical 6/6 + 方案-代码对账 37 项 + 完善文档 9 节 + 切片 5 来源 276 块（业务主题口径）+ 引导问题 77 问 + GUIDE_POOL 同步（15 测试过）
-> - ⏸ ⑥ 索引入 COS、⑦ 评测（用户指示先不做，后续再说）
+> - ✅ ⑥ 索引入 COS 完成（2026-08-29）：普通桶 300 文件（语雀 6/代码 9/完善 9/切片 276）+ 向量桶全量池 24 + 切片池 552 双向量；元数据审计 0 重复
+> - ⏳ ⑦ 评测
 
 ---
 
@@ -70,9 +71,16 @@
 - [x] `7. 引导问题/引导问题.md`（77 条问答，答案从 完善文档/分析/坑档案 提炼）
 - [x] 同步 `guide_pool.py` 的 `GUIDE_POOL["rag-system"]`（77 问 5 组）→ 引导单测 15 passed
 
-## 6. 索引入 COS（⏸ 先不做）
+## 6. 索引入 COS（✅ 2026-08-29 完成）
 
-## 7. 评测（⏸ 先不做）
+- [x] 语料清理：删附录（语雀 4 份「仅供人工查阅」节）+ 清 ⚠✅❓❌（121 文件）+ COS 路径修正（42 块 interview 前缀）+ 分析-03 补类别头
+- [x] `scripts/rag/rag-system/01_slice_jsonl.py`（276 切片）+ `02_full_jsonl.py`（24 全量：语雀 6/代码 9/完善 9，全 whole + embed_mode 标记）
+- [x] `upload_cos.py --root docs/rag/rag-system` → 普通桶已传 300 文件
+- [x] `build_index.py --module rag-system --pool full|slice`（不带 --clear 增量并入）：全量 24 + 切片 552 双向量
+- [x] `build_index.py` + `query.py` MODULE_DATA 加 `rag-system`
+- [x] 元数据审计（module=rag-system / 键唯一性 0 重复）+ `向量桶入桶清单.md` 归档
+
+## 7. 评测（⏳ 待做）
 
 ---
 

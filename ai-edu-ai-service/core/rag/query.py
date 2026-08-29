@@ -38,6 +38,7 @@ MODULE_DATA = {
     "ai-tutoring": ("rag_slices.jsonl", "rag_slices_full.jsonl"),
     "question-analysis": ("rag_slices-question-analysis.jsonl", "rag_slices_full-question-analysis.jsonl"),
     "knowledge-graph": ("rag_slices-knowledge-graph.jsonl", "rag_slices_full-knowledge-graph.jsonl"),
+    "rag-system": ("rag_slices-rag-system.jsonl", "rag_slices_full-rag-system.jsonl"),
 }
 
 # 检索参数
