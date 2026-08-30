@@ -67,4 +67,6 @@ data/*
 # Temporary files
 *.tmp
 *.temp
-.cache/
+.cache
+deploy/
+
