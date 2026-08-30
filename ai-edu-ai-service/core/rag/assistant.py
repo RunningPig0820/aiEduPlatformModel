@@ -382,10 +382,12 @@ def _spread_pool_suggestions(module: str, n: int = 3) -> list:
 
 # ============ A9 范围门低置信过滤(唯一拒答路径) ============
 
-# 低置信阈值(guardrails spec): 向量(索引层)0.75 / BM25(源)0.5。
+# 低置信阈值(guardrails spec): 向量(索引层)0.72 / BM25(源)0.5。
 # 用召回置信度(0-1)而非 rerank 的 RRF 相对分(量级 0.01~0.05, 天花板也够不到阈值)。
 # 双路都低于各自阈值 → 低置信拒答; 单路高即过(双路召回互补, 一路够用)。
-BOUNDARY_VEC_CONF = 0.75
+# 2026-08-30: vec 0.75→0.72 —— "防套答案"类问题 vec 稳定在 0.74~0.76 恰好贴 0.75 线,
+#    embedding 微小抖动即偶发拒答(边界抖动非语料缺失)。降阈值留 0.72~0.75 余量。
+BOUNDARY_VEC_CONF = 0.72
 BOUNDARY_BM_CONF = 0.5
 BOUNDARY_MSG = "未找到关联文档，我尚未掌握。"
 BOUNDARY_REASON = "low_confidence"
